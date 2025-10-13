@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  rms-mcp-server:
+    build: .
+    container_name: rms-mcp-server
+    ports:
+      - "3000:3000"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - rms-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  rms-network:
+    driver: bridge
+
+# Optional: Add n8n service if you want to run both together
+# Uncomment below to run n8n alongside RMS server
+
+  # n8n:
+  #   image: n8nio/n8n:latest
+  #   container_name: n8n
+  #   ports:
+  #     - "5678:5678"
+  #   environment:
+  #     - N8N_BASIC_AUTH_ACTIVE=true
+  #     - N8N_BASIC_AUTH_USER=admin
+  #     - N8N_BASIC_AUTH_PASSWORD=change_this_password
+  #     - N8N_HOST=0.0.0.0
+  #     - N8N_PORT=5678
+  #     - WEBHOOK_URL=http://YOUR_VM_IP:5678/
+  #   volumes:
+  #     - n8n_data:/home/node/.n8n
+  #   networks:
+  #     - rms-network
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - rms-mcp-server
+
+# volumes:
+#   n8n_data:
+
