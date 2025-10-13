@@ -1,0 +1,290 @@
+{
+  "name": "RMS Freight Quote Automation",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "rms-enquiry",
+      "notes": "Trigger workflow with customer enquiry data"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/search-rates",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "pol_code",
+              "value": "={{ $json.body.pol_code }}"
+            },
+            {
+              "name": "pod_code",
+              "value": "={{ $json.body.pod_code }}"
+            },
+            {
+              "name": "container_type",
+              "value": "={{ $json.body.container_type }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "search-rates",
+      "name": "Search Freight Rates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 300],
+      "notes": "Search available freight rates"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.success }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-rates-found",
+      "name": "Rates Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/get-local-charges",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "pol_code",
+              "value": "={{ $json.body.pol_code }}"
+            },
+            {
+              "name": "pod_code",
+              "value": "={{ $json.body.pod_code }}"
+            },
+            {
+              "name": "container_type",
+              "value": "={{ $json.body.container_type }}"
+            },
+            {
+              "name": "vendor_name",
+              "value": "={{ $('Search Freight Rates').item.json.data[0].vendor }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-local-charges",
+      "name": "Get Local Charges",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [850, 200],
+      "notes": "Get origin and destination charges for preferred vendor"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/prepare-quote",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "customer_name",
+              "value": "={{ $json.body.customer_name }}"
+            },
+            {
+              "name": "pol_code",
+              "value": "={{ $json.body.pol_code }}"
+            },
+            {
+              "name": "pod_code",
+              "value": "={{ $json.body.pod_code }}"
+            },
+            {
+              "name": "container_type",
+              "value": "={{ $json.body.container_type }}"
+            },
+            {
+              "name": "container_count",
+              "value": "={{ $json.body.container_count || 1 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare-quote",
+      "name": "Prepare Quote",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 200],
+      "notes": "Generate complete quote with all charges"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format the quote for email/display\nconst quote = $input.item.json.data;\n\nconst formattedQuote = {\n  quote_number: `QT-${Date.now().toString().slice(-6)}`,\n  customer: quote.customer_name || 'N/A',\n  generated_at: new Date().toISOString(),\n  \n  route: {\n    origin: `${quote.route.pol}`,\n    destination: `${quote.route.pod}`,\n    display: quote.quote_summary.route_display\n  },\n  \n  shipment: {\n    container_type: quote.route.container_type,\n    container_count: quote.route.container_count,\n    carrier: quote.quote_summary.vendor_info.carrier,\n    transit_days: quote.quote_summary.vendor_info.transit_days\n  },\n  \n  pricing: {\n    ocean_freight: `$${quote.totals.ocean_freight_total.toFixed(2)}`,\n    origin_charges: {\n      local: `${quote.totals.origin_total_local} ${quote.quote_parts.origin_charges.charges[0]?.charge_currency || 'INR'}`,\n      usd: `$${quote.totals.origin_total_usd.toFixed(2)}`\n    },\n    destination_charges: {\n      local: `${quote.totals.destination_total_local} ${quote.quote_parts.destination_charges.charges[0]?.charge_currency || 'EUR'}`,\n      usd: `$${quote.totals.destination_total_usd.toFixed(2)}`\n    },\n    grand_total: `$${quote.totals.grand_total_usd.toFixed(2)} USD`\n  },\n  \n  charge_details: {\n    origin: quote.quote_parts.origin_charges.charges.map(c => ({\n      name: c.charge_name,\n      code: c.charge_code,\n      amount: `${c.charge_amount} ${c.charge_currency}`,\n      usd: `$${c.amount_usd.toFixed(2)}`,\n      uom: c.uom\n    })),\n    destination: quote.quote_parts.destination_charges.charges.map(c => ({\n      name: c.charge_name,\n      code: c.charge_code,\n      amount: `${c.charge_amount} ${c.charge_currency}`,\n      usd: `$${c.amount_usd.toFixed(2)}`,\n      uom: c.uom\n    }))\n  },\n  \n  validity: {\n    from: quote.quote_parts.ocean_freight.validity.from,\n    to: quote.quote_parts.ocean_freight.validity.to\n  }\n};\n\nreturn { json: formattedQuote };"
+      },
+      "id": "format-quote",
+      "name": "Format Quote",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 200],
+      "notes": "Format quote data for email or display"
+    },
+    {
+      "parameters": {
+        "operation": "sendEmail",
+        "fromEmail": "quotes@yourcompany.com",
+        "toEmail": "={{ $json.body.customer_email }}",
+        "subject": "Your Freight Quote - {{ $json.quote_number }}",
+        "emailFormat": "html",
+        "text": "=<h1>Freight Quote {{ $json.quote_number }}</h1>\n\n<h2>Customer: {{ $json.customer }}</h2>\n\n<h3>Route Details</h3>\n<p><strong>From:</strong> {{ $json.route.display }}</p>\n<p><strong>Carrier:</strong> {{ $json.shipment.carrier }}</p>\n<p><strong>Transit Time:</strong> {{ $json.shipment.transit_days }} days</p>\n<p><strong>Container:</strong> {{ $json.shipment.container_count }}x {{ $json.shipment.container_type }}</p>\n\n<h3>Pricing Breakdown</h3>\n<table border=\"1\" cellpadding=\"10\" style=\"border-collapse: collapse;\">\n  <tr>\n    <td><strong>Ocean Freight</strong></td>\n    <td align=\"right\">{{ $json.pricing.ocean_freight }}</td>\n  </tr>\n  <tr>\n    <td><strong>Origin Charges</strong></td>\n    <td align=\"right\">{{ $json.pricing.origin_charges.usd }} ({{ $json.pricing.origin_charges.local }})</td>\n  </tr>\n  <tr>\n    <td><strong>Destination Charges</strong></td>\n    <td align=\"right\">{{ $json.pricing.destination_charges.usd }} ({{ $json.pricing.destination_charges.local }})</td>\n  </tr>\n  <tr style=\"background-color: #f0f0f0;\">\n    <td><strong>GRAND TOTAL</strong></td>\n    <td align=\"right\"><strong>{{ $json.pricing.grand_total }}</strong></td>\n  </tr>\n</table>\n\n<h3>Charge Details</h3>\n\n<h4>Origin Charges:</h4>\n<ul>\n{{ $json.charge_details.origin.map(c => `<li>${c.name} (${c.code}): ${c.amount} = ${c.usd} - ${c.uom}</li>`).join('') }}\n</ul>\n\n<h4>Destination Charges:</h4>\n<ul>\n{{ $json.charge_details.destination.map(c => `<li>${c.name} (${c.code}): ${c.amount} = ${c.usd} - ${c.uom}</li>`).join('') }}\n</ul>\n\n<p><strong>Valid Until:</strong> {{ $json.validity.to }}</p>\n\n<p style=\"color: #666; font-size: 12px;\">Generated at: {{ $json.generated_at }}</p>"
+      },
+      "id": "send-email",
+      "name": "Send Quote Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1450, 200],
+      "notes": "Send formatted quote to customer"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "resource": "databaseRow",
+        "table": "quotes",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "quote_number": "={{ $json.quote_number }}",
+            "customer_name": "={{ $json.customer }}",
+            "pol_code": "={{ $json.route.origin }}",
+            "pod_code": "={{ $json.route.destination }}",
+            "container_type": "={{ $json.shipment.container_type }}",
+            "container_count": "={{ $json.shipment.container_count }}",
+            "carrier": "={{ $json.shipment.carrier }}",
+            "grand_total_usd": "={{ parseFloat($json.pricing.grand_total.replace('$', '').replace(' USD', '')) }}",
+            "status": "sent",
+            "created_at": "={{ $json.generated_at }}"
+          }
+        }
+      },
+      "id": "save-to-db",
+      "name": "Save Quote to Database",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1450, 400],
+      "notes": "Optional: Save quote to Supabase for tracking",
+      "credentials": {
+        "supabaseApi": {
+          "id": "1",
+          "name": "Supabase RMS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "=## No Rates Found\n\nSorry, we couldn't find any preferred rates for:\n- Origin: {{ $('Webhook Trigger').item.json.body.pol_code }}\n- Destination: {{ $('Webhook Trigger').item.json.body.pod_code }}\n- Container: {{ $('Webhook Trigger').item.json.body.container_type }}\n\nPlease contact us for manual quote.",
+        "height": 80,
+        "width": 150
+      },
+      "id": "no-rates-message",
+      "name": "No Rates Message",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [650, 450]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Search Freight Rates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Freight Rates": {
+      "main": [
+        [
+          {
+            "node": "Rates Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rates Found?": {
+      "main": [
+        [
+          {
+            "node": "Get Local Charges",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get Local Charges": {
+      "main": [
+        [
+          {
+            "node": "Prepare Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Quote": {
+      "main": [
+        [
+          {
+            "node": "Format Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Quote": {
+      "main": [
+        [
+          {
+            "node": "Send Quote Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save Quote to Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-10-13T00:00:00.000Z",
+  "versionId": "1"
+}
+
