@@ -14,7 +14,7 @@ import {
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import jwt from '@fastify/jwt';
+import jwt from 'jsonwebtoken';
 
 // Environment variables are passed directly by Claude Desktop
 
@@ -1108,11 +1108,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // ============================================
 
 async function tenantAuthMiddleware(fastify: any) {
-  // Register JWT plugin
-  await fastify.register(jwt, {
-    secret: JWT_SECRET
-  });
-
   // Pre-handler for all /api routes
   fastify.addHook('preHandler', async (request: any, reply: any) => {
     // Skip health check and auth endpoints
@@ -1137,7 +1132,7 @@ async function tenantAuthMiddleware(fastify: any) {
       const token = authHeader.replace('Bearer ', '');
       
       // 3. Verify JWT and extract payload
-      const decoded = fastify.jwt.verify(token) as any;
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
       
       // 4. Validate tenant_id matches
       if (decoded.tenant_id !== tenantHeader) {
@@ -1196,12 +1191,12 @@ async function createHttpServer() {
       return reply.code(400).send({ error: 'tenant_id is required' });
     }
 
-    const token = fastify.jwt.sign({
+    const token = jwt.sign({
       tenant_id,
       user_id: user_id || 'test-user',
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + (60 * 60) // 1 hour
-    });
+    }, JWT_SECRET);
 
     return {
       token,
