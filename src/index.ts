@@ -1115,8 +1115,8 @@ async function tenantAuthMiddleware(fastify: any) {
 
   // Pre-handler for all /api routes
   fastify.addHook('preHandler', async (request: any, reply: any) => {
-    // Skip health check
-    if (request.url === '/health') return;
+    // Skip health check and auth endpoints
+    if (request.url === '/health' || request.url === '/api/auth/token') return;
 
     // Only apply to /api routes
     if (!request.url.startsWith('/api/')) return;
