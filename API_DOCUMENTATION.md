@@ -4,18 +4,170 @@
 The RMS MCP Server provides RESTful API endpoints for freight rate management, local charges retrieval, and quote generation. Built with Fastify and Supabase, it supports both MCP (Model Context Protocol) for Claude Desktop and HTTP API for n8n workflow automation.
 
 **Base URL**: `http://localhost:3000`  
-**Server**: Fastify with CORS enabled
+**Server**: Fastify with CORS enabled  
+**Security**: JWT Authentication with Multi-Tenant Isolation
+
+## 🔒 Authentication & Security
+
+All API endpoints (except `/health` and `/api/auth/token`) require JWT authentication and tenant validation:
+
+### Required Headers
+- `Authorization: Bearer <jwt_token>`
+- `x-tenant-id: <tenant_uuid>`
+
+### JWT Token Generation
+**Endpoint**: `POST /api/auth/token`
+
+**Request**:
+```json
+{
+  "tenant_id": "00000000-0000-0000-0000-000000000001",
+  "user_id": "user123"
+}
+```
+
+**Response**:
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "tenant_id": "00000000-0000-0000-0000-000000000001",
+  "expires_in": "1h"
+}
+```
+
+### Security Features
+- ✅ **JWT Authentication**: All API calls require valid tokens
+- ✅ **Tenant Isolation**: Each tenant can only access their own data
+- ✅ **Row Level Security**: Database-level tenant isolation via Supabase RLS
+- ✅ **Views & Materialized Views**: All database views include tenant_id filtering
+- ✅ **Header Validation**: Both Authorization and x-tenant-id required
+- ✅ **Token Expiration**: 1-hour token lifetime for security
+- ✅ **Session Context**: Automatic tenant context setting for all database queries
+
+### Error Responses
+- **401 Unauthorized**: Missing or invalid authentication headers
+- **403 Forbidden**: Tenant ID mismatch between token and header
+
+---
+
+## 🏗️ Database Architecture & Tenant Isolation
+
+### Multi-Tenant Database Design
+The RMS system implements comprehensive tenant isolation at multiple database levels:
+
+#### **Base Tables**
+All primary tables include `tenant_id` columns with Row Level Security (RLS) policies:
+```sql
+-- Example: Ocean freight rates table
+CREATE TABLE ocean_freight_rate (
+  id SERIAL PRIMARY KEY,
+  tenant_id UUID NOT NULL,
+  pol_code VARCHAR(10),
+  pod_code VARCHAR(10),
+  -- ... other columns
+);
+
+-- RLS Policy
+CREATE POLICY tenant_isolation_ocean_freight_rate ON ocean_freight_rate
+  USING (tenant_id = current_setting('app.tenant_id')::uuid);
+```
+
+#### **Views & Materialized Views**
+All database views and materialized views automatically filter by `tenant_id`:
+- **`mv_freight_sell_prices`**: Materialized view with tenant isolation
+- **`v_local_charges_details`**: View with tenant filtering
+- **`fx_rate`**: Exchange rates with tenant context
+
+#### **Session Context Management**
+Every API request automatically sets tenant context:
+```typescript
+// Automatically called for all authenticated requests
+await supabase.rpc('set_tenant_context', {
+  tenant_id: decoded.tenant_id,
+  user_id: decoded.user_id
+});
+```
+
+#### **Security Benefits**
+- 🔒 **Database-Level Isolation**: Even direct database access respects tenant boundaries
+- 🔒 **View-Level Filtering**: All aggregated data automatically filtered by tenant
+- 🔒 **Session-Based Context**: Tenant ID set per request session
+- 🔒 **RLS Enforcement**: Supabase automatically applies tenant policies
 
 ---
 
 ## Table of Contents
-1. [Health Check](#health-check)
-2. [Search Rates](#search-rates)
-3. [Get Local Charges](#get-local-charges)
-4. [Prepare Quote](#prepare-quote)
-5. [Data Models](#data-models)
-6. [Error Handling](#error-handling)
-7. [FX Conversion](#fx-conversion)
+1. [🔒 Authentication & Security](#-authentication--security)
+2. [🏗️ Database Architecture & Tenant Isolation](#️-database-architecture--tenant-isolation)
+3. [Health Check](#health-check)
+4. [Search Rates](#search-rates)
+5. [Get Local Charges](#get-local-charges)
+6. [Prepare Quote](#prepare-quote)
+7. [Data Models](#data-models)
+8. [Error Handling](#error-handling)
+9. [FX Conversion](#fx-conversion)
+
+---
+
+## 🔐 Authentication Examples
+
+### Complete Authentication Flow
+
+```bash
+# Step 1: Generate JWT Token
+curl -X POST http://localhost:3000/api/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant_id": "00000000-0000-0000-0000-000000000001",
+    "user_id": "user123"
+  }'
+
+# Response:
+# {
+#   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+#   "tenant_id": "00000000-0000-0000-0000-000000000001",
+#   "expires_in": "1h"
+# }
+
+# Step 2: Use Token in API Call
+curl -X POST http://localhost:3000/api/search-rates \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -H "x-tenant-id: 00000000-0000-0000-0000-000000000001" \
+  -d '{
+    "pol_code": "INNSA",
+    "pod_code": "NLRTM",
+    "container_type": "40HC"
+  }'
+```
+
+### Error Examples
+
+```bash
+# Missing Authentication Headers (401)
+curl -X POST http://localhost:3000/api/search-rates \
+  -H "Content-Type: application/json" \
+  -d '{"pol_code":"INNSA","pod_code":"NLRTM"}'
+
+# Response: 401 Unauthorized
+# {
+#   "error": "Missing required headers",
+#   "required": ["authorization: Bearer <token>", "x-tenant-id: <tenant_id>"]
+# }
+
+# Wrong Tenant ID (403)
+curl -X POST http://localhost:3000/api/search-rates \
+  -H "Authorization: Bearer <valid_token>" \
+  -H "x-tenant-id: wrong-tenant-id" \
+  -d '{"pol_code":"INNSA","pod_code":"NLRTM"}'
+
+# Response: 403 Forbidden
+# {
+#   "error": "Tenant ID mismatch",
+#   "token_tenant": "00000000-0000-0000-0000-000000000001",
+#   "header_tenant": "wrong-tenant-id"
+# }
+```
 
 ---
 
@@ -47,9 +199,17 @@ curl http://localhost:3000/health
 
 ### Search Rates
 
-**Endpoint**: `POST /api/search-rates`
+**Endpoint**: `POST /api/search-rates`  
+**Authentication**: Required (JWT + Tenant ID)
 
 **Description**: Search for ocean freight rates from the `mv_freight_sell_prices` view. Returns all matching rates with detailed pricing breakdown.
+
+**Headers**:
+```
+Authorization: Bearer <jwt_token>
+x-tenant-id: <tenant_uuid>
+Content-Type: application/json
+```
 
 **Request Body**:
 ```json
@@ -111,9 +271,17 @@ curl -X POST http://localhost:3000/api/search-rates \
 
 ### Get Local Charges
 
-**Endpoint**: `POST /api/get-local-charges`
+**Endpoint**: `POST /api/get-local-charges`  
+**Authentication**: Required (JWT + Tenant ID)
 
 **Description**: Retrieve origin and/or destination local charges from `v_local_charges_details`. Supports flexible querying - can request origin only, destination only, or both.
+
+**Headers**:
+```
+Authorization: Bearer <jwt_token>
+x-tenant-id: <tenant_uuid>
+Content-Type: application/json
+```
 
 **Request Body**:
 ```json
@@ -220,9 +388,17 @@ curl -X POST http://localhost:3000/api/get-local-charges \
 
 ### Prepare Quote
 
-**Endpoint**: `POST /api/prepare-quote`
+**Endpoint**: `POST /api/prepare-quote`  
+**Authentication**: Required (JWT + Tenant ID)
 
 **Description**: Generate a complete shipping quote by aggregating ocean freight from the preferred rate and associated local charges. Automatically deduplicates charges and converts currencies to USD.
+
+**Headers**:
+```
+Authorization: Bearer <jwt_token>
+x-tenant-id: <tenant_uuid>
+Content-Type: application/json
+```
 
 **Request Body**:
 ```json
