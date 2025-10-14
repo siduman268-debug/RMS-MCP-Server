@@ -14,6 +14,7 @@ import {
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import jwt from '@fastify/jwt';
 
 // Environment variables are passed directly by Claude Desktop
 
@@ -23,6 +24,8 @@ import cors from '@fastify/cors';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production';
+const JWT_TTL = process.env.JWT_TTL || '1h';
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.error('Error: SUPABASE_URL and SUPABASE_SERVICE_KEY must be set');
@@ -1101,11 +1104,78 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // ============================================
 
 // ============================================
+// TENANT & AUTH MIDDLEWARE
+// ============================================
+
+async function tenantAuthMiddleware(fastify: any) {
+  // Register JWT plugin
+  await fastify.register(jwt, {
+    secret: JWT_SECRET
+  });
+
+  // Pre-handler for all /api routes
+  fastify.addHook('preHandler', async (request: any, reply: any) => {
+    // Skip health check
+    if (request.url === '/health') return;
+
+    // Only apply to /api routes
+    if (!request.url.startsWith('/api/')) return;
+
+    try {
+      // 1. Extract and validate headers
+      const authHeader = request.headers.authorization;
+      const tenantHeader = request.headers['x-tenant-id'];
+
+      if (!authHeader || !tenantHeader) {
+        return reply.code(401).send({
+          error: 'Missing required headers',
+          required: ['authorization: Bearer <token>', 'x-tenant-id: <tenant_id>']
+        });
+      }
+
+      // 2. Extract JWT token
+      const token = authHeader.replace('Bearer ', '');
+      
+      // 3. Verify JWT and extract payload
+      const decoded = fastify.jwt.verify(token) as any;
+      
+      // 4. Validate tenant_id matches
+      if (decoded.tenant_id !== tenantHeader) {
+        return reply.code(403).send({
+          error: 'Tenant ID mismatch',
+          token_tenant: decoded.tenant_id,
+          header_tenant: tenantHeader
+        });
+      }
+
+      // 5. Set tenant context for Supabase RLS
+      request.tenant_id = decoded.tenant_id;
+      request.user_id = decoded.user_id;
+
+      // 6. Set DB session variable for RLS
+      await supabase.rpc('set_tenant_context', {
+        tenant_id: decoded.tenant_id,
+        user_id: decoded.user_id
+      });
+
+    } catch (error) {
+      return reply.code(401).send({
+        error: 'Invalid or expired token',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+}
+
+// ============================================
 // HTTP API SERVER (for n8n integration)
 // ============================================
 
 async function createHttpServer() {
   const fastify = Fastify({ logger: true });
+
+  // Register tenant auth middleware
+  await fastify.register(tenantAuthMiddleware);
 
   // Enable CORS for n8n
   await fastify.register(cors, {
@@ -1116,6 +1186,28 @@ async function createHttpServer() {
   // Health check endpoint
   fastify.get('/health', async (request, reply) => {
     return { status: 'ok', service: 'rms-api', timestamp: new Date().toISOString() };
+  });
+
+  // JWT Token generation endpoint (for testing)
+  fastify.post('/api/auth/token', async (request, reply) => {
+    const { tenant_id, user_id } = request.body as any;
+    
+    if (!tenant_id) {
+      return reply.code(400).send({ error: 'tenant_id is required' });
+    }
+
+    const token = fastify.jwt.sign({
+      tenant_id,
+      user_id: user_id || 'test-user',
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + (60 * 60) // 1 hour
+    });
+
+    return {
+      token,
+      tenant_id,
+      expires_in: '1h'
+    };
   });
 
   // 1. Search Rates endpoint
