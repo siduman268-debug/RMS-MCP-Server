@@ -1107,8 +1107,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // TENANT & AUTH MIDDLEWARE
 // ============================================
 
-async function tenantAuthMiddleware(fastify: any) {
-  // Pre-handler for all /api routes
+// Authentication middleware is now directly in createHttpServer function
+
+// ============================================
+// HTTP API SERVER (for n8n integration)
+// ============================================
+
+async function createHttpServer() {
+  const fastify = Fastify({ logger: true });
+
+  // Enable CORS for n8n
+  await fastify.register(cors, {
+    origin: true,
+    credentials: true
+  });
+
+  // Add authentication middleware directly to fastify
   fastify.addHook('preHandler', async (request: any, reply: any) => {
     // Skip health check and auth endpoints
     if (request.url === '/health' || request.url === '/api/auth/token') return;
@@ -1159,23 +1173,6 @@ async function tenantAuthMiddleware(fastify: any) {
         details: error instanceof Error ? error.message : 'Unknown error'
       });
     }
-  });
-}
-
-// ============================================
-// HTTP API SERVER (for n8n integration)
-// ============================================
-
-async function createHttpServer() {
-  const fastify = Fastify({ logger: true });
-
-  // Register tenant auth middleware
-  await fastify.register(tenantAuthMiddleware);
-
-  // Enable CORS for n8n
-  await fastify.register(cors, {
-    origin: true,
-    credentials: true
   });
 
   // Health check endpoint
