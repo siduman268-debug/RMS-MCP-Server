@@ -1325,7 +1325,7 @@ async function createHttpServer() {
           .select('rate_date, base_ccy, quote_ccy, rate')
           .eq('quote_ccy', 'USD')
           .in('base_ccy', currencies)
-          .eq('rate_date', new Date().toISOString().split('T')[0])
+          .lte('rate_date', new Date().toISOString().split('T')[0])
           .order('rate_date', { ascending: false });
 
         if (fxError) throw fxError;
@@ -1494,7 +1494,7 @@ async function createHttpServer() {
           .select('rate_date, base_ccy, quote_ccy, rate')
           .eq('quote_ccy', 'USD')
           .in('base_ccy', currencies)
-          .eq('rate_date', new Date().toISOString().split('T')[0])
+          .lte('rate_date', new Date().toISOString().split('T')[0])
           .order('rate_date', { ascending: false });
 
         if (fxError) throw fxError;
@@ -1872,16 +1872,25 @@ async function createHttpServer() {
 
         let fxRates: { [key: string]: number } = {};
         if (currencies.length > 0) {
+          // Try to get FX rates for today first, then fall back to latest available
           const { data: fxData, error: fxError } = await supabase
             .from('fx_rate')
             .select('rate_date, base_ccy, quote_ccy, rate')
             .eq('quote_ccy', 'USD')
             .in('base_ccy', currencies)
-            .eq('rate_date', new Date().toISOString().split('T')[0])
+            .lte('rate_date', new Date().toISOString().split('T')[0])
             .order('rate_date', { ascending: false });
 
           if (fxData && fxData.length > 0) {
+            // Group by currency and take the latest rate for each
+            const latestRates: { [key: string]: any } = {};
             fxData.forEach((fx: any) => {
+              if (!latestRates[fx.base_ccy]) {
+                latestRates[fx.base_ccy] = fx;
+              }
+            });
+            
+            Object.values(latestRates).forEach((fx: any) => {
               fxRates[fx.base_ccy] = fx.rate;
               allFxRates[fx.base_ccy] = fx.rate;
             });
