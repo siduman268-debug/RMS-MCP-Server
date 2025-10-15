@@ -1813,17 +1813,21 @@ async function createHttpServer() {
         }
 
         // Get origin and destination charges for this rate
+        // Note: We get all charges for the port/container, not filtered by vendor
+        // The V1 endpoint shows charges are available for multiple vendors
         const { data: originCharges } = await supabase
           .from('v_local_charges_details')
           .select('*')
           .eq('pol_code', rateData.pol_code)
-          .eq('container_type', rateData.container_type);
+          .eq('container_type', rateData.container_type)
+          .eq('applies_scope', 'origin');
 
         const { data: destCharges } = await supabase
           .from('v_local_charges_details')
           .select('*')
           .eq('pod_code', rateData.pod_code)
-          .eq('container_type', rateData.container_type);
+          .eq('container_type', rateData.container_type)
+          .eq('applies_scope', 'dest');
 
         // Calculate totals for this rate
         const oceanFreightSell = rateData.all_in_freight_sell || 0;
