@@ -1834,17 +1834,17 @@ async function createHttpServer() {
         }
       }
 
-      // Process charges with currency conversion (same logic as V1)
-      const processCharges = (charges: any[]) => {
-        return charges?.map((charge: any) => {
-          const fxRate = fxRates[charge.charge_currency] || 1;
-          const amountUSD = charge.charge_currency === 'USD' ? charge.charge_amount : charge.charge_amount / fxRate;
-          return {
-            ...charge,
-            amount_usd: Math.round(amountUSD * 100) / 100
-          };
-        }) || [];
-      };
+           // Process charges with currency conversion (same logic as V1)
+           const processCharges = (charges: any[]) => {
+             return charges?.map((charge: any) => {
+               const fxRate = fxRates[charge.charge_currency] || 1;
+               const amountUSD = charge.charge_currency === 'USD' ? charge.charge_amount : charge.charge_amount * fxRate;
+               return {
+                 ...charge,
+                 amount_usd: Math.round(amountUSD * 100) / 100
+               };
+             }) || [];
+           };
 
       const processedOriginCharges = processCharges(originCharges);
       const processedDestCharges = processCharges(destCharges);
