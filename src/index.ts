@@ -1721,6 +1721,14 @@ async function createHttpServer() {
         });
       }
 
+      // Validate container_count if provided
+      if (container_count && (container_count < 1 || container_count > 10)) {
+        return reply.code(400).send({
+          success: false,
+          error: 'container_count must be between 1 and 10'
+        });
+      }
+
       // Get rate details from database
       const { data: rateData, error: rateError } = await supabase
         .from('mv_freight_sell_prices')

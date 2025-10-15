@@ -32,7 +32,7 @@ POST /webhook/salesforce-rms-v2
   "action": "prepare_quote",
   "salesforce_org_id": "00DBE000002eBzh",
   "rate_id": 77,
-  "container_count": 1  // optional, defaults to 1
+  "container_count": 2  // required: number of containers (1-10)
 }
 ```
 
@@ -105,7 +105,7 @@ curl -X POST https://agents.propelor.io/webhook/salesforce-rms-v2 \
 }
 ```
 
-#### Test 2: Prepare Quote
+#### Test 2: Prepare Quote (Single Container)
 ```bash
 curl -X POST https://agents.propelor.io/webhook/salesforce-rms-v2 \
   -H "Content-Type: application/json" \
@@ -114,6 +114,18 @@ curl -X POST https://agents.propelor.io/webhook/salesforce-rms-v2 \
     "salesforce_org_id": "00DBE000002eBzh",
     "rate_id": 77,
     "container_count": 1
+  }'
+```
+
+#### Test 3: Prepare Quote (Multiple Containers)
+```bash
+curl -X POST https://agents.propelor.io/webhook/salesforce-rms-v2 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "prepare_quote",
+    "salesforce_org_id": "00DBE000002eBzh",
+    "rate_id": 77,
+    "container_count": 3
   }'
 ```
 
@@ -210,7 +222,7 @@ Map<String, Object> request = new Map<String, Object>{
     'action' => 'prepare_quote',
     'salesforce_org_id' => '{!$Organization.Id}',
     'rate_id' => '{!Selected_Rate_ID__c}',
-    'container_count' => '{!Container_Count__c}'
+    'container_count' => '{!Container_Count__c}'  // User input: 1-10 containers
 };
 
 HttpResponse response = callout('RMS_Prepare_Quote', request);
@@ -256,6 +268,12 @@ Error: "401 Unauthorized"
 Error: "Invalid action. Use 'search_rates' or 'prepare_quote'"
 ```
 **Solution:** Ensure action field is exactly "search_rates" or "prepare_quote"
+
+#### **5. Invalid Container Count**
+```
+Error: "container_count must be between 1 and 10"
+```
+**Solution:** Ensure container_count is a number between 1 and 10
 
 ## 📊 Monitoring
 
