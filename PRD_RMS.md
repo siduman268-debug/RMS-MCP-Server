@@ -374,48 +374,68 @@ PUT /api/weight-slabs/{id}        # Update weight slab
 
 ---
 
-## 📅 Development Roadmap
+## 📅 Development Roadmap (Monthly Plan)
 
-### Q1 2025: Foundation & Testing
-- ✅ **Core API Development**: Authentication, rate management, quote generation
-- ✅ **Multi-Tenant Architecture**: Database RLS, JWT security
-- 🚧 **Salesforce Integration**: Org ID mapping, data testing
-- 🚧 **n8n Workflow**: Email-to-quote automation
-
-### Q2 2025: Advanced Features
+### October 2025: Core Feature Development
+- ✅ **Core API Development**: Authentication, rate management, quote generation (Completed)
+- ✅ **Multi-Tenant Architecture**: Database RLS, JWT security (Completed)
+- 🚧 **Salesforce Integration**: Org ID mapping, data testing (In Progress)
+- 🚧 **n8n Workflow**: Email-to-quote automation (In Progress)
 - 📋 **IHE Implementation**: Inland haulage extension logic
-- 📋 **Multi-Leg Routes**: Road+rail+ocean transportation
-- 📋 **Weight Slab Pricing**: Dynamic weight-based pricing
 - 📋 **Rate Management CRUD**: Full rate management capabilities
 
-### Q3 2025: Integration & Automation
-- 📋 **Advanced n8n Workflows**: Complex automation scenarios
+### November 2025: Advanced Features & Integration
+- 📋 **Multi-Leg Routes**: Road+rail+ocean transportation
+- 📋 **Weight Slab Pricing**: Dynamic weight-based pricing
 - 📋 **Analytics Dashboard**: Reporting and analytics interface
-- 📋 **API Rate Limiting**: Performance and security enhancements
-- 📋 **Webhook Support**: Real-time event notifications
-
-### Q4 2025: Scale & Optimize
+- 📋 **Advanced n8n Workflows**: Complex automation scenarios
 - 📋 **Performance Optimization**: Caching, database optimization
-- 📋 **Advanced Analytics**: AI-powered insights and recommendations
-- 📋 **Mobile API**: Mobile app support and optimization
-- 📋 **International Expansion**: Additional market support
+
+### December 2025: Market Launch Preparation
+- 📋 **Customer Pilot Program**: 5 pilot customers onboarding
+- 📋 **Sales Strategy**: Develop sales materials and pricing
+- 📋 **Market Launch**: Official GTM launch with complete feature set
+- 📋 **API Rate Limiting**: Performance and security enhancements
+
+### January 2026: Market Launch & Early Growth
+- 📋 **Customer Onboarding**: First 10 paying customers
+- 📋 **Webhook Support**: Real-time event notifications
+- 📋 **Customer Success Program**: Support and training systems
+- 📋 **Market Feedback**: Gather and implement customer feedback
+
+### February 2026: Scale & Optimization
+- 📋 **Customer Growth**: 15+ paying customers
+- 📋 **Advanced Analytics**: Enhanced reporting and insights
+- 📋 **Performance Tuning**: Optimize based on real usage
+- 📋 **Feature Refinements**: Improve based on customer feedback
+
+### March 2026: Market Leadership
+- 📋 **Market Expansion**: 25+ paying customers
+- 📋 **Advanced Features**: AI-powered insights and recommendations
+- 📋 **Partnership Development**: Key technology and industry partnerships
+- 📋 **Product Excellence**: Industry-leading features and performance
 
 ---
 
 ## 💰 Business Case
 
-### Revenue Projections (Year 1)
-- **Q1**: $0 (Development phase)
-- **Q2**: $10K (Pilot customers)
-- **Q3**: $50K (Market launch)
-- **Q4**: $150K (Growth phase)
-- **Total Year 1**: $210K
+### Revenue Projections (Monthly Plan)
+- **October 2025**: $0 (Feature development)
+- **November 2025**: $0 (Feature completion)
+- **December 2025**: $2K (Pilot customers launch)
+- **January 2026**: $5K (Early paying customers)
+- **February 2026**: $12K (Growth acceleration)
+- **March 2026**: $25K (Market traction)
+- **Total 6-Month Revenue**: $44K
 
-### Customer Acquisition Targets
-- **Q2**: 5 pilot customers
-- **Q3**: 25 paying customers
-- **Q4**: 75 paying customers
-- **Growth Rate**: 200% quarter-over-quarter
+### Customer Acquisition Targets (Monthly)
+- **October 2025**: 0 (Development phase)
+- **November 2025**: 0 (Development phase)
+- **December 2025**: 3 pilot customers
+- **January 2026**: 8 paying customers (+5)
+- **February 2026**: 15 paying customers (+7)
+- **March 2026**: 25 paying customers (+10)
+- **Growth Rate**: 150% month-over-month (Jan-Mar)
 
 ### Cost Structure
 - **Development**: $120K (team of 2-3 developers)
@@ -425,7 +445,7 @@ PUT /api/weight-slabs/{id}        # Update weight slab
 - **Total Year 1**: $240K
 
 ### Break-Even Analysis
-- **Break-Even Point**: Q4 2025
+- **Break-Even Point**: Q1 2026 (Accelerated timeline)
 - **Customer Lifetime Value**: $15,000
 - **Customer Acquisition Cost**: $3,000
 - **Gross Margin**: 85%
@@ -454,25 +474,43 @@ PUT /api/weight-slabs/{id}        # Update weight slab
 
 ---
 
-## 📞 Next Steps
+## 📞 Next Steps (Monthly Action Plan)
 
-### Immediate Actions (Next 30 Days)
+### October 2025: Core Development Sprint
 1. **Complete Salesforce Testing**: Validate API with real Salesforce data
-2. **n8n Workflow Development**: Build email-to-quote automation
-3. **Customer Pilot Program**: Identify and onboard 5 pilot customers
-4. **Market Research**: Deep dive into India/UAE freight forwarding market
+2. **IHE Implementation**: Develop inland haulage extension logic
+3. **Rate Management CRUD**: Full rate management capabilities
+4. **Performance Optimization**: Caching and database optimization
 
-### Short-term Goals (Next 90 Days)
-1. **Advanced Features**: Implement IHE and multi-leg routing
-2. **Customer Feedback**: Gather feedback from pilot customers
-3. **Sales Strategy**: Develop sales materials and pricing
-4. **Partnership Development**: Establish key technology partnerships
+### November 2025: Advanced Features Sprint
+1. **Multi-Leg Routes**: Road+rail+ocean transportation
+2. **Weight Slab Pricing**: Dynamic weight-based pricing
+3. **Analytics Dashboard**: Reporting and analytics interface
+4. **Advanced n8n Workflows**: Complex automation scenarios
 
-### Long-term Vision (Next 12 Months)
-1. **Market Leadership**: Become the go-to RMS solution in India/UAE
-2. **Product Excellence**: Industry-leading features and performance
-3. **Customer Success**: 100+ satisfied customers with high retention
-4. **International Expansion**: Prepare for expansion to other markets
+### December 2025: Market Launch Sprint
+1. **Customer Pilot Program**: Identify and onboard 3 pilot customers
+2. **Sales Strategy**: Develop sales materials and pricing
+3. **Market Launch**: Official GTM launch with complete feature set
+4. **API Rate Limiting**: Performance and security enhancements
+
+### January 2026: Early Growth Phase
+1. **Customer Onboarding**: First 8 paying customers
+2. **Webhook Support**: Real-time event notifications
+3. **Customer Success Program**: Support and training systems
+4. **Market Feedback**: Gather and implement customer feedback
+
+### February 2026: Scale & Optimization
+1. **Customer Growth**: Reach 15+ paying customers
+2. **Advanced Analytics**: Enhanced reporting and insights
+3. **Performance Tuning**: Optimize based on real usage
+4. **Feature Refinements**: Improve based on customer feedback
+
+### March 2026: Market Leadership
+1. **Market Expansion**: 25+ paying customers
+2. **Advanced Features**: AI-powered insights and recommendations
+3. **Partnership Development**: Key technology and industry partnerships
+4. **Product Excellence**: Industry-leading features and performance
 
 ---
 

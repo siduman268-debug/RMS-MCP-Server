@@ -403,11 +403,11 @@ Content-Type: application/json
 **Request Body**:
 ```json
 {
-  "customer_name": "Acme Corp",  // Optional: Customer name
-  "pol_code": "INNSA",           // Required: Port of Loading
-  "pod_code": "NLRTM",           // Required: Port of Discharge
-  "container_type": "40HC",      // Required: Container type
-  "container_count": 2           // Optional: Number of containers (default: 1)
+  "salesforce_org_id": "00DBE000002eBzh",  // Required: Salesforce Organization ID
+  "pol_code": "INNSA",                     // Required: Port of Loading
+  "pod_code": "NLRTM",                     // Required: Port of Discharge
+  "container_type": "40HC",                // Required: Container type
+  "container_count": 2                     // Optional: Number of containers (default: 1)
 }
 ```
 
@@ -416,7 +416,7 @@ Content-Type: application/json
 {
   "success": true,
   "data": {
-    "customer_name": "Acme Corp",
+    "salesforce_org_id": "00DBE000002eBzh",
     "route": {
       "pol": "INNSA",
       "pod": "NLRTM",
@@ -545,7 +545,7 @@ Content-Type: application/json
 curl -X POST http://localhost:3000/api/prepare-quote \
   -H "Content-Type: application/json" \
   -d '{
-    "customer_name": "Acme Corp",
+    "salesforce_org_id": "00DBE000002eBzh",
     "pol_code": "INNSA",
     "pod_code": "NLRTM",
     "container_type": "40HC",
@@ -694,7 +694,7 @@ All USD amounts are rounded to 2 decimal places using banker's rounding.
   "method": "POST",
   "url": "http://localhost:3000/api/prepare-quote",
   "body": {
-    "customer_name": "{{$json.customer_name}}",
+    "salesforce_org_id": "{{$json.salesforce_org_id}}",
     "pol_code": "{{$json.origin}}",
     "pod_code": "{{$json.destination}}",
     "container_type": "{{$json.container}}",

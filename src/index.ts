@@ -1413,7 +1413,7 @@ async function createHttpServer() {
   // 3. Prepare Quote endpoint
   fastify.post('/api/prepare-quote', async (request, reply) => {
     try {
-      const { customer_name, pol_code, pod_code, container_type, container_count = 1 } = request.body as any;
+      const { salesforce_org_id, pol_code, pod_code, container_type, container_count = 1 } = request.body as any;
 
       // 1. Get Ocean Freight (All-in Sell) from mv_freight_sell_prices
       const { data: freightData, error: freightError } = await supabase
@@ -1557,7 +1557,7 @@ async function createHttpServer() {
       return {
         success: true,
         data: {
-          customer_name,
+          salesforce_org_id,
           route: {
             pol: pol_code,
             pod: pod_code,
