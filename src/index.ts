@@ -1859,9 +1859,9 @@ async function createHttpServer() {
           }) || [];
         };
 
-        const originCharges = deduplicateCharges(originChargesRaw);
-        const destCharges = deduplicateCharges(destChargesRaw);
-        const otherCharges = deduplicateCharges(otherChargesRaw);
+        const originCharges = deduplicateCharges(originChargesRaw || []);
+        const destCharges = deduplicateCharges(destChargesRaw || []);
+        const otherCharges = deduplicateCharges(otherChargesRaw || []);
 
         // Get FX rates for currency conversion (same logic as V1)
         const currencies = [...new Set([
