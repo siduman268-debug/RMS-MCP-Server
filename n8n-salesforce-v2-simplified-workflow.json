@@ -1,0 +1,339 @@
+{
+  "name": "Salesforce RMS V2 Simplified Quote Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "salesforce-rms-v2",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-salesforce",
+      "name": "Salesforce Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "salesforce-rms-v2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "search-rates-condition",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "search_rates",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-search-rates",
+      "name": "IF: Search Rates?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "prepare-quote-condition",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "prepare_quote",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-prepare-quote",
+      "name": "IF: Prepare Quote?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "url": "http://13.204.127.113:3000/api/v2/search-rates",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $('Get JWT Token').item.json.token }}"
+            },
+            {
+              "name": "x-tenant-id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "pol_code",
+              "value": "={{ $json.pol_code }}"
+            },
+            {
+              "name": "pod_code",
+              "value": "={{ $json.pod_code }}"
+            },
+            {
+              "name": "container_type",
+              "value": "={{ $json.container_type }}"
+            },
+            {
+              "name": "vendor_name",
+              "value": "={{ $json.vendor_name || '' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "call-rms-search-rates",
+      "name": "Call RMS Search Rates API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "url": "http://13.204.127.113:3000/api/v2/prepare-quote",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $('Get JWT Token').item.json.token }}"
+            },
+            {
+              "name": "x-tenant-id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "salesforce_org_id",
+              "value": "={{ $json.salesforce_org_id }}"
+            },
+            {
+              "name": "rate_id",
+              "value": "={{ $json.rate_id }}"
+            },
+            {
+              "name": "container_count",
+              "value": "={{ $json.container_count || 1 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "call-rms-prepare-quote",
+      "name": "Call RMS Prepare Quote API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "url": "http://13.204.127.113:3000/api/auth/token",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tenant_id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            },
+            {
+              "name": "user_id",
+              "value": "sf_00DBE000002eBzh"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-jwt-token",
+      "name": "Get JWT Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond-search-rates",
+      "name": "Respond: Search Rates",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond-prepare-quote",
+      "name": "Respond: Prepare Quote",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"error\": \"Invalid action. Use 'search_rates' or 'prepare_quote'\" } }}"
+      },
+      "id": "respond-error",
+      "name": "Respond: Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 600]
+    }
+  ],
+  "connections": {
+    "Salesforce Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get JWT Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get JWT Token": {
+      "main": [
+        [
+          {
+            "node": "IF: Search Rates?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF: Prepare Quote?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Search Rates?": {
+      "main": [
+        [
+          {
+            "node": "Call RMS Search Rates API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Prepare Quote?": {
+      "main": [
+        [
+          {
+            "node": "Call RMS Prepare Quote API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call RMS Search Rates API": {
+      "main": [
+        [
+          {
+            "node": "Respond: Search Rates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call RMS Prepare Quote API": {
+      "main": [
+        [
+          {
+            "node": "Respond: Prepare Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-15T08:00:00.000Z",
+  "versionId": "1"
+}
