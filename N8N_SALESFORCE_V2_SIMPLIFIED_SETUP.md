@@ -21,7 +21,8 @@ POST /webhook/salesforce-rms-v2
   "pol_code": "INNSA",
   "pod_code": "NLRTM", 
   "container_type": "40HC",
-  "vendor_name": "MSC"  // optional
+  "vendor_name": "MSC",  // optional
+  "salesforce_org_id": "00DBE000002eBzh"  // required
 }
 ```
 
@@ -68,7 +69,8 @@ curl -X POST https://agents.propelor.io/webhook/salesforce-rms-v2 \
     "action": "search_rates",
     "pol_code": "INNSA",
     "pod_code": "NLRTM",
-    "container_type": "40HC"
+    "container_type": "40HC",
+    "salesforce_org_id": "00DBE000002eBzh"
   }'
 ```
 
@@ -202,7 +204,8 @@ Map<String, Object> request = new Map<String, Object>{
     'action' => 'search_rates',
     'pol_code' => '{!POL_Code__c}',
     'pod_code' => '{!POD_Code__c}',
-    'container_type' => '{!Container_Type__c}'
+    'container_type' => '{!Container_Type__c}',
+    'salesforce_org_id' => '{!$Organization.Id}'
 };
 
 HttpResponse response = callout('RMS_Search_Rates', request);

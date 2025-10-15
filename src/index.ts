@@ -1657,7 +1657,15 @@ async function createHttpServer() {
   // V2: Search Rates (same as V1 but with V2 endpoint)
   fastify.post('/api/v2/search-rates', async (request, reply) => {
     try {
-      const { pol_code, pod_code, container_type, vendor_name } = request.body as any;
+      const { pol_code, pod_code, container_type, vendor_name, salesforce_org_id } = request.body as any;
+
+      // Validate required parameters
+      if (!pol_code || !pod_code) {
+        return reply.code(400).send({
+          success: false,
+          error: 'pol_code and pod_code are required'
+        });
+      }
 
       let query = supabase
         .from('mv_freight_sell_prices')

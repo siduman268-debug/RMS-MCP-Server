@@ -113,6 +113,10 @@
             {
               "name": "vendor_name",
               "value": "={{ $json.vendor_name || '' }}"
+            },
+            {
+              "name": "salesforce_org_id",
+              "value": "={{ $json.salesforce_org_id }}"
             }
           ]
         },
