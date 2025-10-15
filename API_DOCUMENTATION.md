@@ -100,12 +100,16 @@ await supabase.rpc('set_tenant_context', {
 1. [🔒 Authentication & Security](#-authentication--security)
 2. [🏗️ Database Architecture & Tenant Isolation](#️-database-architecture--tenant-isolation)
 3. [Health Check](#health-check)
-4. [Search Rates](#search-rates)
-5. [Get Local Charges](#get-local-charges)
-6. [Prepare Quote](#prepare-quote)
-7. [Data Models](#data-models)
-8. [Error Handling](#error-handling)
-9. [FX Conversion](#fx-conversion)
+4. [API Version 1 (V1) Endpoints](#api-version-1-v1-endpoints)
+   - [Search Rates](#search-rates)
+   - [Get Local Charges](#get-local-charges)
+   - [Prepare Quote](#prepare-quote)
+5. [API Version 2 (V2) Endpoints](#api-version-2-v2-endpoints)
+   - [V2 Search Rates](#v2-search-rates)
+   - [V2 Prepare Quote](#v2-prepare-quote)
+6. [Data Models](#data-models)
+7. [Error Handling](#error-handling)
+8. [FX Conversion](#fx-conversion)
 
 ---
 
@@ -171,7 +175,11 @@ curl -X POST http://localhost:3000/api/search-rates \
 
 ---
 
-## Endpoints
+## API Version 1 (V1) Endpoints
+
+The original API endpoints that provide comprehensive freight rate management functionality.
+
+---
 
 ### Health Check
 
@@ -555,6 +563,307 @@ curl -X POST http://localhost:3000/api/prepare-quote \
 
 ---
 
+## API Version 2 (V2) Endpoints
+
+The V2 API provides a simplified, single-rate quote flow designed for Salesforce integration. These endpoints support a streamlined workflow where users can search for rates and then create quotes for specific rate IDs.
+
+### Key Differences from V1:
+- **Simplified Flow**: Search rates → Select rate → Create quote
+- **Rate ID Based**: Quotes are created for specific rate IDs rather than preferred rates
+- **Salesforce Integration**: Optimized for Salesforce Org ID tracking
+- **Container Count Validation**: Enforces 1-10 container limit
+- **Same Response Structure**: V2 quotes match V1 structure for compatibility
+
+---
+
+### V2 Search Rates
+
+**Endpoint**: `POST /api/v2/search-rates`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Search for ocean freight rates with enhanced validation and Salesforce Org ID support. Returns all matching rates with detailed pricing breakdown.
+
+**Headers**:
+```
+Authorization: Bearer <jwt_token>
+x-tenant-id: <tenant_uuid>
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "pol_code": "INNSA",                    // Required: Port of Loading UN/LOCODE
+  "pod_code": "NLRTM",                    // Required: Port of Discharge UN/LOCODE
+  "container_type": "40HC",               // Optional: Container type (20GP, 40GP, 40HC, 45HC)
+  "vendor_name": "MSC",                   // Optional: Filter by carrier name (partial match)
+  "salesforce_org_id": "00DBE000002eBzh"  // Required: Salesforce Organization ID
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "vendor": "MSC",
+      "route": "Nhava Sheva (JNPT) (INNSA) → Rotterdam (NLRTM)",
+      "container_type": "40HC",
+      "transit_days": 18,
+      "pricing": {
+        "ocean_freight_buy": 1950,
+        "freight_surcharges": 289.85,
+        "all_in_freight_buy": 2239.85,
+        "margin": {
+          "type": "pct",
+          "percentage": 10,
+          "amount": 223.99
+        },
+        "all_in_freight_sell": 2463.84,
+        "currency": "USD"
+      },
+      "validity": {
+        "from": "2025-10-07",
+        "to": "2026-01-05"
+      },
+      "is_preferred": true,
+      "rate_id": 71
+    }
+  ]
+}
+```
+
+**Validation**:
+- `pol_code` and `pod_code` are required and validated
+- `salesforce_org_id` is required for tenant tracking
+- Returns empty array if no rates found (not an error)
+
+**Use Cases**:
+- Salesforce integration for rate discovery
+- Multi-vendor rate comparison
+- Route-specific rate lookup
+
+**Example**:
+```bash
+curl -X POST http://localhost:3000/api/v2/search-rates \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -H "x-tenant-id: <tenant_id>" \
+  -d '{
+    "pol_code": "INNSA",
+    "pod_code": "NLRTM",
+    "container_type": "40HC",
+    "salesforce_org_id": "00DBE000002eBzh"
+  }'
+```
+
+---
+
+### V2 Prepare Quote
+
+**Endpoint**: `POST /api/v2/prepare-quote`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Create a complete shipping quote for a specific rate ID. This endpoint fetches the exact rate details and calculates associated local charges, returning a V1-compatible quote structure.
+
+**Headers**:
+```
+Authorization: Bearer <jwt_token>
+x-tenant-id: <tenant_uuid>
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "salesforce_org_id": "00DBE000002eBzh",  // Required: Salesforce Organization ID
+  "rate_id": 77,                           // Required: Specific rate ID from search results
+  "container_count": 1                     // Optional: Number of containers (1-10, default: 1)
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "salesforce_org_id": "00DBE000002eBzh",
+    "rate_id": 77,
+    "route": {
+      "pol": "INNSA",
+      "pod": "NLRTM",
+      "container_type": "40HC",
+      "container_count": 1
+    },
+    "quote_parts": {
+      "ocean_freight": {
+        "carrier": "Hapag-Lloyd",
+        "all_in_freight_sell": 2765.84,
+        "ocean_freight_buy": 2200,
+        "freight_surcharges": 314.4,
+        "margin": {
+          "type": "pct",
+          "percentage": 10,
+          "amount": 251.44
+        },
+        "currency": "USD",
+        "transit_days": 22,
+        "validity": {
+          "from": "2025-10-07",
+          "to": "2026-01-05"
+        },
+        "is_preferred": false,
+        "rate_id": 77
+      },
+      "origin_charges": {
+        "charges": [
+          {
+            "charge_code": "DOC_FEE",
+            "vendor_charge_name": "Documentation Fee",
+            "charge_amount": 1800,
+            "charge_currency": "INR",
+            "amount_usd": 21.6,
+            "uom": "per_bl"
+          }
+        ],
+        "total_local": 11600,
+        "total_usd": 139.2,
+        "count": 4
+      },
+      "destination_charges": {
+        "charges": [
+          {
+            "charge_code": "DO_FEE",
+            "vendor_charge_name": "Delivery Order Fee",
+            "charge_amount": 50,
+            "charge_currency": "EUR",
+            "amount_usd": 50,
+            "uom": "per_bl"
+          }
+        ],
+        "total_local": 375,
+        "total_usd": 375,
+        "count": 4
+      },
+      "other_charges": {
+        "charges": [],
+        "total_local": 0,
+        "total_usd": 0,
+        "count": 0
+      }
+    },
+    "totals": {
+      "ocean_freight_total": 2765.84,
+      "origin_total_local": 11600,
+      "origin_total_usd": 139.2,
+      "destination_total_local": 375,
+      "destination_total_usd": 375,
+      "other_total_local": 0,
+      "other_total_usd": 0,
+      "grand_total_usd": 3280.04,
+      "currency": "USD",
+      "fx_rates": {
+        "INR": 0.012
+      },
+      "currencies_used": ["INR", "EUR"]
+    },
+    "quote_summary": {
+      "route_display": "Nhava Sheva (JNPT) (INNSA) → Rotterdam (NLRTM)",
+      "container_info": "1x 40HC",
+      "total_charges_breakdown": {
+        "ocean_freight_usd": 2765.84,
+        "local_charges_usd": 514.2
+      },
+      "vendor_info": {
+        "carrier": "Hapag-Lloyd",
+        "transit_days": 22
+      },
+      "currency_conversion": {
+        "fx_rates_applied": {
+          "INR": 0.012
+        },
+        "fx_date": "2025-10-15",
+        "currencies_converted": ["INR", "EUR"]
+      }
+    },
+    "metadata": {
+      "generated_at": "2025-10-15T10:34:05.508Z",
+      "pol_code": "INNSA",
+      "pod_code": "NLRTM",
+      "container_type": "40HC",
+      "container_count": 1
+    }
+  }
+}
+```
+
+**Business Logic**:
+1. Fetches the **specific rate** by `rate_id` from the database
+2. Retrieves local charges that match the rate's **contract_id**, **pol_id/pod_id**, and **charge_location_type**
+3. **Deduplicates charges** by `charge_code` (takes first occurrence only)
+4. Converts all local currency amounts to USD using latest available FX rates
+5. Multiplies all totals by `container_count`
+6. Returns V1-compatible response structure
+
+**Validation**:
+- `salesforce_org_id` and `rate_id` are required
+- `container_count` must be between 1 and 10 (inclusive)
+- Returns 404 if rate_id not found
+
+**Error Responses**:
+```json
+// Rate not found
+{
+  "success": false,
+  "error": "Rate not found"
+}
+
+// Invalid container count
+{
+  "success": false,
+  "error": "container_count must be between 1 and 10"
+}
+
+// Missing required parameters
+{
+  "success": false,
+  "error": "salesforce_org_id and rate_id are required"
+}
+```
+
+**Use Cases**:
+- Salesforce quote generation workflow
+- Single-rate quote creation
+- Rate-specific cost calculation
+- Multi-currency quote generation
+
+**Example**:
+```bash
+curl -X POST http://localhost:3000/api/v2/prepare-quote \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -H "x-tenant-id: <tenant_id>" \
+  -d '{
+    "salesforce_org_id": "00DBE000002eBzh",
+    "rate_id": 77,
+    "container_count": 1
+  }'
+```
+
+**V2 vs V1 Comparison**:
+
+| Feature | V1 | V2 |
+|---------|----|----|
+| **Rate Selection** | Uses preferred rate (`is_preferred = true`) | Uses specific `rate_id` |
+| **Input Parameters** | `pol_code`, `pod_code`, `container_type` | `rate_id`, `salesforce_org_id` |
+| **Container Count** | Optional, no validation | Required, validated (1-10) |
+| **Response Structure** | Full quote structure | Same as V1 (compatible) |
+| **Use Case** | General quote generation | Salesforce integration |
+| **Flexibility** | Route-based | Rate-specific |
+
+---
+
 ## Data Models
 
 ### Container Types
@@ -823,6 +1132,15 @@ The same server also runs an MCP interface for Claude Desktop via stdio, allowin
 ---
 
 ## Changelog
+
+### Version 2.0.0 (2025-10-15)
+- **NEW**: V2 API endpoints for Salesforce integration
+- **NEW**: `POST /api/v2/search-rates` - Enhanced rate search with Salesforce Org ID
+- **NEW**: `POST /api/v2/prepare-quote` - Rate-specific quote generation
+- **FIXED**: FX rate calculation (multiply instead of divide for currency conversion)
+- **ENHANCED**: Container count validation (1-10 range)
+- **IMPROVED**: Error handling and validation for V2 endpoints
+- **COMPATIBLE**: V2 responses match V1 structure for seamless integration
 
 ### Version 1.0.0 (2025-10-13)
 - Initial release with three endpoints
