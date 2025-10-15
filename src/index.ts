@@ -1652,6 +1652,247 @@ async function createHttpServer() {
     }
   });
 
+  // ===== V2 API ENDPOINTS FOR MULTI-STEP QUOTE FLOW =====
+
+  // In-memory storage for quote sessions (in production, use database)
+  const quoteSessions = new Map();
+
+  // V2: Add Rate to Quote Session
+  fastify.post('/api/v2/add-rate-to-quote', async (request, reply) => {
+    try {
+      const { salesforce_org_id, rate_id, quote_session_id } = request.body as any;
+
+      if (!salesforce_org_id || !rate_id || !quote_session_id) {
+        return reply.code(400).send({
+          success: false,
+          error: 'salesforce_org_id, rate_id, and quote_session_id are required'
+        });
+      }
+
+      // Get or create quote session
+      if (!quoteSessions.has(quote_session_id)) {
+        quoteSessions.set(quote_session_id, {
+          salesforce_org_id,
+          selected_rates: [],
+          created_at: new Date(),
+          updated_at: new Date()
+        });
+      }
+
+      const session = quoteSessions.get(quote_session_id);
+      
+      // Validate salesforce_org_id matches
+      if (session.salesforce_org_id !== salesforce_org_id) {
+        return reply.code(403).send({
+          success: false,
+          error: 'Salesforce Org ID mismatch for this quote session'
+        });
+      }
+
+      // Add rate to session (avoid duplicates)
+      if (!session.selected_rates.includes(rate_id)) {
+        session.selected_rates.push(rate_id);
+        session.updated_at = new Date();
+      }
+
+      return {
+        success: true,
+        data: {
+          quote_session_id,
+          salesforce_org_id,
+          selected_rates: session.selected_rates,
+          rate_count: session.selected_rates.length,
+          message: `Rate ${rate_id} added to quote session`
+        }
+      };
+
+    } catch (error) {
+      reply.code(500);
+      return { success: false, error: error instanceof Error ? error.message : JSON.stringify(error) };
+    }
+  });
+
+  // V2: Get Quote Session Status
+  fastify.post('/api/v2/get-quote-session', async (request, reply) => {
+    try {
+      const { salesforce_org_id, quote_session_id } = request.body as any;
+
+      if (!salesforce_org_id || !quote_session_id) {
+        return reply.code(400).send({
+          success: false,
+          error: 'salesforce_org_id and quote_session_id are required'
+        });
+      }
+
+      const session = quoteSessions.get(quote_session_id);
+      
+      if (!session) {
+        return reply.code(404).send({
+          success: false,
+          error: 'Quote session not found'
+        });
+      }
+
+      // Validate salesforce_org_id matches
+      if (session.salesforce_org_id !== salesforce_org_id) {
+        return reply.code(403).send({
+          success: false,
+          error: 'Salesforce Org ID mismatch for this quote session'
+        });
+      }
+
+      return {
+        success: true,
+        data: {
+          quote_session_id,
+          salesforce_org_id,
+          selected_rates: session.selected_rates,
+          rate_count: session.selected_rates.length,
+          created_at: session.created_at,
+          updated_at: session.updated_at,
+          status: 'building'
+        }
+      };
+
+    } catch (error) {
+      reply.code(500);
+      return { success: false, error: error instanceof Error ? error.message : JSON.stringify(error) };
+    }
+  });
+
+  // V2: Create Multi-Rate Quote
+  fastify.post('/api/v2/prepare-quote', async (request, reply) => {
+    try {
+      const { salesforce_org_id, quote_session_id } = request.body as any;
+
+      if (!salesforce_org_id || !quote_session_id) {
+        return reply.code(400).send({
+          success: false,
+          error: 'salesforce_org_id and quote_session_id are required'
+        });
+      }
+
+      const session = quoteSessions.get(quote_session_id);
+      
+      if (!session) {
+        return reply.code(404).send({
+          success: false,
+          error: 'Quote session not found'
+        });
+      }
+
+      // Validate salesforce_org_id matches
+      if (session.salesforce_org_id !== salesforce_org_id) {
+        return reply.code(403).send({
+          success: false,
+          error: 'Salesforce Org ID mismatch for this quote session'
+        });
+      }
+
+      if (session.selected_rates.length === 0) {
+        return reply.code(400).send({
+          success: false,
+          error: 'No rates selected for quote. Add rates first using /api/v2/add-rate-to-quote'
+        });
+      }
+
+      // Build quote for each selected rate
+      const quote_parts = [];
+      let grandTotal = 0;
+
+      for (const rate_id of session.selected_rates) {
+        // Get rate details from database
+        const { data: rateData, error: rateError } = await supabase
+          .from('mv_freight_sell_prices')
+          .select('*')
+          .eq('rate_id', rate_id)
+          .single();
+
+        if (rateError || !rateData) {
+          continue; // Skip invalid rates
+        }
+
+        // Get origin and destination charges for this rate
+        const { data: originCharges } = await supabase
+          .from('v_local_charges_details')
+          .select('*')
+          .eq('pol_code', rateData.pol_code)
+          .eq('container_type', rateData.container_type);
+
+        const { data: destCharges } = await supabase
+          .from('v_local_charges_details')
+          .select('*')
+          .eq('pod_code', rateData.pod_code)
+          .eq('container_type', rateData.container_type);
+
+        // Calculate totals for this rate
+        const oceanFreightSell = rateData.all_in_freight_sell || 0;
+        const originTotal = originCharges?.reduce((sum, charge) => sum + (charge.charge_amount || 0), 0) || 0;
+        const destTotal = destCharges?.reduce((sum, charge) => sum + (charge.charge_amount || 0), 0) || 0;
+        const rateTotal = oceanFreightSell + originTotal + destTotal;
+
+        quote_parts.push({
+          rate_id: rate_id,
+          route: {
+            pol: rateData.pol_code,
+            pod: rateData.pod_code,
+            container_type: rateData.container_type,
+            container_count: 1 // Default to 1, can be made configurable
+          },
+          ocean_freight: {
+            carrier: rateData.carrier,
+            all_in_freight_sell: oceanFreightSell,
+            transit_days: rateData.transit_days,
+            validity: {
+              from: rateData.valid_from,
+              to: rateData.valid_to
+            }
+          },
+          origin_charges: {
+            charges: originCharges || [],
+            total: originTotal,
+            count: originCharges?.length || 0
+          },
+          destination_charges: {
+            charges: destCharges || [],
+            total: destTotal,
+            count: destCharges?.length || 0
+          },
+          rate_total: rateTotal
+        });
+
+        grandTotal += rateTotal;
+      }
+
+      // Mark session as completed
+      session.status = 'completed';
+      session.completed_at = new Date();
+
+      return {
+        success: true,
+        data: {
+          salesforce_org_id,
+          quote_session_id,
+          quote_parts,
+          totals: {
+            total_rates: quote_parts.length,
+            grand_total: grandTotal,
+            currency: 'USD'
+          },
+          session_info: {
+            created_at: session.created_at,
+            completed_at: session.completed_at,
+            status: 'completed'
+          }
+        }
+      };
+
+    } catch (error) {
+      reply.code(500);
+      return { success: false, error: error instanceof Error ? error.message : JSON.stringify(error) };
+    }
+  });
+
   return fastify;
 }
 
@@ -1672,9 +1913,13 @@ async function main() {
       console.error(`HTTP API Server running on http://localhost:${port}`);
       console.error("Available endpoints:");
       console.error("  GET  /health");
+      console.error("  POST /api/auth/token");
       console.error("  POST /api/search-rates");
       console.error("  POST /api/get-local-charges");
       console.error("  POST /api/prepare-quote");
+      console.error("  POST /api/v2/add-rate-to-quote");
+      console.error("  POST /api/v2/get-quote-session");
+      console.error("  POST /api/v2/prepare-quote");
     } catch (error) {
       console.error("Failed to start HTTP server:", error);
     }
