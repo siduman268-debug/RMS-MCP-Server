@@ -1796,9 +1796,11 @@ async function createHttpServer() {
         });
       }
 
-      // Build quote for each selected rate
+      // Build quote for each selected rate using V1 structure
       const quote_parts = [];
       let grandTotal = 0;
+      let allFxRates: { [key: string]: number } = {};
+      let allCurrencies: string[] = [];
 
       for (const rate_id of session.selected_rates) {
         // Get rate details from database
@@ -1812,60 +1814,201 @@ async function createHttpServer() {
           continue; // Skip invalid rates
         }
 
-        // Get origin and destination charges for this rate
-        // Note: We get all charges for the port/container, not filtered by vendor
-        // The V1 endpoint shows charges are available for multiple vendors
-        const { data: originCharges } = await supabase
+        // Get contract_id and pol/pod IDs from the rate
+        const contractId = rateData.contract_id;
+        const polId = rateData.pol_id;
+        const podId = rateData.pod_id;
+        const containerType = rateData.container_type;
+        const containerCount = 1; // Default to 1, can be made configurable
+
+        // Get Origin Charges (same logic as V1)
+        const { data: originChargesRaw, error: originError } = await supabase
           .from('v_local_charges_details')
           .select('*')
-          .eq('pol_code', rateData.pol_code)
-          .eq('container_type', rateData.container_type)
-          .eq('applies_scope', 'origin');
+          .eq('contract_id', contractId)
+          .eq('pol_id', polId)
+          .eq('charge_location_type', 'Origin Charges')
+          .or(`surcharge_container_type.eq.${containerType},surcharge_container_type.is.null`);
 
-        const { data: destCharges } = await supabase
+        // Get Destination Charges (same logic as V1)
+        const { data: destChargesRaw, error: destError } = await supabase
           .from('v_local_charges_details')
           .select('*')
-          .eq('pod_code', rateData.pod_code)
-          .eq('container_type', rateData.container_type)
-          .eq('applies_scope', 'dest');
+          .eq('contract_id', contractId)
+          .eq('pod_id', podId)
+          .eq('charge_location_type', 'Destination Charges')
+          .or(`surcharge_container_type.eq.${containerType},surcharge_container_type.is.null`);
 
-        // Calculate totals for this rate
+        // Get Other Charges (same logic as V1)
+        const { data: otherChargesRaw, error: otherError } = await supabase
+          .from('v_local_charges_details')
+          .select('*')
+          .eq('contract_id', contractId)
+          .not('charge_location_type', 'in', '(Origin Charges,Destination Charges)')
+          .or(`surcharge_container_type.eq.${containerType},surcharge_container_type.is.null`);
+
+        // Deduplicate charges by charge_code (same logic as V1)
+        const deduplicateCharges = (charges: any[]) => {
+          const seen = new Set();
+          return charges?.filter((charge: any) => {
+            if (seen.has(charge.charge_code)) {
+              return false;
+            }
+            seen.add(charge.charge_code);
+            return true;
+          }) || [];
+        };
+
+        const originCharges = deduplicateCharges(originChargesRaw);
+        const destCharges = deduplicateCharges(destChargesRaw);
+        const otherCharges = deduplicateCharges(otherChargesRaw);
+
+        // Get FX rates for currency conversion (same logic as V1)
+        const currencies = [...new Set([
+          ...(originCharges?.map((c: any) => c.charge_currency).filter(Boolean) || []),
+          ...(destCharges?.map((c: any) => c.charge_currency).filter(Boolean) || []),
+          ...(otherCharges?.map((c: any) => c.charge_currency).filter(Boolean) || [])
+        ])].filter(c => c !== 'USD');
+
+        let fxRates: { [key: string]: number } = {};
+        if (currencies.length > 0) {
+          const { data: fxData, error: fxError } = await supabase
+            .from('fx_rate')
+            .select('rate_date, base_ccy, quote_ccy, rate')
+            .eq('quote_ccy', 'USD')
+            .in('base_ccy', currencies)
+            .eq('rate_date', new Date().toISOString().split('T')[0])
+            .order('rate_date', { ascending: false });
+
+          if (fxData && fxData.length > 0) {
+            fxData.forEach((fx: any) => {
+              fxRates[fx.base_ccy] = fx.rate;
+              allFxRates[fx.base_ccy] = fx.rate;
+            });
+          }
+        }
+
+        // Process charges with currency conversion (same logic as V1)
+        const processCharges = (charges: any[]) => {
+          return charges?.map((charge: any) => {
+            const fxRate = fxRates[charge.charge_currency] || 1;
+            const amountUSD = charge.charge_currency === 'USD' ? charge.charge_amount : charge.charge_amount / fxRate;
+            return {
+              ...charge,
+              amount_usd: Math.round(amountUSD * 100) / 100
+            };
+          }) || [];
+        };
+
+        const processedOriginCharges = processCharges(originCharges);
+        const processedDestCharges = processCharges(destCharges);
+        const processedOtherCharges = processCharges(otherCharges);
+
+        // Calculate totals (same logic as V1)
         const oceanFreightSell = rateData.all_in_freight_sell || 0;
-        const originTotal = originCharges?.reduce((sum, charge) => sum + (charge.charge_amount || 0), 0) || 0;
-        const destTotal = destCharges?.reduce((sum, charge) => sum + (charge.charge_amount || 0), 0) || 0;
-        const rateTotal = oceanFreightSell + originTotal + destTotal;
+        const originTotalUSD = processedOriginCharges?.reduce((sum: number, charge: any) => sum + (charge.amount_usd || 0), 0) || 0;
+        const destTotalUSD = processedDestCharges?.reduce((sum: number, charge: any) => sum + (charge.amount_usd || 0), 0) || 0;
+        const otherTotalUSD = processedOtherCharges?.reduce((sum: number, charge: any) => sum + (charge.amount_usd || 0), 0) || 0;
 
+        const originTotalLocal = originCharges?.reduce((sum: number, charge: any) => sum + (charge.charge_amount || 0), 0) || 0;
+        const destTotalLocal = destCharges?.reduce((sum: number, charge: any) => sum + (charge.charge_amount || 0), 0) || 0;
+        const otherTotalLocal = otherCharges?.reduce((sum: number, charge: any) => sum + (charge.charge_amount || 0), 0) || 0;
+
+        const rateTotal = Math.round((oceanFreightSell + originTotalUSD + destTotalUSD + otherTotalUSD) * containerCount * 100) / 100;
+
+        // Build quote part in V1 structure
         quote_parts.push({
           rate_id: rate_id,
           route: {
             pol: rateData.pol_code,
             pod: rateData.pod_code,
             container_type: rateData.container_type,
-            container_count: 1 // Default to 1, can be made configurable
+            container_count: containerCount,
           },
-          ocean_freight: {
-            carrier: rateData.carrier,
-            all_in_freight_sell: oceanFreightSell,
-            transit_days: rateData.transit_days,
-            validity: {
-              from: rateData.valid_from,
-              to: rateData.valid_to
-            }
+          quote_parts: {
+            ocean_freight: {
+              carrier: rateData.carrier || 'N/A',
+              all_in_freight_sell: oceanFreightSell,
+              ocean_freight_buy: rateData.ocean_freight_buy || 0,
+              freight_surcharges: rateData.freight_surcharges || 0,
+              margin: {
+                type: rateData.margin_type || 'N/A',
+                percentage: rateData.margin_percentage || 0,
+                amount: rateData.margin_amount || 0,
+              },
+              currency: rateData.currency || 'USD',
+              transit_days: rateData.transit_days || 0,
+              validity: {
+                from: rateData.valid_from,
+                to: rateData.valid_to,
+              },
+              is_preferred: rateData.is_preferred || false,
+              rate_id: rateData.rate_id,
+            },
+            origin_charges: {
+              charges: processedOriginCharges,
+              total_local: originTotalLocal,
+              total_usd: originTotalUSD,
+              count: processedOriginCharges.length,
+            },
+            destination_charges: {
+              charges: processedDestCharges,
+              total_local: destTotalLocal,
+              total_usd: destTotalUSD,
+              count: processedDestCharges.length,
+            },
+            other_charges: {
+              charges: processedOtherCharges,
+              total_local: otherTotalLocal,
+              total_usd: otherTotalUSD,
+              count: processedOtherCharges.length,
+            },
           },
-          origin_charges: {
-            charges: originCharges || [],
-            total: originTotal,
-            count: originCharges?.length || 0
+          totals: {
+            ocean_freight_total: oceanFreightSell * containerCount,
+            origin_total_local: originTotalLocal * containerCount,
+            origin_total_usd: originTotalUSD * containerCount,
+            destination_total_local: destTotalLocal * containerCount,
+            destination_total_usd: destTotalUSD * containerCount,
+            other_total_local: otherTotalLocal * containerCount,
+            other_total_usd: otherTotalUSD * containerCount,
+            grand_total_usd: rateTotal,
+            currency: 'USD',
+            fx_rates: fxRates,
+            currencies_used: [...new Set([
+              ...(originCharges?.map((c: any) => c.charge_currency) || []),
+              ...(destCharges?.map((c: any) => c.charge_currency) || []),
+              ...(otherCharges?.map((c: any) => c.charge_currency) || [])
+            ])].filter(Boolean),
           },
-          destination_charges: {
-            charges: destCharges || [],
-            total: destTotal,
-            count: destCharges?.length || 0
+          quote_summary: {
+            route_display: rateData ? `${rateData.pol_name} (${rateData.pol_code}) → ${rateData.pod_name} (${rateData.pod_code})` : `${rateData.pol_code} → ${rateData.pod_code}`,
+            container_info: `${containerCount}x ${rateData.container_type}`,
+            total_charges_breakdown: {
+              ocean_freight_usd: oceanFreightSell * containerCount,
+              local_charges_usd: (originTotalUSD + destTotalUSD + otherTotalUSD) * containerCount,
+            },
+            vendor_info: {
+              carrier: rateData.carrier || 'N/A',
+              transit_days: rateData.transit_days || 0,
+            },
+            currency_conversion: {
+              fx_rates_applied: fxRates,
+              fx_date: new Date().toISOString().split('T')[0],
+              currencies_converted: currencies,
+            },
           },
-          rate_total: rateTotal
+          metadata: {
+            generated_at: new Date().toISOString(),
+            pol_code: rateData.pol_code,
+            pod_code: rateData.pod_code,
+            container_type: rateData.container_type,
+            container_count: containerCount,
+          }
         });
 
         grandTotal += rateTotal;
+        allCurrencies = [...new Set([...allCurrencies, ...currencies])];
       }
 
       // Mark session as completed
@@ -1877,16 +2020,27 @@ async function createHttpServer() {
         data: {
           salesforce_org_id,
           quote_session_id,
-          quote_parts,
+          quote_parts, // Array of V1-style quote structures
           totals: {
             total_rates: quote_parts.length,
-            grand_total: grandTotal,
-            currency: 'USD'
+            grand_total_usd: grandTotal,
+            currency: 'USD',
+            fx_rates: allFxRates,
+            currencies_used: allCurrencies.filter(Boolean),
           },
           session_info: {
             created_at: session.created_at,
             completed_at: session.completed_at,
             status: 'completed'
+          },
+          quote_summary: {
+            total_rates: quote_parts.length,
+            total_routes: [...new Set(quote_parts.map(qp => `${qp.route.pol} → ${qp.route.pod}`))].length,
+            total_containers: quote_parts.reduce((sum, qp) => sum + qp.route.container_count, 0),
+            grand_total_usd: grandTotal,
+            currency: 'USD',
+            fx_date: new Date().toISOString().split('T')[0],
+            currencies_converted: allCurrencies.filter(Boolean),
           }
         }
       };
