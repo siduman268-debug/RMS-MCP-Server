@@ -66,8 +66,8 @@
 
 1. **Show Email Inquiry**:
    - From: customer@techcorp.com
-   - Subject: "Freight Quote Request - Mumbai to Los Angeles"
-   - Content: "Need quote for 2x 40HC containers, Mumbai to LA"
+   - Subject: "Freight Quote Request - Mumbai to Rotterdam"
+   - Content: "Need quote for 2x 40HC containers, Mumbai to Rotterdam"
 
 2. **Trigger Email Workflow**:
    - Show webhook trigger from email system
@@ -89,7 +89,7 @@
 
 1. **Show Salesforce Opportunity**:
    - Customer: "TechCorp Inc"
-   - Route: Mumbai (INNSA) → Los Angeles (USLAX)
+   - Route: Mumbai (INNSA) → Rotterdam (NLRTM)
    - Container: 2x 40HC
    - Urgency: High
 
@@ -105,7 +105,7 @@
    POST /api/v2/search-rates
    {
      "pol_code": "INNSA",
-     "pod_code": "USLAX", 
+     "pod_code": "NLRTM", 
      "container_type": "40HC",
      "salesforce_org_id": "00DBE000002eBzh"
    }
@@ -135,7 +135,7 @@
    POST /api/v2/prepare-quote
    {
      "salesforce_org_id": "00DBE000002eBzh",
-     "rate_id": 77,
+     "rate_id": 71,
      "container_count": 2
    }
    ```
@@ -179,7 +179,7 @@
 
 2. **Live Claude Demo**:
    ```
-   User: "Find me the best rate for 2 containers from Mumbai to Los Angeles"
+   User: "Find me the best rate for 2 containers from Mumbai to Rotterdam"
    Claude: [Uses price_enquiry tool, analyzes results, provides recommendation]
    ```
 
@@ -284,7 +284,7 @@ VALUES
 ## 🎯 Key Demo Scenarios
 
 ### Scenario 1: Email-to-Email Auto Quote
-**Input**: Customer email inquiry for Mumbai → Los Angeles, 2x 40HC containers
+**Input**: Customer email inquiry for Mumbai → Rotterdam, 2x 40HC containers
 **Process**: 
 - Email triggers n8n workflow
 - V1 API auto-selects preferred rate
@@ -293,7 +293,7 @@ VALUES
 **Expected Output**: Complete quote email + Salesforce update
 
 ### Scenario 2: Standard Quote Request
-**Input**: Mumbai → Los Angeles, 2x 40HC containers
+**Input**: Mumbai → Rotterdam, 2x 40HC containers
 **Expected Output**: Complete quote with all charges, ~$6,000 total
 
 ### Scenario 3: No Rates Available

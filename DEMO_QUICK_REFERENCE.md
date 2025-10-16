@@ -37,7 +37,7 @@ curl -X POST http://localhost:3000/api/prepare-quote \
   -d '{
     "salesforce_org_id": "00DBE000002eBzh",
     "pol_code": "INNSA",
-    "pod_code": "USLAX",
+    "pod_code": "NLRTM",
     "container_type": "40HC",
     "container_count": 2
   }'
@@ -51,7 +51,7 @@ curl -X POST http://localhost:3000/api/v2/search-rates \
   -H "x-tenant-id: 00000000-0000-0000-0000-000000000001" \
   -d '{
     "pol_code": "INNSA",
-    "pod_code": "USLAX",
+    "pod_code": "NLRTM",
     "container_type": "40HC",
     "salesforce_org_id": "00DBE000002eBzh"
   }'
@@ -65,7 +65,7 @@ curl -X POST http://localhost:3000/api/v2/prepare-quote \
   -H "x-tenant-id: 00000000-0000-0000-0000-000000000001" \
   -d '{
     "salesforce_org_id": "00DBE000002eBzh",
-    "rate_id": 77,
+    "rate_id": 71,
     "container_count": 2
   }'
 ```
@@ -73,16 +73,16 @@ curl -X POST http://localhost:3000/api/v2/prepare-quote \
 ### Scenario 4: MCP Claude Demo
 **Claude Desktop Commands**:
 ```
-User: "Find me the best rate for 2 containers from Mumbai to Los Angeles"
+User: "Find me the best rate for 2 containers from Mumbai to Rotterdam"
 Claude: [Uses price_enquiry tool automatically]
 
-User: "Compare rates across different carriers for this route"
+User: "Compare rates across different carriers for Mumbai to Rotterdam"
 Claude: [Uses search_rates tool, analyzes results]
 
-User: "What's the margin on this route?"
+User: "What's the margin on the Mumbai to Rotterdam route?"
 Claude: [Analyzes pricing data, provides insights]
 
-User: "Create a new freight rate for Shanghai to Hamburg"
+User: "Create a new freight rate for Mumbai to Rotterdam"
 Claude: [Uses create_freight_rate tool]
 ```
 
@@ -97,7 +97,7 @@ Claude: [Uses create_freight_rate tool]
   "data": [
     {
       "vendor": "MSC",
-      "route": "Nhava Sheva (JNPT) (INNSA) → Los Angeles (USLAX)",
+      "route": "Nhava Sheva (JNPT) (INNSA) → Rotterdam (NLRTM)",
       "container_type": "40HC",
       "transit_days": 18,
       "pricing": {
@@ -106,7 +106,7 @@ Claude: [Uses create_freight_rate tool]
         "currency": "USD"
       },
       "is_preferred": true,
-      "rate_id": 77
+      "rate_id": 71
     }
   ]
 }
@@ -120,7 +120,7 @@ Claude: [Uses create_freight_rate tool]
     "salesforce_org_id": "00DBE000002eBzh",
     "route": {
       "pol": "INNSA",
-      "pod": "USLAX",
+      "pod": "NLRTM",
       "container_type": "40HC",
       "container_count": 2
     },

@@ -525,6 +525,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
+    // Set tenant context for MCP tools (use default tenant for MCP)
+    await supabase.rpc('set_tenant_context', {
+      tenant_id: '00000000-0000-0000-0000-000000000001',
+      user_id: 'mcp_user'
+    });
+
     // ==========================================
     // 1. PRICING ENQUIRIES
     // ==========================================
