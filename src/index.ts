@@ -538,64 +538,58 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === "price_enquiry") {
       const { pol_code, pod_code, container_type, container_count = 1 } = args as any;
 
-      // Get location IDs
-      const { data: polData } = await supabase
-        .from('locations')
-        .select('id')
-        .eq('unlocode', pol_code)
+      // Use the same approach as the working HTTP API - query mv_freight_sell_prices
+      const { data: rateData, error: rateError } = await supabase
+        .from('mv_freight_sell_prices')
+        .select('*')
+        .eq('pol_code', pol_code)
+        .eq('pod_code', pod_code)
+        .eq('container_type', container_type)
+        .eq('is_preferred', true)
         .single();
 
-      const { data: podData } = await supabase
-        .from('locations')
-        .select('id')
-        .eq('unlocode', pod_code)
-        .single();
+      if (rateError && rateError.code !== 'PGRST116') throw rateError;
 
-      if (!polData || !podData) {
+      if (!rateData) {
         return {
           content: [{
             type: "text",
-            text: `Error: Could not find locations for ${pol_code} or ${pod_code}`,
+            text: `No preferred rate found for ${pol_code} → ${pod_code}, ${container_type}`,
           }],
           isError: true,
         };
       }
 
-      // Use the RMS function to get preferred rate
-      const { data: rateData, error: rateError } = await supabase
-        .rpc('rms_pick_ofr_preferred_only', {
-          pol_id: polData.id,
-          pod_id: podData.id,
-          container_type: container_type,
-        });
+      // Get local charges using the same logic as HTTP API
+      const contractId = rateData.contract_id;
+      const polId = rateData.pol_id;
+      const podId = rateData.pod_id;
 
-      if (rateError) throw rateError;
-
-      // Get surcharges
-      const { data: surcharges } = await supabase
-        .from('v_surcharges')
+      // Get Origin Charges
+      const { data: originCharges } = await supabase
+        .from('v_local_charges_details')
         .select('*')
-        .eq('pol_code', pol_code)
-        .eq('pod_code', pod_code)
-        .or(`container_type.eq.${container_type},container_type.is.null`);
+        .eq('contract_id', contractId)
+        .eq('pol_id', polId)
+        .eq('charge_location_type', 'Origin Charges')
+        .or(`surcharge_container_type.eq.${container_type},surcharge_container_type.is.null`);
+
+      // Get Destination Charges
+      const { data: destCharges } = await supabase
+        .from('v_local_charges_details')
+        .select('*')
+        .eq('contract_id', contractId)
+        .eq('pod_id', podId)
+        .eq('charge_location_type', 'Destination Charges')
+        .or(`surcharge_container_type.eq.${container_type},surcharge_container_type.is.null`);
 
       // Calculate totals
-      const freightBuy = rateData?.buy_amount || 0;
-      const surchargeTotal = surcharges?.reduce((sum: number, sc: any) => sum + (sc.amount || 0), 0) || 0;
-      const totalBuy = (freightBuy + surchargeTotal) * container_count;
-
-      // Apply margin using RMS function
-      const { data: pricingResult, error: pricingError } = await supabase
-        .rpc('apply_margin_allin_v2', {
-          buy_total: totalBuy,
-          mode: 'ocean',
-          container_type: container_type,
-          pol_id: polData.id,
-          pod_id: podData.id,
-          as_of: new Date().toISOString().split('T')[0],
-        });
-
-      if (pricingError) throw pricingError;
+      const oceanFreightSell = rateData.all_in_freight_sell || 0;
+      const originTotalUSD = originCharges?.reduce((sum: number, charge: any) => sum + (charge.charge_amount || 0), 0) || 0;
+      const destTotalUSD = destCharges?.reduce((sum: number, charge: any) => sum + (charge.charge_amount || 0), 0) || 0;
+      
+      const totalPerContainer = oceanFreightSell + originTotalUSD + destTotalUSD;
+      const grandTotal = totalPerContainer * container_count;
 
       const result = {
         route: {
@@ -604,24 +598,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           container_type: container_type,
           container_count: container_count,
         },
-        vendor: rateData?.vendor_name || 'N/A',
-        transit_days: rateData?.tt_days || 0,
+        vendor: rateData.carrier || 'N/A',
+        transit_days: rateData.transit_days || 0,
         pricing: {
-          freight_buy: freightBuy,
-          surcharges_buy: surchargeTotal,
-          buy_per_container: freightBuy + surchargeTotal,
-          total_buy: totalBuy,
-          total_sell: pricingResult?.sell_total || totalBuy,
-          margin_amount: (pricingResult?.sell_total || totalBuy) - totalBuy,
-          margin_pct: totalBuy > 0 ? (((pricingResult?.sell_total || totalBuy) - totalBuy) / totalBuy * 100).toFixed(2) : 0,
+          ocean_freight: {
+            buy: rateData.ocean_freight_buy || 0,
+            sell: oceanFreightSell,
+            surcharges: rateData.freight_surcharges || 0,
+            margin: {
+              type: rateData.margin_type || 'N/A',
+              percentage: rateData.margin_percentage || 0,
+              amount: rateData.margin_amount || 0,
+            },
+            currency: rateData.currency || 'USD',
+          },
+          local_charges: {
+            origin_total: originTotalUSD,
+            destination_total: destTotalUSD,
+            origin_charges: originCharges?.map((c: any) => ({
+              charge_name: c.vendor_charge_name,
+              charge_code: c.charge_code,
+              amount: c.charge_amount,
+              currency: c.charge_currency,
+            })) || [],
+            destination_charges: destCharges?.map((c: any) => ({
+              charge_name: c.vendor_charge_name,
+              charge_code: c.charge_code,
+              amount: c.charge_amount,
+              currency: c.charge_currency,
+            })) || [],
+          },
+          totals: {
+            per_container: totalPerContainer,
+            grand_total: grandTotal,
+            currency: 'USD',
+          },
         },
-        surcharges: surcharges?.map((sc: any) => ({
-          charge_code: sc.charge_code,
-          charge_name: sc.charge_name,
-          amount: sc.amount,
-          uom: sc.uom,
-        })) || [],
-        margin_rule_applied: pricingResult?.rule_info || 'Default',
+        validity: {
+          from: rateData.valid_from,
+          to: rateData.valid_to,
+        },
+        rate_id: rateData.rate_id,
       };
 
       return {
@@ -689,27 +706,69 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === "get_surcharges") {
       const { pol_code, pod_code, container_type, vendor_id } = args as any;
 
-      let query = supabase
-        .from('v_surcharges')
+      // Use the same approach as HTTP API - query v_local_charges_details
+      let originQuery = supabase
+        .from('v_local_charges_details')
         .select('*')
-        .eq('pol_code', pol_code)
-        .eq('pod_code', pod_code);
+        .eq('origin_port_code', pol_code)
+        .eq('applies_scope', 'origin');
+
+      let destQuery = supabase
+        .from('v_local_charges_details')
+        .select('*')
+        .eq('destination_port_code', pod_code)
+        .eq('applies_scope', 'dest');
 
       if (container_type) {
-        query = query.or(`container_type.eq.${container_type},container_type.is.null`);
+        originQuery = originQuery.or(`surcharge_container_type.eq.${container_type},surcharge_container_type.is.null`);
+        destQuery = destQuery.or(`surcharge_container_type.eq.${container_type},surcharge_container_type.is.null`);
       }
 
       if (vendor_id) {
-        query = query.eq('vendor_id', vendor_id);
+        originQuery = originQuery.eq('vendor_id', vendor_id);
+        destQuery = destQuery.eq('vendor_id', vendor_id);
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const { data: originCharges, error: originError } = await originQuery;
+      const { data: destCharges, error: destError } = await destQuery;
+
+      if (originError) throw originError;
+      if (destError) throw destError;
+
+      const result = {
+        origin_charges: originCharges?.map((c: any) => ({
+          charge_name: c.vendor_charge_name,
+          charge_code: c.charge_code,
+          amount: c.charge_amount,
+          currency: c.charge_currency,
+          uom: c.uom,
+          vendor_name: c.vendor_name,
+          port_code: c.origin_port_code,
+          port_name: c.origin_port_name,
+        })) || [],
+        destination_charges: destCharges?.map((c: any) => ({
+          charge_name: c.vendor_charge_name,
+          charge_code: c.charge_code,
+          amount: c.charge_amount,
+          currency: c.charge_currency,
+          uom: c.uom,
+          vendor_name: c.vendor_name,
+          port_code: c.destination_port_code,
+          port_name: c.destination_port_name,
+        })) || [],
+        summary: {
+          pol_code,
+          pod_code,
+          container_type,
+          origin_count: originCharges?.length || 0,
+          destination_count: destCharges?.length || 0,
+        },
+      };
 
       return {
         content: [{
           type: "text",
-          text: JSON.stringify(data, null, 2),
+          text: JSON.stringify(result, null, 2),
         }],
       };
     }
@@ -742,13 +801,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // Get location IDs
       const { data: polData } = await supabase
-        .from('locations')
+        .from('location')
         .select('id')
         .eq('unlocode', pol_code)
         .single();
 
       const { data: podData } = await supabase
-        .from('locations')
+        .from('location')
         .select('id')
         .eq('unlocode', pod_code)
         .single();
@@ -803,7 +862,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // Get location IDs if specified
       if (pol_code) {
         const { data: polData } = await supabase
-          .from('locations')
+          .from('location')
           .select('id')
           .eq('unlocode', pol_code)
           .single();
@@ -812,7 +871,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       if (pod_code) {
         const { data: podData } = await supabase
-          .from('locations')
+          .from('location')
           .select('id')
           .eq('unlocode', pod_code)
           .single();
@@ -838,7 +897,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { location_id, updates } = args as any;
 
       const { data, error } = await supabase
-        .from('locations')
+        .from('location')
         .update(updates)
         .eq('id', location_id)
         .select();
@@ -855,7 +914,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     if (name === "create_location") {
       const { data, error } = await supabase
-        .from('locations')
+        .from('location')
         .insert(args)
         .select();
 
@@ -1048,7 +1107,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { search, location_type, country_code, limit = 20 } = args as any;
 
       let query = supabase
-        .from('locations')
+        .from('location')
         .select('*')
         .or(`name.ilike.%${search}%,unlocode.ilike.%${search}%`)
         .limit(limit);
