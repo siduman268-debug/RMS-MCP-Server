@@ -177,6 +177,45 @@
     },
     {
       "parameters": {
+        "url": "https://xsvwhctzwpfcwmmvbgmf.supabase.co/rest/v1/tenant_mapping",
+        "authentication": "none",
+        "requestMethod": "GET",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "salesforce_org_id",
+              "value": "eq.{{ $('Salesforce Webhook').item.json.salesforce_org_id }}"
+            },
+            {
+              "name": "select",
+              "value": "tenant_id"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-tenant-id",
+      "name": "Get Tenant ID from Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 100]
+    },
+    {
+      "parameters": {
         "url": "http://13.204.127.113:3000/api/auth/token",
         "authentication": "none",
         "requestMethod": "POST",
@@ -194,11 +233,11 @@
           "parameters": [
             {
               "name": "tenant_id",
-              "value": "00000000-0000-0000-0000-000000000001"
+              "value": "={{ $json[0].tenant_id }}"
             },
             {
               "name": "user_id",
-              "value": "sf_00DBE000002eBzh"
+              "value": "sf_{{ $('Salesforce Webhook').item.json.salesforce_org_id }}"
             }
           ]
         },
@@ -208,7 +247,7 @@
       "name": "Get JWT Token",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [240, 100]
+      "position": [240, 200]
     },
     {
       "parameters": {
@@ -246,6 +285,17 @@
   ],
   "connections": {
     "Salesforce Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Tenant ID from Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tenant ID from Supabase": {
       "main": [
         [
           {

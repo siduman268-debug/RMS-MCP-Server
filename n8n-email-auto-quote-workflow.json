@@ -1,0 +1,417 @@
+{
+  "name": "RMS Email Auto Quote Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "email-auto-quote",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-email-trigger",
+      "name": "Email Quote Request Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "email-auto-quote"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/auth/token",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tenant_id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            },
+            {
+              "name": "user_id",
+              "value": "email_auto_quote_system"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-jwt-token",
+      "name": "Get JWT Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/prepare-quote",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $('Get JWT Token').item.json.token }}"
+            },
+            {
+              "name": "x-tenant-id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "salesforce_org_id",
+              "value": "={{ $json.salesforce_org_id }}"
+            },
+            {
+              "name": "pol_code",
+              "value": "={{ $json.pol_code }}"
+            },
+            {
+              "name": "pod_code",
+              "value": "={{ $json.pod_code }}"
+            },
+            {
+              "name": "container_type",
+              "value": "={{ $json.container_type }}"
+            },
+            {
+              "name": "container_count",
+              "value": "={{ $json.container_count || 1 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare-quote-v1",
+      "name": "Prepare Quote (V1 - Auto Preferred Rate)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "quote-success-condition",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-quote-success",
+      "name": "Check: Quote Generated?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format quote data for email response and Salesforce update\nconst quoteData = $input.first().json.data;\nconst originalRequest = $('Email Quote Request Webhook').first().json;\n\n// Extract key information\nconst route = quoteData.route;\nconst totals = quoteData.totals;\nconst oceanFreight = quoteData.quote_parts.ocean_freight;\nconst originCharges = quoteData.quote_parts.origin_charges;\nconst destCharges = quoteData.quote_parts.destination_charges;\n\n// Format for email\nconst emailData = {\n  to: originalRequest.customer_email || 'customer@example.com',\n  subject: `Freight Quote - ${route.pol} to ${route.pod} - ${route.container_count}x ${route.container_type}`,\n  quote_number: `QT-${Date.now()}`,\n  customer_name: originalRequest.customer_name || 'Valued Customer',\n  route_display: quoteData.quote_summary.route_display,\n  container_info: quoteData.quote_summary.container_info,\n  carrier: oceanFreight.carrier,\n  transit_days: oceanFreight.transit_days,\n  validity: oceanFreight.validity,\n  pricing: {\n    ocean_freight: totals.ocean_freight_total,\n    origin_charges: totals.origin_total_usd,\n    destination_charges: totals.destination_total_usd,\n    grand_total: totals.grand_total_usd,\n    currency: totals.currency\n  },\n  breakdown: {\n    ocean_freight_per_container: oceanFreight.all_in_freight_sell,\n    origin_charges_per_container: originCharges.total_usd,\n    destination_charges_per_container: destCharges.total_usd,\n    total_per_container: totals.grand_total_usd / route.container_count\n  },\n  charges_detail: {\n    origin: originCharges.charges.map(c => ({\n      name: c.charge_name,\n      amount: c.amount_usd,\n      currency: c.charge_currency\n    })),\n    destination: destCharges.charges.map(c => ({\n      name: c.charge_name,\n      amount: c.amount_usd,\n      currency: c.charge_currency\n    }))\n  },\n  generated_at: new Date().toISOString(),\n  valid_until: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 7 days\n};\n\n// Format for Salesforce update\nconst salesforceData = {\n  opportunity_id: originalRequest.salesforce_opportunity_id,\n  quote_status: 'Generated',\n  quote_number: emailData.quote_number,\n  total_amount: totals.grand_total_usd,\n  currency: totals.currency,\n  carrier: oceanFreight.carrier,\n  transit_days: oceanFreight.transit_days,\n  quote_valid_until: emailData.valid_until,\n  quote_generated_at: emailData.generated_at,\n  route_pol: route.pol,\n  route_pod: route.pod,\n  container_type: route.container_type,\n  container_count: route.container_count,\n  pricing_breakdown: {\n    ocean_freight: totals.ocean_freight_total,\n    origin_charges: totals.origin_total_usd,\n    destination_charges: totals.destination_total_usd\n  }\n};\n\nreturn {\n  email_data: emailData,\n  salesforce_data: salesforceData,\n  original_quote: quoteData\n};"
+      },
+      "id": "format-quote-data",
+      "name": "Format Quote Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "fromEmail": "quotes@yourcompany.com",
+        "toEmail": "={{ $json.email_data.to }}",
+        "subject": "={{ $json.email_data.subject }}",
+        "emailType": "html",
+        "message": "<!DOCTYPE html>\n<html>\n<head>\n    <style>\n        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }\n        .header { background-color: #2c3e50; color: white; padding: 20px; text-align: center; }\n        .content { padding: 20px; }\n        .quote-box { border: 2px solid #3498db; border-radius: 8px; padding: 20px; margin: 20px 0; background-color: #f8f9fa; }\n        .pricing-table { width: 100%; border-collapse: collapse; margin: 20px 0; }\n        .pricing-table th, .pricing-table td { border: 1px solid #ddd; padding: 12px; text-align: left; }\n        .pricing-table th { background-color: #3498db; color: white; }\n        .total-row { font-weight: bold; background-color: #e8f4fd; }\n        .footer { background-color: #34495e; color: white; padding: 15px; text-align: center; font-size: 12px; }\n        .highlight { color: #e74c3c; font-weight: bold; }\n    </style>\n</head>\n<body>\n    <div class=\"header\">\n        <h1>🚢 Freight Quote</h1>\n        <p>Quote #{{ $json.email_data.quote_number }}</p>\n    </div>\n    \n    <div class=\"content\">\n        <p>Dear {{ $json.email_data.customer_name }},</p>\n        \n        <p>Thank you for your freight inquiry. Please find below our competitive quote for your shipment:</p>\n        \n        <div class=\"quote-box\">\n            <h2>Route Information</h2>\n            <p><strong>Route:</strong> {{ $json.email_data.route_display }}</p>\n            <p><strong>Container:</strong> {{ $json.email_data.container_info }}</p>\n            <p><strong>Carrier:</strong> {{ $json.email_data.carrier }}</p>\n            <p><strong>Transit Time:</strong> {{ $json.email_data.transit_days }} days</p>\n            <p><strong>Validity:</strong> {{ $json.email_data.validity.from }} to {{ $json.email_data.validity.to }}</p>\n        </div>\n        \n        <h2>Pricing Breakdown</h2>\n        <table class=\"pricing-table\">\n            <thead>\n                <tr>\n                    <th>Description</th>\n                    <th>Per Container</th>\n                    <th>Total ({{ $json.email_data.pricing.currency }})</th>\n                </tr>\n            </thead>\n            <tbody>\n                <tr>\n                    <td>Ocean Freight</td>\n                    <td>${{ $json.email_data.breakdown.ocean_freight_per_container.toFixed(2) }}</td>\n                    <td>${{ $json.email_data.pricing.ocean_freight.toFixed(2) }}</td>\n                </tr>\n                <tr>\n                    <td>Origin Charges</td>\n                    <td>${{ $json.email_data.breakdown.origin_charges_per_container.toFixed(2) }}</td>\n                    <td>${{ $json.email_data.pricing.origin_charges.toFixed(2) }}</td>\n                </tr>\n                <tr>\n                    <td>Destination Charges</td>\n                    <td>${{ $json.email_data.breakdown.destination_charges_per_container.toFixed(2) }}</td>\n                    <td>${{ $json.email_data.pricing.destination_charges.toFixed(2) }}</td>\n                </tr>\n                <tr class=\"total-row\">\n                    <td><strong>GRAND TOTAL</strong></td>\n                    <td><strong>${{ $json.email_data.breakdown.total_per_container.toFixed(2) }}</strong></td>\n                    <td><strong class=\"highlight\">${{ $json.email_data.pricing.grand_total.toFixed(2) }}</strong></td>\n                </tr>\n            </tbody>\n        </table>\n        \n        <h3>Charge Details</h3>\n        <p><strong>Origin Charges:</strong></p>\n        <ul>\n            {{ $json.email_data.charges_detail.origin.map(c => `<li>${c.name}: $${c.amount.toFixed(2)} ${c.currency}</li>`).join('') }}\n        </ul>\n        \n        <p><strong>Destination Charges:</strong></p>\n        <ul>\n            {{ $json.email_data.charges_detail.destination.map(c => `<li>${c.name}: $${c.amount.toFixed(2)} ${c.currency}</li>`).join('') }}\n        </ul>\n        \n        <div class=\"quote-box\">\n            <p><strong>Quote Valid Until:</strong> {{ $json.email_data.valid_until }}</p>\n            <p><strong>Generated:</strong> {{ new Date($json.email_data.generated_at).toLocaleString() }}</p>\n        </div>\n        \n        <p>This quote is based on current market rates and is valid for 7 days from the date of issue. Please contact us to confirm your booking or if you have any questions.</p>\n        \n        <p>Best regards,<br>\n        Your Freight Team</p>\n    </div>\n    \n    <div class=\"footer\">\n        <p>This is an automated quote generated by our RMS system. For questions, please contact our sales team.</p>\n    </div>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "send-quote-email",
+      "name": "Send Quote Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://yourcompany.my.salesforce.com/services/data/v58.0/sobjects/Opportunity/{{ $json.salesforce_data.opportunity_id }}",
+        "authentication": "none",
+        "requestMethod": "PATCH",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $('Get Salesforce Token').item.json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "Quote_Status__c",
+              "value": "={{ $json.salesforce_data.quote_status }}"
+            },
+            {
+              "name": "Quote_Number__c",
+              "value": "={{ $json.salesforce_data.quote_number }}"
+            },
+            {
+              "name": "Total_Amount__c",
+              "value": "={{ $json.salesforce_data.total_amount }}"
+            },
+            {
+              "name": "Currency__c",
+              "value": "={{ $json.salesforce_data.currency }}"
+            },
+            {
+              "name": "Carrier__c",
+              "value": "={{ $json.salesforce_data.carrier }}"
+            },
+            {
+              "name": "Transit_Days__c",
+              "value": "={{ $json.salesforce_data.transit_days }}"
+            },
+            {
+              "name": "Quote_Valid_Until__c",
+              "value": "={{ $json.salesforce_data.quote_valid_until }}"
+            },
+            {
+              "name": "Quote_Generated_At__c",
+              "value": "={{ $json.salesforce_data.quote_generated_at }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "update-salesforce",
+      "name": "Update Salesforce Opportunity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 100]
+    },
+    {
+      "parameters": {
+        "url": "https://login.salesforce.com/services/oauth2/token",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "password"
+            },
+            {
+              "name": "client_id",
+              "value": "YOUR_SALESFORCE_CLIENT_ID"
+            },
+            {
+              "name": "client_secret",
+              "value": "YOUR_SALESFORCE_CLIENT_SECRET"
+            },
+            {
+              "name": "username",
+              "value": "YOUR_SALESFORCE_USERNAME"
+            },
+            {
+              "name": "password",
+              "value": "YOUR_SALESFORCE_PASSWORD_AND_SECURITY_TOKEN"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-salesforce-token",
+      "name": "Get Salesforce Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Quote generated and sent successfully\", \"quote_number\": $('Format Quote Data').item.json.email_data.quote_number, \"total_amount\": $('Format Quote Data').item.json.salesforce_data.total_amount, \"email_sent_to\": $('Format Quote Data').item.json.email_data.to, \"salesforce_updated\": true } }}"
+      },
+      "id": "respond-success",
+      "name": "Respond: Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": false, \"error\": \"Failed to generate quote\", \"details\": $json } }}"
+      },
+      "id": "respond-error",
+      "name": "Respond: Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": false, \"error\": \"No preferred rate found for the specified route\", \"request\": $('Email Quote Request Webhook').item.json } }}"
+      },
+      "id": "respond-no-rates",
+      "name": "Respond: No Rates",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 400]
+    }
+  ],
+  "connections": {
+    "Email Quote Request Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get JWT Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get JWT Token": {
+      "main": [
+        [
+          {
+            "node": "Prepare Quote (V1 - Auto Preferred Rate)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Quote (V1 - Auto Preferred Rate)": {
+      "main": [
+        [
+          {
+            "node": "Check: Quote Generated?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check: Quote Generated?": {
+      "main": [
+        [
+          {
+            "node": "Format Quote Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: No Rates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Quote Data": {
+      "main": [
+        [
+          {
+            "node": "Get Salesforce Token",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Quote Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Salesforce Token": {
+      "main": [
+        [
+          {
+            "node": "Update Salesforce Opportunity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Quote Email": {
+      "main": [
+        [
+          {
+            "node": "Respond: Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Salesforce Opportunity": {
+      "main": [
+        [
+          {
+            "node": "Respond: Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["email-quote", "salesforce", "v1-api"],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-15T11:00:00.000Z",
+  "versionId": "1"
+}

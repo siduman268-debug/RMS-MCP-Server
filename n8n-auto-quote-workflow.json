@@ -1,0 +1,412 @@
+{
+  "name": "RMS Auto Quote Generation Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "auto-quote",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-auto-quote",
+      "name": "Auto Quote Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "auto-quote"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/auth/token",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tenant_id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            },
+            {
+              "name": "user_id",
+              "value": "auto_quote_system"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-jwt-token",
+      "name": "Get JWT Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/v2/search-rates",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $('Get JWT Token').item.json.token }}"
+            },
+            {
+              "name": "x-tenant-id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "pol_code",
+              "value": "={{ $json.pol_code }}"
+            },
+            {
+              "name": "pod_code",
+              "value": "={{ $json.pod_code }}"
+            },
+            {
+              "name": "container_type",
+              "value": "={{ $json.container_type }}"
+            },
+            {
+              "name": "salesforce_org_id",
+              "value": "={{ $json.salesforce_org_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "search-rates",
+      "name": "Search Available Rates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-rates-condition",
+              "leftValue": "={{ $json.data.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-rates-available",
+      "name": "Check: Rates Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Auto-select best rate based on multiple criteria\nconst rates = $input.first().json.data;\n\nif (!rates || rates.length === 0) {\n  return {\n    selected_rate: null,\n    selection_reason: 'No rates available'\n  };\n}\n\n// Scoring algorithm for rate selection\nconst scoredRates = rates.map(rate => {\n  let score = 0;\n  \n  // Prefer preferred rates (highest priority)\n  if (rate.is_preferred) {\n    score += 100;\n  }\n  \n  // Prefer lower transit times (faster delivery)\n  const transitDays = rate.transit_days || 999;\n  score += Math.max(0, 50 - transitDays); // Max 50 points for fastest\n  \n  // Prefer competitive pricing (lower is better, but not too low)\n  const price = rate.pricing.all_in_freight_sell || 0;\n  const avgPrice = rates.reduce((sum, r) => sum + (r.pricing.all_in_freight_sell || 0), 0) / rates.length;\n  if (price > 0 && price <= avgPrice * 1.1) { // Within 10% of average\n    score += 30;\n  }\n  \n  // Prefer longer validity periods\n  const validFrom = new Date(rate.validity.from);\n  const validTo = new Date(rate.validity.to);\n  const validityDays = (validTo - validFrom) / (1000 * 60 * 60 * 24);\n  score += Math.min(20, validityDays / 10); // Max 20 points\n  \n  // Prefer major carriers (reliability bonus)\n  const majorCarriers = ['MSC', 'MAERSK', 'CMA CGM', 'COSCO', 'HAPAG-LLOYD', 'ONE'];\n  if (majorCarriers.some(carrier => rate.vendor.toUpperCase().includes(carrier))) {\n    score += 15;\n  }\n  \n  return {\n    ...rate,\n    selection_score: score\n  };\n});\n\n// Sort by score (highest first)\nscoredRates.sort((a, b) => b.selection_score - a.selection_score);\n\nconst selectedRate = scoredRates[0];\nconst selectionReason = `Selected based on: ${selectedRate.is_preferred ? 'Preferred rate, ' : ''}Score: ${selectedRate.selection_score}, Transit: ${selectedRate.transit_days} days, Price: $${selectedRate.pricing.all_in_freight_sell}`;\n\nreturn {\n  selected_rate: selectedRate,\n  selection_reason: selectionReason,\n  all_rates: scoredRates,\n  total_rates_found: rates.length\n};"
+      },
+      "id": "auto-select-best-rate",
+      "name": "Auto-Select Best Rate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/v2/prepare-quote",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $('Get JWT Token').item.json.token }}"
+            },
+            {
+              "name": "x-tenant-id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "salesforce_org_id",
+              "value": "={{ $('Auto Quote Webhook').item.json.salesforce_org_id }}"
+            },
+            {
+              "name": "rate_id",
+              "value": "={{ $json.selected_rate.rate_id }}"
+            },
+            {
+              "name": "container_count",
+              "value": "={{ $('Auto Quote Webhook').item.json.container_count || 1 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "generate-quote",
+      "name": "Generate Complete Quote",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enhance quote with additional business logic and formatting\nconst originalQuote = $input.first().json.data;\nconst selectionData = $('Auto-Select Best Rate').first().json;\nconst webhookData = $('Auto Quote Webhook').first().json;\n\n// Add auto-selection metadata\nconst enhancedQuote = {\n  ...originalQuote,\n  auto_selection: {\n    selected_rate_id: selectionData.selected_rate.rate_id,\n    selection_reason: selectionData.selection_reason,\n    total_rates_considered: selectionData.total_rates_found,\n    selection_algorithm: 'multi-criteria scoring (preferred, transit, price, validity, carrier)'\n  },\n  business_insights: {\n    cost_breakdown: {\n      ocean_freight_percentage: ((originalQuote.totals.ocean_freight_total / originalQuote.totals.grand_total_usd) * 100).toFixed(1),\n      local_charges_percentage: (((originalQuote.totals.origin_total_usd + originalQuote.totals.destination_total_usd) / originalQuote.totals.grand_total_usd) * 100).toFixed(1)\n    },\n    competitiveness: {\n      transit_time_days: originalQuote.quote_parts.ocean_freight.transit_days,\n      price_per_container: originalQuote.totals.grand_total_usd / originalQuote.route.container_count,\n      carrier_reliability: originalQuote.quote_parts.ocean_freight.carrier\n    },\n    recommendations: []\n  }\n};\n\n// Add business recommendations\nif (originalQuote.totals.grand_total_usd > 10000) {\n  enhancedQuote.business_insights.recommendations.push('High-value shipment - consider insurance options');\n}\n\nif (originalQuote.quote_parts.ocean_freight.transit_days > 30) {\n  enhancedQuote.business_insights.recommendations.push('Long transit time - consider expedited options if urgent');\n}\n\nif (originalQuote.totals.origin_total_usd + originalQuote.totals.destination_total_usd > originalQuote.totals.ocean_freight_total * 0.3) {\n  enhancedQuote.business_insights.recommendations.push('High local charges - review port-specific costs');\n}\n\n// Add quote metadata\nenhancedQuote.quote_metadata = {\n  generated_by: 'auto_quote_system',\n  generation_timestamp: new Date().toISOString(),\n  request_source: 'n8n_workflow',\n  original_request: {\n    pol_code: webhookData.pol_code,\n    pod_code: webhookData.pod_code,\n    container_type: webhookData.container_type,\n    container_count: webhookData.container_count || 1\n  }\n};\n\nreturn enhancedQuote;"
+      },
+      "id": "enhance-quote",
+      "name": "Enhance Quote with Business Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond-success",
+      "name": "Respond: Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": false, \"error\": \"No rates available for the specified route\", \"request\": $('Auto Quote Webhook').item.json } }}"
+      },
+      "id": "respond-no-rates",
+      "name": "Respond: No Rates",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": false, \"error\": \"Failed to generate quote\", \"details\": $json } }}"
+      },
+      "id": "respond-error",
+      "name": "Respond: Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "quote-success-condition",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-quote-success",
+      "name": "Check: Quote Generated?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "🚢 New Auto Quote Generated\\n\\nRoute: {{ $('Auto Quote Webhook').item.json.pol_code }} → {{ $('Auto Quote Webhook').item.json.pod_code }}\\nContainer: {{ $('Auto Quote Webhook').item.json.container_type }}\\nTotal Cost: ${{ $json.totals.grand_total_usd }}\\nCarrier: {{ $json.quote_parts.ocean_freight.carrier }}\\nTransit: {{ $json.quote_parts.ocean_freight.transit_days }} days\\n\\nQuote ID: {{ $json.quote_metadata.generation_timestamp }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "notify-slack",
+      "name": "Notify Slack (Optional)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 100]
+    }
+  ],
+  "connections": {
+    "Auto Quote Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get JWT Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get JWT Token": {
+      "main": [
+        [
+          {
+            "node": "Search Available Rates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Available Rates": {
+      "main": [
+        [
+          {
+            "node": "Check: Rates Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check: Rates Available?": {
+      "main": [
+        [
+          {
+            "node": "Auto-Select Best Rate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: No Rates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-Select Best Rate": {
+      "main": [
+        [
+          {
+            "node": "Generate Complete Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Complete Quote": {
+      "main": [
+        [
+          {
+            "node": "Check: Quote Generated?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check: Quote Generated?": {
+      "main": [
+        [
+          {
+            "node": "Enhance Quote with Business Logic",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enhance Quote with Business Logic": {
+      "main": [
+        [
+          {
+            "node": "Respond: Success",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Slack (Optional)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["auto-quote", "rms", "salesforce"],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-15T10:00:00.000Z",
+  "versionId": "1"
+}
