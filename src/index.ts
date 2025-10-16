@@ -536,117 +536,215 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ==========================================
     
     if (name === "price_enquiry") {
-      const { pol_code, pod_code, container_type, container_count = 1 } = args as any;
+      try {
+        const { pol_code, pod_code, container_type, container_count = 1 } = args as any;
 
-      // Use the same approach as the working HTTP API - query mv_freight_sell_prices
-      const { data: rateData, error: rateError } = await supabase
-        .from('mv_freight_sell_prices')
-        .select('*')
-        .eq('pol_code', pol_code)
-        .eq('pod_code', pod_code)
-        .eq('container_type', container_type)
-        .eq('is_preferred', true)
-        .single();
+        console.error(`[price_enquiry] Starting with: ${pol_code} → ${pod_code}, ${container_type}`);
 
-      if (rateError && rateError.code !== 'PGRST116') throw rateError;
+        // Use the same approach as the working HTTP API - query mv_freight_sell_prices
+        const { data: rateData, error: rateError } = await supabase
+          .from('mv_freight_sell_prices')
+          .select('*')
+          .eq('pol_code', pol_code)
+          .eq('pod_code', pod_code)
+          .eq('container_type', container_type)
+          .eq('is_preferred', true)
+          .single();
 
-      if (!rateData) {
+        console.error(`[price_enquiry] Rate query result:`, { rateData: !!rateData, rateError });
+
+        if (rateError && rateError.code !== 'PGRST116') {
+          throw new Error(`Rate query failed: ${rateError.message}`);
+        }
+
+        if (!rateData) {
+          return {
+            content: [{
+              type: "text",
+              text: `No preferred rate found for ${pol_code} → ${pod_code}, ${container_type}`,
+            }],
+            isError: true,
+          };
+        }
+
+        // Get local charges using the same logic as HTTP API
+        const contractId = rateData.contract_id;
+        const polId = rateData.pol_id;
+        const podId = rateData.pod_id;
+        const vendorId = rateData.vendor_id;
+
+        console.error(`[price_enquiry] Contract/Port/Vendor IDs:`, { contractId, polId, podId, vendorId });
+
+        // Get Origin Charges - filter by vendor to reduce duplicates
+        const { data: originChargesRaw, error: originError } = await supabase
+          .from('v_local_charges_details')
+          .select('*')
+          .eq('contract_id', contractId)
+          .eq('pol_id', polId)
+          .eq('vendor_id', vendorId)
+          .eq('charge_location_type', 'Origin Charges')
+          .or(`surcharge_container_type.eq.${container_type},surcharge_container_type.is.null`);
+
+        console.error(`[price_enquiry] Origin charges raw:`, { count: originChargesRaw?.length, error: originError });
+
+        // Get Destination Charges - filter by vendor to reduce duplicates
+        const { data: destChargesRaw, error: destError } = await supabase
+          .from('v_local_charges_details')
+          .select('*')
+          .eq('contract_id', contractId)
+          .eq('pod_id', podId)
+          .eq('vendor_id', vendorId)
+          .eq('charge_location_type', 'Destination Charges')
+          .or(`surcharge_container_type.eq.${container_type},surcharge_container_type.is.null`);
+
+        console.error(`[price_enquiry] Destination charges raw:`, { count: destChargesRaw?.length, error: destError });
+
+        // Deduplicate charges by charge_code (take first occurrence only)
+        const deduplicateCharges = (charges: any[]) => {
+          const seen = new Set();
+          return charges?.filter((charge: any) => {
+            if (seen.has(charge.charge_code)) {
+              return false;
+            }
+            seen.add(charge.charge_code);
+            return true;
+          }) || [];
+        };
+
+        const originCharges = deduplicateCharges(originChargesRaw || []);
+        const destCharges = deduplicateCharges(destChargesRaw || []);
+
+        console.error(`[price_enquiry] After deduplication:`, { 
+          origin_count: originCharges?.length, 
+          dest_count: destCharges?.length 
+        });
+
+        // Get FX rates for currency conversion
+        const currencies = [...new Set([
+          ...(originCharges?.map((c: any) => c.charge_currency).filter(Boolean) || []),
+          ...(destCharges?.map((c: any) => c.charge_currency).filter(Boolean) || [])
+        ])].filter(c => c !== 'USD');
+
+        let fxRates: { [key: string]: number } = {};
+        if (currencies.length > 0) {
+          const { data: fxData, error: fxError } = await supabase
+            .from('fx_rate')
+            .select('rate_date, base_ccy, quote_ccy, rate')
+            .eq('quote_ccy', 'USD')
+            .in('base_ccy', currencies)
+            .lte('rate_date', new Date().toISOString().split('T')[0])
+            .order('rate_date', { ascending: false });
+
+          if (fxData && fxData.length > 0) {
+            // Group by currency and take the latest rate for each
+            const latestRates: { [key: string]: any } = {};
+            fxData.forEach((fx: any) => {
+              if (!latestRates[fx.base_ccy]) {
+                latestRates[fx.base_ccy] = fx;
+              }
+            });
+            
+            Object.values(latestRates).forEach((fx: any) => {
+              fxRates[fx.base_ccy] = fx.rate;
+            });
+          }
+        }
+
+        // Helper function to convert currency to USD with fallback rates
+        const convertToUSD = (amount: number, currency: string) => {
+          if (!amount || currency === 'USD') return amount;
+          
+          // Try to use database FX rate first
+          if (fxRates[currency]) {
+            return Math.round(amount * fxRates[currency] * 100) / 100;
+          }
+          
+          // Fallback rates (how many USD per 1 unit of foreign currency)
+          const fallbackRates: { [key: string]: number } = {
+            'INR': 1/83.0,   // 1 INR = ~0.012 USD
+            'EUR': 1/0.85,   // 1 EUR = ~1.176 USD
+            'AED': 1/3.67,   // 1 AED = ~0.272 USD
+            'GBP': 1/0.73,   // 1 GBP = ~1.370 USD
+            'JPY': 1/110.0,  // 1 JPY = ~0.009 USD
+            'CNY': 1/7.2,    // 1 CNY = ~0.139 USD
+          };
+          
+          const rate = fallbackRates[currency] || 1;
+          return Math.round(amount * rate * 100) / 100;
+        };
+
+        // Calculate totals with currency conversion
+        const oceanFreightSell = rateData.all_in_freight_sell || 0;
+        const originTotalUSD = originCharges?.reduce((sum: number, charge: any) => sum + convertToUSD(charge.charge_amount || 0, charge.charge_currency), 0) || 0;
+        const destTotalUSD = destCharges?.reduce((sum: number, charge: any) => sum + convertToUSD(charge.charge_amount || 0, charge.charge_currency), 0) || 0;
+        
+        const totalPerContainer = oceanFreightSell + originTotalUSD + destTotalUSD;
+        const grandTotal = totalPerContainer * container_count;
+
+        const result = {
+          route: {
+            pol: pol_code,
+            pod: pod_code,
+            container_type: container_type,
+            container_count: container_count,
+          },
+          vendor: rateData.carrier || 'N/A',
+          transit_days: rateData.transit_days || 0,
+          pricing: {
+            ocean_freight: {
+              buy: rateData.ocean_freight_buy || 0,
+              sell: oceanFreightSell,
+              surcharges: rateData.freight_surcharges || 0,
+              margin: {
+                type: rateData.margin_type || 'N/A',
+                percentage: rateData.margin_percentage || 0,
+                amount: rateData.margin_amount || 0,
+              },
+              currency: rateData.currency || 'USD',
+            },
+            local_charges: {
+              origin_total: originTotalUSD,
+              destination_total: destTotalUSD,
+              origin_charges: originCharges?.map((c: any) => ({
+                charge_name: c.vendor_charge_name,
+                charge_code: c.charge_code,
+                amount: c.charge_amount,
+                currency: c.charge_currency,
+                amount_usd: convertToUSD(c.charge_amount, c.charge_currency),
+              })) || [],
+              destination_charges: destCharges?.map((c: any) => ({
+                charge_name: c.vendor_charge_name,
+                charge_code: c.charge_code,
+                amount: c.charge_amount,
+                currency: c.charge_currency,
+                amount_usd: convertToUSD(c.charge_amount, c.charge_currency),
+              })) || [],
+            },
+            totals: {
+              per_container: totalPerContainer,
+              grand_total: grandTotal,
+              currency: 'USD',
+            },
+          },
+          validity: {
+            from: rateData.valid_from,
+            to: rateData.valid_to,
+          },
+          rate_id: rateData.rate_id,
+        };
+
+        console.error(`[price_enquiry] Success - returning result`);
+
         return {
           content: [{
             type: "text",
-            text: `No preferred rate found for ${pol_code} → ${pod_code}, ${container_type}`,
+            text: JSON.stringify(result, null, 2),
           }],
-          isError: true,
         };
+      } catch (priceError) {
+        console.error(`[price_enquiry] Error:`, priceError);
+        throw new Error(`Price enquiry failed: ${priceError instanceof Error ? priceError.message : String(priceError)}`);
       }
-
-      // Get local charges using the same logic as HTTP API
-      const contractId = rateData.contract_id;
-      const polId = rateData.pol_id;
-      const podId = rateData.pod_id;
-
-      // Get Origin Charges
-      const { data: originCharges } = await supabase
-        .from('v_local_charges_details')
-        .select('*')
-        .eq('contract_id', contractId)
-        .eq('pol_id', polId)
-        .eq('charge_location_type', 'Origin Charges')
-        .or(`surcharge_container_type.eq.${container_type},surcharge_container_type.is.null`);
-
-      // Get Destination Charges
-      const { data: destCharges } = await supabase
-        .from('v_local_charges_details')
-        .select('*')
-        .eq('contract_id', contractId)
-        .eq('pod_id', podId)
-        .eq('charge_location_type', 'Destination Charges')
-        .or(`surcharge_container_type.eq.${container_type},surcharge_container_type.is.null`);
-
-      // Calculate totals
-      const oceanFreightSell = rateData.all_in_freight_sell || 0;
-      const originTotalUSD = originCharges?.reduce((sum: number, charge: any) => sum + (charge.charge_amount || 0), 0) || 0;
-      const destTotalUSD = destCharges?.reduce((sum: number, charge: any) => sum + (charge.charge_amount || 0), 0) || 0;
-      
-      const totalPerContainer = oceanFreightSell + originTotalUSD + destTotalUSD;
-      const grandTotal = totalPerContainer * container_count;
-
-      const result = {
-        route: {
-          pol: pol_code,
-          pod: pod_code,
-          container_type: container_type,
-          container_count: container_count,
-        },
-        vendor: rateData.carrier || 'N/A',
-        transit_days: rateData.transit_days || 0,
-        pricing: {
-          ocean_freight: {
-            buy: rateData.ocean_freight_buy || 0,
-            sell: oceanFreightSell,
-            surcharges: rateData.freight_surcharges || 0,
-            margin: {
-              type: rateData.margin_type || 'N/A',
-              percentage: rateData.margin_percentage || 0,
-              amount: rateData.margin_amount || 0,
-            },
-            currency: rateData.currency || 'USD',
-          },
-          local_charges: {
-            origin_total: originTotalUSD,
-            destination_total: destTotalUSD,
-            origin_charges: originCharges?.map((c: any) => ({
-              charge_name: c.vendor_charge_name,
-              charge_code: c.charge_code,
-              amount: c.charge_amount,
-              currency: c.charge_currency,
-            })) || [],
-            destination_charges: destCharges?.map((c: any) => ({
-              charge_name: c.vendor_charge_name,
-              charge_code: c.charge_code,
-              amount: c.charge_amount,
-              currency: c.charge_currency,
-            })) || [],
-          },
-          totals: {
-            per_container: totalPerContainer,
-            grand_total: grandTotal,
-            currency: 'USD',
-          },
-        },
-        validity: {
-          from: rateData.valid_from,
-          to: rateData.valid_to,
-        },
-        rate_id: rateData.rate_id,
-      };
-
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify(result, null, 2),
-        }],
-      };
     }
 
     if (name === "search_rates") {
@@ -1154,10 +1252,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     throw new Error(`Unknown tool: ${name}`);
 
   } catch (error) {
+    console.error(`MCP Tool Error [${name}]:`, error);
     return {
       content: [{
         type: "text",
-        text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+        text: `Error in ${name}: ${error instanceof Error ? error.message : JSON.stringify(error)}`,
       }],
       isError: true,
     };
