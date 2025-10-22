@@ -1,0 +1,380 @@
+{
+  "name": "Orchestrated V1 + V3 Quote Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "from": "quotes@company.com",
+          "subject": "Quote Request"
+        }
+      },
+      "id": "email-trigger",
+      "name": "Email Trigger",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse email content to extract quote parameters\nconst emailContent = $input.first().json.text || $input.first().json.html;\n\n// Extract POL, POD, Container Type from email\nconst polMatch = emailContent.match(/POL[\\s:]*([A-Z]{5})/i);\nconst podMatch = emailContent.match(/POD[\\s:]*([A-Z]{5})/i);\nconst containerMatch = emailContent.match(/Container[\\s:]*([0-9]+[A-Z]+)/i);\nconst weightMatch = emailContent.match(/Weight[\\s:]*([0-9.]+)\\s*(MT|tons?)/i);\n\nconst pol_code = polMatch ? polMatch[1] : 'INTKD';\nconst pod_code = podMatch ? podMatch[1] : 'NLRTM';\nconst container_type = containerMatch ? containerMatch[1] : '40HC';\nconst cargo_weight_mt = weightMatch ? parseFloat(weightMatch[1]) : 25;\nconst haulage_type = 'carrier'; // Default to carrier haulage\n\nreturn {\n  pol_code,\n  pod_code,\n  container_type,\n  cargo_weight_mt,\n  haulage_type,\n  salesforce_org_id: 'test',\n  container_count: 1\n};"
+      },
+      "id": "parse-email",
+      "name": "Parse Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/auth/token",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tenant_id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            },
+            {
+              "name": "user_id",
+              "value": "test_user"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-token",
+      "name": "Get JWT Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/prepare-quote",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $json.token }}"
+            },
+            {
+              "name": "x-tenant-id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "salesforce_org_id",
+              "value": "={{ $('Parse Email').item.json.salesforce_org_id }}"
+            },
+            {
+              "name": "pol_code",
+              "value": "={{ $('Parse Email').item.json.pol_code }}"
+            },
+            {
+              "name": "pod_code",
+              "value": "={{ $('Parse Email').item.json.pod_code }}"
+            },
+            {
+              "name": "container_type",
+              "value": "={{ $('Parse Email').item.json.container_type }}"
+            },
+            {
+              "name": "container_count",
+              "value": "={{ $('Parse Email').item.json.container_count }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "call-v1",
+      "name": "Call V1 API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if POL or POD is inland\nconst v1Result = $input.first().json;\nconst pol_code = $('Parse Email').item.json.pol_code;\nconst pod_code = $('Parse Email').item.json.pod_code;\n\n// For now, assume INTKD is inland (you can make this dynamic later)\nconst pol_is_inland = pol_code === 'INTKD';\nconst pod_is_inland = pod_code === 'INTKD'; // Example: if POD is also inland\n\nreturn {\n  pol_is_inland,\n  pod_is_inland,\n  pol_code,\n  pod_code,\n  container_type: $('Parse Email').item.json.container_type,\n  container_count: $('Parse Email').item.json.container_count,\n  cargo_weight_mt: $('Parse Email').item.json.cargo_weight_mt,\n  haulage_type: $('Parse Email').item.json.haulage_type,\n  v1_result: v1Result\n};"
+      },
+      "id": "check-inland",
+      "name": "Check if Inland",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "inland-condition",
+              "leftValue": "={{ $json.pol_is_inland || $json.pod_is_inland }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "inland-check",
+      "name": "Is Inland?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/v3/prepare-quote",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $('Get JWT Token').item.json.token }}"
+            },
+            {
+              "name": "x-tenant-id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "pol_code",
+              "value": "={{ $json.pol_code }}"
+            },
+            {
+              "name": "pod_code",
+              "value": "={{ $json.pod_code }}"
+            },
+            {
+              "name": "container_type",
+              "value": "={{ $json.container_type }}"
+            },
+            {
+              "name": "container_count",
+              "value": "={{ $json.container_count }}"
+            },
+            {
+              "name": "cargo_weight_mt",
+              "value": "={{ $json.cargo_weight_mt }}"
+            },
+            {
+              "name": "haulage_type",
+              "value": "={{ $json.haulage_type }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "call-v3",
+      "name": "Call V3 API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine V1 and V3 results\nconst v1Result = $('Call V1 API').item.json;\nconst v3Result = $('Call V3 API').item.json;\n\n// Extract haulage charges from V3\nconst ihe_charges = v3Result.data.ihe_charges;\nconst ihi_charges = v3Result.data.ihi_charges;\n\n// Calculate total haulage costs\nlet total_haulage_usd = 0;\nif (ihe_charges.found) {\n  total_haulage_usd += ihe_charges.total_amount_usd || 0;\n}\nif (ihi_charges.found) {\n  total_haulage_usd += ihi_charges.total_amount_usd || 0;\n}\n\n// Combine with V1 totals\nconst v1_totals = v1Result.data.totals;\nconst combined_total = v1_totals.grand_total_usd + total_haulage_usd;\n\nreturn {\n  success: true,\n  data: {\n    // V1 results (ocean freight + local charges)\n    ...v1Result.data,\n    \n    // V3 results (haulage charges)\n    haulage_charges: {\n      ihe_charges,\n      ihi_charges,\n      total_haulage_usd\n    },\n    \n    // Combined totals\n    combined_totals: {\n      ocean_freight_total: v1_totals.ocean_freight_total,\n      local_charges_total: v1_totals.origin_total_usd + v1_totals.destination_total_usd + v1_totals.other_total_usd,\n      haulage_total: total_haulage_usd,\n      grand_total_usd: combined_total\n    },\n    \n    metadata: {\n      generated_at: new Date().toISOString(),\n      api_version: 'v1+v3',\n      orchestrated: true,\n      pol_is_inland: v3Result.data.pol_is_inland,\n      pod_is_inland: v3Result.data.pod_is_inland\n    }\n  }\n};"
+      },
+      "id": "combine-results",
+      "name": "Combine Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Use V1 results only (no inland charges)\nconst v1Result = $('Call V1 API').item.json;\n\nreturn {\n  success: true,\n  data: {\n    ...v1Result.data,\n    metadata: {\n      generated_at: new Date().toISOString(),\n      api_version: 'v1-only',\n      orchestrated: true,\n      inland_charges: 'none'\n    }\n  }\n};"
+      },
+      "id": "v1-only-results",
+      "name": "V1 Only Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate quote email response\nconst result = $input.first().json;\nconst data = result.data;\n\nlet emailBody = `Quote Generated Successfully\\n\\n`;\nemailBody += `Route: ${data.route.pol} → ${data.route.pod}\\n`;\nemailBody += `Container: ${data.route.container_count}x ${data.route.container_type}\\n\\n`;\n\n// Ocean Freight\nif (data.quote_parts.ocean_freight) {\n  emailBody += `Ocean Freight: $${data.quote_parts.ocean_freight.all_in_freight_sell.toFixed(2)}\\n`;\n}\n\n// Local Charges\nif (data.quote_parts.origin_charges.count > 0) {\n  emailBody += `Origin Charges: $${data.quote_parts.origin_charges.total_usd.toFixed(2)}\\n`;\n}\nif (data.quote_parts.destination_charges.count > 0) {\n  emailBody += `Destination Charges: $${data.quote_parts.destination_charges.total_usd.toFixed(2)}\\n`;\n}\n\n// Haulage Charges (if any)\nif (data.haulage_charges) {\n  if (data.haulage_charges.ihe_charges.found) {\n    emailBody += `IHE Charges: $${data.haulage_charges.ihe_charges.total_amount_usd.toFixed(2)}\\n`;\n  }\n  if (data.haulage_charges.ihi_charges.found) {\n    emailBody += `IHI Charges: $${data.haulage_charges.ihi_charges.total_amount_usd.toFixed(2)}\\n`;\n  }\n}\n\n// Total\nconst total = data.combined_totals ? data.combined_totals.grand_total_usd : data.totals.grand_total_usd;\nemailBody += `\\nTOTAL: $${total.toFixed(2)}\\n`;\n\nreturn {\n  to: 'quotes@company.com',\n  subject: 'Quote Response',\n  body: emailBody\n};"
+      },
+      "id": "generate-response",
+      "name": "Generate Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "quotes@company.com",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Quote Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [2220, 300]
+    }
+  ],
+  "connections": {
+    "Email Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Email": {
+      "main": [
+        [
+          {
+            "node": "Get JWT Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get JWT Token": {
+      "main": [
+        [
+          {
+            "node": "Call V1 API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call V1 API": {
+      "main": [
+        [
+          {
+            "node": "Check if Inland",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Inland": {
+      "main": [
+        [
+          {
+            "node": "Is Inland?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Inland?": {
+      "main": [
+        [
+          {
+            "node": "Call V3 API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "V1 Only Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call V3 API": {
+      "main": [
+        [
+          {
+            "node": "Combine Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Results": {
+      "main": [
+        [
+          {
+            "node": "Generate Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "V1 Only Results": {
+      "main": [
+        [
+          {
+            "node": "Generate Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Response": {
+      "main": [
+        [
+          {
+            "node": "Send Quote Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-17T10:00:00.000Z",
+  "versionId": "1"
+}

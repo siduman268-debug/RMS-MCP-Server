@@ -13,8 +13,13 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import Fastify from 'fastify';
+// import { InlandPricingService } from './INLAND_PRICING_SERVICE.js'; // Not needed for simplified V3
 import cors from '@fastify/cors';
 import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 // Environment variables are passed directly by Claude Desktop
 
@@ -537,7 +542,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     
     if (name === "price_enquiry") {
       try {
-        const { pol_code, pod_code, container_type, container_count = 1 } = args as any;
+      const { pol_code, pod_code, container_type, container_count = 1 } = args as any;
 
         console.error(`[price_enquiry] Starting with: ${pol_code} → ${pod_code}, ${container_type}`);
 
@@ -549,7 +554,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           .eq('pod_code', pod_code)
           .eq('container_type', container_type)
           .eq('is_preferred', true)
-          .single();
+        .single();
 
         console.error(`[price_enquiry] Rate query result:`, { rateData: !!rateData, rateError });
 
@@ -558,14 +563,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         if (!rateData) {
-          return {
-            content: [{
-              type: "text",
+        return {
+          content: [{
+            type: "text",
               text: `No preferred rate found for ${pol_code} → ${pod_code}, ${container_type}`,
-            }],
-            isError: true,
-          };
-        }
+          }],
+          isError: true,
+        };
+      }
 
         // Get local charges using the same logic as HTTP API
         const contractId = rateData.contract_id;
@@ -578,7 +583,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Get Origin Charges - filter by vendor to reduce duplicates
         const { data: originChargesRaw, error: originError } = await supabase
           .from('v_local_charges_details')
-          .select('*')
+        .select('*')
           .eq('contract_id', contractId)
           .eq('pol_id', polId)
           .eq('vendor_id', vendorId)
@@ -681,16 +686,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const totalPerContainer = oceanFreightSell + originTotalUSD + destTotalUSD;
         const grandTotal = totalPerContainer * container_count;
 
-        const result = {
-          route: {
-            pol: pol_code,
-            pod: pod_code,
-            container_type: container_type,
-            container_count: container_count,
-          },
+      const result = {
+        route: {
+          pol: pol_code,
+          pod: pod_code,
+          container_type: container_type,
+          container_count: container_count,
+        },
           vendor: rateData.carrier || 'N/A',
           transit_days: rateData.transit_days || 0,
-          pricing: {
+        pricing: {
             ocean_freight: {
               buy: rateData.ocean_freight_buy || 0,
               sell: oceanFreightSell,
@@ -711,7 +716,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 amount: c.charge_amount,
                 currency: c.charge_currency,
                 amount_usd: convertToUSD(c.charge_amount, c.charge_currency),
-              })) || [],
+        })) || [],
               destination_charges: destCharges?.map((c: any) => ({
                 charge_name: c.vendor_charge_name,
                 charge_code: c.charge_code,
@@ -735,12 +740,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         console.error(`[price_enquiry] Success - returning result`);
 
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify(result, null, 2),
-          }],
-        };
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(result, null, 2),
+        }],
+      };
       } catch (priceError) {
         console.error(`[price_enquiry] Error:`, priceError);
         throw new Error(`Price enquiry failed: ${priceError instanceof Error ? priceError.message : String(priceError)}`);
@@ -2126,6 +2131,60 @@ async function createHttpServer() {
     }
   });
 
+  // 4. Prepare Quote V3 endpoint (IHE/IHI Haulage Only)
+  fastify.post('/api/v3/prepare-quote', async (request, reply) => {
+    try {
+      const { 
+        pol_code, 
+        pod_code, 
+        container_type, 
+        container_count = 1,
+        cargo_weight_mt,
+        haulage_type
+      } = request.body as any;
+
+      // Call the simplified inland function for IHE/IHI only
+      const { data: result, error } = await supabase.rpc('simplified_inland_function', {
+        p_pol_code: pol_code,
+        p_pod_code: pod_code,
+        p_container_type: container_type,
+        p_container_count: container_count,
+        p_cargo_weight_mt: cargo_weight_mt,
+        p_haulage_type: haulage_type
+      });
+
+      if (error) {
+        throw new Error(`V3 function error: ${error.message}`);
+      }
+
+      if (!result || !result.success) {
+        throw new Error(result?.error_message || 'V3 function failed');
+      }
+
+      // Return only haulage charges (IHE/IHI)
+      return {
+        success: true,
+        data: {
+          ...result,
+          metadata: {
+            generated_at: new Date().toISOString(),
+            pol_code,
+            pod_code,
+            container_type,
+            container_count,
+            api_version: 'v3',
+            haulage_only: true
+          }
+        }
+      };
+    } catch (error) {
+      console.error('V3 Haulage Error:', error);
+      reply.code(500);
+      return { success: false, error: error instanceof Error ? error.message : JSON.stringify(error) };
+    }
+  });
+
+
   return fastify;
 }
 
@@ -2153,6 +2212,7 @@ async function main() {
       console.error("  POST /api/v2/add-rate-to-quote");
       console.error("  POST /api/v2/get-quote-session");
       console.error("  POST /api/v2/prepare-quote");
+      console.error("  POST /api/v3/prepare-quote");
     } catch (error) {
       console.error("Failed to start HTTP server:", error);
     }

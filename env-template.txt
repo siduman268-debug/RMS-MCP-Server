@@ -1,0 +1,11 @@
+# Supabase Configuration
+SUPABASE_URL=https://xsvwhctzwpfcwmmvbgmf.supabase.co
+SUPABASE_SERVICE_KEY=your_supabase_service_key_here
+
+# JWT Secret (for token generation)
+JWT_SECRET=your_jwt_secret_here
+
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+
