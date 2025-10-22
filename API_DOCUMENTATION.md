@@ -107,9 +107,11 @@ await supabase.rpc('set_tenant_context', {
 5. [API Version 2 (V2) Endpoints](#api-version-2-v2-endpoints)
    - [V2 Search Rates](#v2-search-rates)
    - [V2 Prepare Quote](#v2-prepare-quote)
-6. [Data Models](#data-models)
-7. [Error Handling](#error-handling)
-8. [FX Conversion](#fx-conversion)
+6. [API Version 3 (V3) Endpoints](#api-version-3-v3-endpoints)
+   - [V3 Prepare Quote](#v3-prepare-quote-inland-haulage-only)
+7. [Data Models](#data-models)
+8. [Error Handling](#error-handling)
+9. [FX Conversion](#fx-conversion)
 
 ---
 
@@ -861,6 +863,147 @@ curl -X POST http://localhost:3000/api/v2/prepare-quote \
 | **Response Structure** | Full quote structure | Same as V1 (compatible) |
 | **Use Case** | General quote generation | Salesforce integration |
 | **Flexibility** | Route-based | Rate-specific |
+
+### API Version Comparison
+
+| Feature | V1 API | V2 API | V3 API |
+|---------|--------|--------|--------|
+| **Purpose** | Complete quotes (ocean + local) | Rate-specific quotes | Inland haulage only |
+| **Input** | `pol_code`, `pod_code`, `container_type` | `rate_id`, `salesforce_org_id` | `pol_code`, `pod_code`, `cargo_weight_mt`, `haulage_type` |
+| **Output** | Ocean freight + Local charges | Ocean freight + Local charges | IHE/IHI haulage charges |
+| **Inland Support** | Basic port-to-port | Basic port-to-port | Specialized inland logic |
+| **Currency** | Multi-currency (USD, EUR, INR) | Multi-currency (USD, EUR, INR) | INR to USD conversion |
+| **Use Case** | General shipping quotes | Salesforce integration | Inland container depots |
+| **Orchestration** | Standalone | Standalone | Designed for V1 + V3 |
+| **Response Structure** | Full quote breakdown | Same as V1 | Haulage charges only |
+
+---
+
+## API Version 3 (V3) Endpoints
+
+The V3 API provides specialized inland haulage pricing for Inland Container Depots (ICD). This API is designed to work in conjunction with V1 API to provide complete pricing for inland routes.
+
+### Key Features:
+- **IHE (Inland Haulage Export)**: When POL is inland, calculates haulage from inland to gateway port
+- **IHI (Inland Haulage Import)**: When POD is inland, calculates haulage from gateway to inland port
+- **Weight-based Pricing**: Considers cargo weight for haulage rate calculation
+- **Currency Conversion**: Converts INR haulage charges to USD
+- **Orchestrated with V1**: Designed to be called after V1 for complete inland quotes
+
+### V3 Prepare Quote (Inland Haulage Only)
+
+**Endpoint**: `POST /api/v3/prepare-quote`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Calculate inland haulage charges (IHE/IHI) for routes involving inland ports. This API only handles haulage charges and should be used in conjunction with V1 API for complete pricing.
+
+**Headers**:
+```
+Authorization: Bearer <jwt_token>
+x-tenant-id: <tenant_uuid>
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "pol_code": "INTKD",                    // Required: Port of Loading (can be inland)
+  "pod_code": "NLRTM",                    // Required: Port of Discharge (can be inland)
+  "container_type": "40HC",               // Required: Container type
+  "container_count": 1,                   // Optional: Number of containers (default: 1)
+  "cargo_weight_mt": 25,                  // Required: Cargo weight in metric tons
+  "haulage_type": "carrier"               // Required: "carrier" or "merchant"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "pol_code": "INTKD",
+    "pod_code": "NLRTM",
+    "pol_is_inland": true,
+    "pod_is_inland": false,
+    "container_type": "40HC",
+    "container_count": 1,
+    "haulage_type": "carrier",
+    "ihe_charges": {
+      "found": true,
+      "rate_id": 3,
+      "rate_per_container_inr": 52000,
+      "total_amount_inr": 52000,
+      "total_amount_usd": 624,
+      "currency": "INR",
+      "exchange_rate": 83.33,
+      "vendor_name": "Inland Logistics Co",
+      "route_name": "INTKD to INNSA",
+      "haulage_type": "IHE"
+    },
+    "ihi_charges": {
+      "found": false,
+      "message": "POD is not inland, no IHI needed"
+    },
+    "exchange_rate": 83.33,
+    "message": "V3 function - IHE and IHI haulage logic completed"
+  },
+  "metadata": {
+    "generated_at": "2025-01-17T10:30:00.000Z",
+    "pol_code": "INTKD",
+    "pod_code": "NLRTM",
+    "container_type": "40HC",
+    "container_count": 1,
+    "api_version": "v3",
+    "haulage_only": true
+  }
+}
+```
+
+**Business Logic**:
+1. **Location Detection**: Determines if POL/POD are inland ports
+2. **IHE Calculation**: If POL is inland AND haulage_type is 'carrier', calculates haulage from inland to gateway
+3. **IHI Calculation**: If POD is inland AND haulage_type is 'carrier', calculates haulage from gateway to inland
+4. **Weight Matching**: Finds haulage rates that match cargo weight (handles null weight ranges)
+5. **Currency Conversion**: Converts INR charges to USD using current exchange rates
+6. **Route Validation**: Ensures haulage routes exist between inland and gateway ports
+
+**Use Cases**:
+- **Inland to Seaport**: INTKD → NLRTM (IHE needed)
+- **Seaport to Inland**: NLRTM → INTKD (IHI needed)  
+- **Inland to Inland**: INTKD → INTKD (Both IHE and IHI needed)
+- **Seaport to Seaport**: INNSA → NLRTM (No haulage needed)
+
+**Example**:
+```bash
+curl -X POST http://localhost:3000/api/v3/prepare-quote \
+  -H "Authorization: Bearer <token>" \
+  -H "x-tenant-id: <tenant_id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pol_code": "INTKD",
+    "pod_code": "NLRTM", 
+    "container_type": "40HC",
+    "container_count": 1,
+    "cargo_weight_mt": 25,
+    "haulage_type": "carrier"
+  }'
+```
+
+**Integration with V1**:
+The V3 API is designed to be used in conjunction with V1 API for complete inland pricing:
+
+1. **Call V1 API**: Get ocean freight + local charges
+2. **Check if inland**: Determine if POL/POD are inland ports
+3. **Call V3 API**: Get IHE/IHI haulage charges (if needed)
+4. **Combine results**: V1 + V3 = Complete inland quote
+
+**n8n Orchestration**:
+The `n8n-orchestrated-v1-v3-workflow.json` provides a complete workflow that:
+- Calls V1 API for ocean freight + local charges
+- Checks if route involves inland ports
+- Calls V3 API for haulage charges (if needed)
+- Combines results into complete quote
+- Sends email response
 
 ---
 
