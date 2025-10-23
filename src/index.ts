@@ -2184,6 +2184,65 @@ async function createHttpServer() {
     }
   });
 
+  // 5. Get Inland Haulage endpoint (Simplified for n8n orchestration)
+  fastify.post('/api/v3/get-inland-haulage', async (request, reply) => {
+    try {
+      const { 
+        pol_code, 
+        pod_code, 
+        container_type, 
+        container_count = 1,
+        cargo_weight_mt,
+        haulage_type
+      } = request.body as any;
+
+      // Call the simplified inland function for IHE/IHI only
+      const { data: result, error } = await supabase.rpc('simplified_inland_function', {
+        p_pol_code: pol_code,
+        p_pod_code: pod_code,
+        p_container_type: container_type,
+        p_container_count: container_count,
+        p_cargo_weight_mt: cargo_weight_mt,
+        p_haulage_type: haulage_type
+      });
+
+      if (error) {
+        throw new Error(`Inland haulage error: ${error.message}`);
+      }
+
+      if (!result || !result.success) {
+        throw new Error(result?.error_message || 'Inland haulage function failed');
+      }
+
+      // Return simplified haulage charges for n8n orchestration
+      return {
+        success: true,
+        data: {
+          pol_code,
+          pod_code,
+          pol_is_inland: result.pol_is_inland,
+          pod_is_inland: result.pod_is_inland,
+          container_type,
+          container_count,
+          haulage_type,
+          ihe_charges: result.ihe_charges,
+          ihi_charges: result.ihi_charges,
+          total_haulage_usd: (result.ihe_charges?.total_amount_usd || 0) + (result.ihi_charges?.total_amount_usd || 0),
+          exchange_rate: result.exchange_rate,
+          metadata: {
+            generated_at: new Date().toISOString(),
+            api_version: 'v3',
+            endpoint: 'get-inland-haulage'
+          }
+        }
+      };
+    } catch (error) {
+      console.error('Get Inland Haulage Error:', error);
+      reply.code(500);
+      return { success: false, error: error instanceof Error ? error.message : JSON.stringify(error) };
+    }
+  });
+
 
   return fastify;
 }
@@ -2213,6 +2272,7 @@ async function main() {
       console.error("  POST /api/v2/get-quote-session");
       console.error("  POST /api/v2/prepare-quote");
       console.error("  POST /api/v3/prepare-quote");
+      console.error("  POST /api/v3/get-inland-haulage");
     } catch (error) {
       console.error("Failed to start HTTP server:", error);
     }
