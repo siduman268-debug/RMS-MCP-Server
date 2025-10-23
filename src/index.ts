@@ -518,6 +518,46 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
         },
       },
+
+      // ==========================================
+      // 5. INLAND HAULAGE
+      // ==========================================
+      {
+        name: "get_inland_haulage",
+        description: "Get inland haulage charges (IHE/IHI) for routes involving inland ports. Use this for inland container depots (ICD) to calculate haulage from/to gateway ports.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            pol_code: {
+              type: "string",
+              description: "Port of Loading (can be inland like INTKD)",
+            },
+            pod_code: {
+              type: "string", 
+              description: "Port of Discharge (can be inland)",
+            },
+            container_type: {
+              type: "string",
+              description: "Container type (e.g., 40HC, 20GP)",
+            },
+            container_count: {
+              type: "number",
+              description: "Number of containers (default: 1)",
+              default: 1,
+            },
+            cargo_weight_mt: {
+              type: "number",
+              description: "Cargo weight in metric tons (required for haulage calculation)",
+            },
+            haulage_type: {
+              type: "string",
+              enum: ["carrier", "merchant"],
+              description: "Haulage responsibility - 'carrier' for IHE/IHI charges, 'merchant' for no charges",
+            },
+          },
+          required: ["pol_code", "pod_code", "container_type", "cargo_weight_mt", "haulage_type"],
+        },
+      },
     ],
   };
 });
@@ -874,6 +914,58 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           text: JSON.stringify(result, null, 2),
         }],
       };
+    }
+
+    if (name === "get_inland_haulage") {
+      try {
+        const { pol_code, pod_code, container_type, container_count = 1, cargo_weight_mt, haulage_type } = args as any;
+
+        // Call the simplified inland function for IHE/IHI only
+        const { data: result, error } = await supabase.rpc('simplified_inland_function', {
+          p_pol_code: pol_code,
+          p_pod_code: pod_code,
+          p_container_type: container_type,
+          p_container_count: container_count,
+          p_cargo_weight_mt: cargo_weight_mt,
+          p_haulage_type: haulage_type
+        });
+
+        if (error) {
+          throw new Error(`Inland haulage error: ${error.message}`);
+        }
+
+        if (!result || !result.success) {
+          throw new Error(result?.error_message || 'Inland haulage function failed');
+        }
+
+        const response = {
+          pol_code,
+          pod_code,
+          pol_is_inland: result.pol_is_inland,
+          pod_is_inland: result.pod_is_inland,
+          container_type,
+          container_count,
+          haulage_type,
+          ihe_charges: result.ihe_charges,
+          ihi_charges: result.ihi_charges,
+          total_haulage_usd: (result.ihe_charges?.total_amount_usd || 0) + (result.ihi_charges?.total_amount_usd || 0),
+          exchange_rate: result.exchange_rate,
+          metadata: {
+            generated_at: new Date().toISOString(),
+            api_version: 'v3',
+            endpoint: 'get-inland-haulage'
+          }
+        };
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(response, null, 2),
+          }],
+        };
+      } catch (haulageError) {
+        throw new Error(`Get inland haulage failed: ${haulageError instanceof Error ? haulageError.message : String(haulageError)}`);
+      }
     }
 
     // ==========================================
