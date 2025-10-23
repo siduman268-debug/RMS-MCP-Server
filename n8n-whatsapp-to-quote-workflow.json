@@ -1,0 +1,551 @@
+{
+  "name": "WhatsApp to Quote Automation",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "webhook-whatsapp",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "whatsapp-quote-request"
+    },
+    {
+      "parameters": {
+        "model": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a freight forwarding assistant. Extract quote details from customer messages. Return JSON with: pol (port of loading), pod (port of discharge), container_type (20GP/40GP/40HC), container_count (number), cargo_weight_mt (in metric tons), customer_name, customer_email, customer_phone. If information is missing, ask clarifying questions."
+            },
+            {
+              "role": "user",
+              "content": "={{ $json.body.message }}"
+            }
+          ]
+        }
+      },
+      "id": "ai-extract-details",
+      "name": "AI Extract Quote Details",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI response\nconst aiResponse = $input.item.json.choices[0].message.content;\nconst quoteData = JSON.parse(aiResponse);\n\n// Check if we need more information\nif (!quoteData.pol || !quoteData.pod || !quoteData.container_type) {\n  return {\n    json: {\n      status: 'incomplete',\n      missing_fields: [],\n      reply_message: \"I need more information. Please provide: Port of Loading, Port of Discharge, and Container Type (20GP/40GP/40HC)\",\n      data: quoteData\n    }\n  };\n}\n\nif (!quoteData.container_count) {\n  quoteData.container_count = 1;\n}\n\nif (!quoteData.cargo_weight_mt) {\n  quoteData.cargo_weight_mt = 20; // Default weight\n}\n\nreturn {\n  json: {\n    status: 'complete',\n    data: quoteData\n  }\n};"
+      },
+      "id": "validate-data",
+      "name": "Validate Quote Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "value2": "incomplete"
+            }
+          ]
+        }
+      },
+      "id": "if-incomplete",
+      "name": "If Incomplete",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v17.0/whatsapp/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "messaging_product",
+              "value": "whatsapp"
+            },
+            {
+              "name": "to",
+              "value": "={{ $json.data.customer_phone }}"
+            },
+            {
+              "name": "text",
+              "value": { "body": "={{ $json.reply_message }}" }
+            }
+          ]
+        }
+      },
+      "id": "send-clarification",
+      "name": "Send Clarification Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 150]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT unlocode, name, country_code FROM locations WHERE unlocode ILIKE '%{{ $json.data.pol }}%' OR name ILIKE '%{{ $json.data.pol }}%' LIMIT 5",
+        "options": {}
+      },
+      "id": "lookup-pol",
+      "name": "Lookup POL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1050, 450],
+      "credentials": {
+        "postgres": {
+          "id": "supabase-creds",
+          "name": "Supabase PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT unlocode, name, country_code FROM locations WHERE unlocode ILIKE '%{{ $json.data.pod }}%' OR name ILIKE '%{{ $json.data.pod }}%' LIMIT 5",
+        "options": {}
+      },
+      "id": "lookup-pod",
+      "name": "Lookup POD",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1250, 450]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/auth/token",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tenant_id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            },
+            {
+              "name": "user_id",
+              "value": "n8n_automation"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-rms-token",
+      "name": "Get RMS Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1450, 450]
+    },
+    {
+      "parameters": {
+        "resource": "customObject",
+        "operation": "create",
+        "customObject": "Freight_Enquiry__c",
+        "fields": {
+          "values": [
+            {
+              "fieldId": "Customer_Name__c",
+              "fieldValue": "={{ $json.data.customer_name }}"
+            },
+            {
+              "fieldId": "Customer_Email__c",
+              "fieldValue": "={{ $json.data.customer_email }}"
+            },
+            {
+              "fieldId": "Customer_Phone__c",
+              "fieldValue": "={{ $json.data.customer_phone }}"
+            },
+            {
+              "fieldId": "POL__c",
+              "fieldValue": "={{ $('Lookup POL').item.json.unlocode }}"
+            },
+            {
+              "fieldId": "POD__c",
+              "fieldValue": "={{ $('Lookup POD').item.json.unlocode }}"
+            },
+            {
+              "fieldId": "Container_Type__c",
+              "fieldValue": "={{ $json.data.container_type }}"
+            },
+            {
+              "fieldId": "Container_Count__c",
+              "fieldValue": "={{ $json.data.container_count }}"
+            },
+            {
+              "fieldId": "Cargo_Weight_MT__c",
+              "fieldValue": "={{ $json.data.cargo_weight_mt }}"
+            },
+            {
+              "fieldId": "Status__c",
+              "fieldValue": "New"
+            },
+            {
+              "fieldId": "Source__c",
+              "fieldValue": "WhatsApp"
+            }
+          ]
+        }
+      },
+      "id": "create-salesforce-enquiry",
+      "name": "Create Salesforce Enquiry",
+      "type": "n8n-nodes-base.salesforce",
+      "typeVersion": 2,
+      "position": [1650, 450],
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "salesforce-creds",
+          "name": "Salesforce OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/search-rates",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer ={{ $('Get RMS Token').item.json.token }}"
+            },
+            {
+              "name": "x-tenant-id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "pol_code",
+              "value": "={{ $('Lookup POL').item.json.unlocode }}"
+            },
+            {
+              "name": "pod_code",
+              "value": "={{ $('Lookup POD').item.json.unlocode }}"
+            },
+            {
+              "name": "container_type",
+              "value": "={{ $json.data.container_type }}"
+            }
+          ]
+        }
+      },
+      "id": "search-rates",
+      "name": "Search Rates (V1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1850, 450]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/prepare-quote",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer ={{ $('Get RMS Token').item.json.token }}"
+            },
+            {
+              "name": "x-tenant-id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "pol_code",
+              "value": "={{ $('Lookup POL').item.json.unlocode }}"
+            },
+            {
+              "name": "pod_code",
+              "value": "={{ $('Lookup POD').item.json.unlocode }}"
+            },
+            {
+              "name": "container_type",
+              "value": "={{ $json.data.container_type }}"
+            },
+            {
+              "name": "container_count",
+              "value": "={{ $json.data.container_count }}"
+            }
+          ]
+        }
+      },
+      "id": "prepare-quote-v1",
+      "name": "Prepare Quote (V1 - Ocean + Local)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2050, 450]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if POL or POD is inland\nconst polIsInland = $('Lookup POL').item.json.location_type === 'ICD' || $('Lookup POL').item.json.location_type === 'CFS';\nconst podIsInland = $('Lookup POD').item.json.location_type === 'ICD' || $('Lookup POD').item.json.location_type === 'CFS';\n\nreturn {\n  json: {\n    is_inland_route: polIsInland || podIsInland,\n    pol_is_inland: polIsInland,\n    pod_is_inland: podIsInland,\n    pol_code: $('Lookup POL').item.json.unlocode,\n    pod_code: $('Lookup POD').item.json.unlocode,\n    container_type: $input.item.json.data.container_type,\n    container_count: $input.item.json.data.container_count,\n    cargo_weight_mt: $input.item.json.data.cargo_weight_mt\n  }\n};"
+      },
+      "id": "check-inland",
+      "name": "Check If Inland Route",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2250, 450]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_inland_route }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-inland",
+      "name": "If Inland Route",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2450, 450]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/v3/get-inland-haulage",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer ={{ $('Get RMS Token').item.json.token }}"
+            },
+            {
+              "name": "x-tenant-id",
+              "value": "00000000-0000-0000-0000-000000000001"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "pol_code",
+              "value": "={{ $json.pol_code }}"
+            },
+            {
+              "name": "pod_code",
+              "value": "={{ $json.pod_code }}"
+            },
+            {
+              "name": "container_type",
+              "value": "={{ $json.container_type }}"
+            },
+            {
+              "name": "container_count",
+              "value": "={{ $json.container_count }}"
+            },
+            {
+              "name": "cargo_weight_mt",
+              "value": "={{ $json.cargo_weight_mt }}"
+            },
+            {
+              "name": "haulage_type",
+              "value": "carrier"
+            }
+          ]
+        }
+      },
+      "id": "get-inland-haulage",
+      "name": "Get Inland Haulage (V3)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2650, 350]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine V1 quote (ocean + local) with V3 haulage (IHE/IHI)\nconst v1Quote = $('Prepare Quote (V1 - Ocean + Local)').item.json.data;\nconst v3Haulage = $('Get Inland Haulage (V3)').item.json.data;\n\n// Calculate total\nconst oceanAndLocal = v1Quote.totals.grand_total_usd;\nconst haulageTotal = v3Haulage.total_haulage_usd;\nconst grandTotal = oceanAndLocal + haulageTotal;\n\nreturn {\n  json: {\n    quote_id: `QUOTE-${Date.now()}`,\n    customer: {\n      name: $('Validate Quote Data').item.json.data.customer_name,\n      email: $('Validate Quote Data').item.json.data.customer_email,\n      phone: $('Validate Quote Data').item.json.data.customer_phone\n    },\n    route: {\n      pol: v1Quote.route.pol_code,\n      pod: v1Quote.route.pod_code,\n      container_type: v1Quote.route.container_type,\n      container_count: v1Quote.route.container_count\n    },\n    pricing: {\n      ocean_freight_usd: v1Quote.ocean_freight.all_in_sell,\n      origin_charges_usd: v1Quote.totals.origin_total_usd,\n      destination_charges_usd: v1Quote.totals.destination_total_usd,\n      ihe_charges_usd: v3Haulage.ihe_charges?.total_amount_usd || 0,\n      ihi_charges_usd: v3Haulage.ihi_charges?.total_amount_usd || 0,\n      grand_total_usd: grandTotal\n    },\n    validity: v1Quote.validity,\n    salesforce_enquiry_id: $('Create Salesforce Enquiry').item.json.id,\n    generated_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "combine-pricing",
+      "name": "Combine V1 + V3 Pricing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2850, 350]
+    },
+    {
+      "parameters": {
+        "jsCode": "// For non-inland routes, just use V1 quote\nconst v1Quote = $('Prepare Quote (V1 - Ocean + Local)').item.json.data;\n\nreturn {\n  json: {\n    quote_id: `QUOTE-${Date.now()}`,\n    customer: {\n      name: $('Validate Quote Data').item.json.data.customer_name,\n      email: $('Validate Quote Data').item.json.data.customer_email,\n      phone: $('Validate Quote Data').item.json.data.customer_phone\n    },\n    route: {\n      pol: v1Quote.route.pol_code,\n      pod: v1Quote.route.pod_code,\n      container_type: v1Quote.route.container_type,\n      container_count: v1Quote.route.container_count\n    },\n    pricing: {\n      ocean_freight_usd: v1Quote.ocean_freight.all_in_sell,\n      origin_charges_usd: v1Quote.totals.origin_total_usd,\n      destination_charges_usd: v1Quote.totals.destination_total_usd,\n      ihe_charges_usd: 0,\n      ihi_charges_usd: 0,\n      grand_total_usd: v1Quote.totals.grand_total_usd\n    },\n    validity: v1Quote.validity,\n    salesforce_enquiry_id: $('Create Salesforce Enquiry').item.json.id,\n    generated_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "format-v1-only",
+      "name": "Format V1 Quote Only",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2650, 550]
+    },
+    {
+      "parameters": {
+        "resource": "customObject",
+        "operation": "update",
+        "customObject": "Freight_Enquiry__c",
+        "customObjectId": "={{ $('Create Salesforce Enquiry').item.json.id }}",
+        "fields": {
+          "values": [
+            {
+              "fieldId": "Status__c",
+              "fieldValue": "Quoted"
+            },
+            {
+              "fieldId": "Quote_ID__c",
+              "fieldValue": "={{ $json.quote_id }}"
+            },
+            {
+              "fieldId": "Ocean_Freight_USD__c",
+              "fieldValue": "={{ $json.pricing.ocean_freight_usd }}"
+            },
+            {
+              "fieldId": "Origin_Charges_USD__c",
+              "fieldValue": "={{ $json.pricing.origin_charges_usd }}"
+            },
+            {
+              "fieldId": "Destination_Charges_USD__c",
+              "fieldValue": "={{ $json.pricing.destination_charges_usd }}"
+            },
+            {
+              "fieldId": "IHE_Charges_USD__c",
+              "fieldValue": "={{ $json.pricing.ihe_charges_usd }}"
+            },
+            {
+              "fieldId": "IHI_Charges_USD__c",
+              "fieldValue": "={{ $json.pricing.ihi_charges_usd }}"
+            },
+            {
+              "fieldId": "Total_Quote_USD__c",
+              "fieldValue": "={{ $json.pricing.grand_total_usd }}"
+            },
+            {
+              "fieldId": "Quote_Generated_At__c",
+              "fieldValue": "={{ $json.generated_at }}"
+            }
+          ]
+        }
+      },
+      "id": "update-salesforce-quote",
+      "name": "Update Salesforce with Quote",
+      "type": "n8n-nodes-base.salesforce",
+      "typeVersion": 2,
+      "position": [3050, 450]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v17.0/whatsapp/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "messaging_product",
+              "value": "whatsapp"
+            },
+            {
+              "name": "to",
+              "value": "={{ $json.customer.phone }}"
+            },
+            {
+              "name": "text",
+              "value": {
+                "body": "✅ Your Quote is Ready!\n\n📦 Route: {{ $json.route.pol }} → {{ $json.route.pod }}\n📦 Container: {{ $json.route.container_count }}x {{ $json.route.container_type }}\n\n💰 Pricing Breakdown:\n- Ocean Freight: ${{ $json.pricing.ocean_freight_usd }}\n- Origin Charges: ${{ $json.pricing.origin_charges_usd }}\n- Destination Charges: ${{ $json.pricing.destination_charges_usd }}\n{{#if $json.pricing.ihe_charges_usd}}- Inland Haulage (Export): ${{ $json.pricing.ihe_charges_usd }}\n{{/if}}{{#if $json.pricing.ihi_charges_usd}}- Inland Haulage (Import): ${{ $json.pricing.ihi_charges_usd }}\n{{/if}}\n\n💵 TOTAL: ${{ $json.pricing.grand_total_usd }} USD\n\n📅 Valid Until: {{ $json.validity.to }}\n\nQuote ID: {{ $json.quote_id }}\n\nReply 'YES' to confirm or 'MODIFY' to request changes."
+              }
+            }
+          ]
+        }
+      },
+      "id": "send-quote-whatsapp",
+      "name": "Send Quote via WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [3250, 450]
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [[{ "node": "AI Extract Quote Details", "type": "main", "index": 0 }]]
+    },
+    "AI Extract Quote Details": {
+      "main": [[{ "node": "Validate Quote Data", "type": "main", "index": 0 }]]
+    },
+    "Validate Quote Data": {
+      "main": [[{ "node": "If Incomplete", "type": "main", "index": 0 }]]
+    },
+    "If Incomplete": {
+      "main": [
+        [{ "node": "Send Clarification Request", "type": "main", "index": 0 }],
+        [
+          { "node": "Lookup POL", "type": "main", "index": 0 },
+          { "node": "Lookup POD", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Lookup POL": {
+      "main": [[{ "node": "Get RMS Token", "type": "main", "index": 0 }]]
+    },
+    "Lookup POD": {
+      "main": [[{ "node": "Get RMS Token", "type": "main", "index": 0 }]]
+    },
+    "Get RMS Token": {
+      "main": [[{ "node": "Create Salesforce Enquiry", "type": "main", "index": 0 }]]
+    },
+    "Create Salesforce Enquiry": {
+      "main": [[{ "node": "Search Rates (V1)", "type": "main", "index": 0 }]]
+    },
+    "Search Rates (V1)": {
+      "main": [[{ "node": "Prepare Quote (V1 - Ocean + Local)", "type": "main", "index": 0 }]]
+    },
+    "Prepare Quote (V1 - Ocean + Local)": {
+      "main": [[{ "node": "Check If Inland Route", "type": "main", "index": 0 }]]
+    },
+    "Check If Inland Route": {
+      "main": [[{ "node": "If Inland Route", "type": "main", "index": 0 }]]
+    },
+    "If Inland Route": {
+      "main": [
+        [{ "node": "Get Inland Haulage (V3)", "type": "main", "index": 0 }],
+        [{ "node": "Format V1 Quote Only", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Inland Haulage (V3)": {
+      "main": [[{ "node": "Combine V1 + V3 Pricing", "type": "main", "index": 0 }]]
+    },
+    "Combine V1 + V3 Pricing": {
+      "main": [[{ "node": "Update Salesforce with Quote", "type": "main", "index": 0 }]]
+    },
+    "Format V1 Quote Only": {
+      "main": [[{ "node": "Update Salesforce with Quote", "type": "main", "index": 0 }]]
+    },
+    "Update Salesforce with Quote": {
+      "main": [[{ "node": "Send Quote via WhatsApp", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-23T02:50:00.000Z",
+  "versionId": "1"
+}
+
