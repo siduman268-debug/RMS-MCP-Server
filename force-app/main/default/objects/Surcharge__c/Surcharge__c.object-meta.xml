@@ -1,0 +1,371 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <actionOverrides>
+        <actionName>Accept</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>CancelEdit</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>Clone</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>Delete</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>Edit</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>List</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>New</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>SaveEdit</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>Tab</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>View</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <allowInChatterGroups>false</allowInChatterGroups>
+    <compactLayoutAssignment>SYSTEM</compactLayoutAssignment>
+    <deploymentStatus>Deployed</deploymentStatus>
+    <description>Surcharges for RMS - additional charges applied to shipments</description>
+    <enableActivities>true</enableActivities>
+    <enableBulkApi>true</enableBulkApi>
+    <enableEnhancedLookup>true</enableEnhancedLookup>
+    <enableFeeds>true</enableFeeds>
+    <enableHistory>true</enableHistory>
+    <enableLicensing>false</enableLicensing>
+    <enableReports>true</enableReports>
+    <enableSearch>true</enableSearch>
+    <enableSharing>true</enableSharing>
+    <enableStreamingApi>true</enableStreamingApi>
+    <externalSharingModel>Private</externalSharingModel>
+    <fields>
+        <fullName>Vendor_ID__c</fullName>
+        <description>Vendor ID from RMS system</description>
+        <externalId>false</externalId>
+        <label>Vendor ID</label>
+        <precision>18</precision>
+        <required>true</required>
+        <scale>0</scale>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Number</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>Contract_ID__c</fullName>
+        <description>Contract ID from RMS system</description>
+        <externalId>false</externalId>
+        <label>Contract ID</label>
+        <precision>18</precision>
+        <required>true</required>
+        <scale>0</scale>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Number</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>Charge_Code__c</fullName>
+        <description>Charge code (THC, BAF, DOC_FEE, etc.)</description>
+        <externalId>false</externalId>
+        <label>Charge Code</label>
+        <length>50</length>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>Amount__c</fullName>
+        <description>Surcharge amount</description>
+        <externalId>false</externalId>
+        <label>Amount</label>
+        <precision>18</precision>
+        <required>true</required>
+        <scale>2</scale>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Number</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>Currency__c</fullName>
+        <description>Currency code (USD, EUR, etc.)</description>
+        <externalId>false</externalId>
+        <label>Currency</label>
+        <length>3</length>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>UOM__c</fullName>
+        <description>Unit of measure</description>
+        <externalId>false</externalId>
+        <label>UOM</label>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Picklist</type>
+        <valueSet>
+            <restricted>true</restricted>
+            <valueSetDefinition>
+                <sorted>false</sorted>
+                <value>
+                    <fullName>per_cntr</fullName>
+                    <default>false</default>
+                    <label>Per Container</label>
+                </value>
+                <value>
+                    <fullName>per_bl</fullName>
+                    <default>false</default>
+                    <label>Per Bill of Lading</label>
+                </value>
+                <value>
+                    <fullName>per_shipment</fullName>
+                    <default>false</default>
+                    <label>Per Shipment</label>
+                </value>
+                <value>
+                    <fullName>per_kg</fullName>
+                    <default>false</default>
+                    <label>Per Kilogram</label>
+                </value>
+                <value>
+                    <fullName>per_cbm</fullName>
+                    <default>false</default>
+                    <label>Per Cubic Meter</label>
+                </value>
+            </valueSetDefinition>
+        </valueSet>
+    </fields>
+    <fields>
+        <fullName>Calc_Method__c</fullName>
+        <description>Calculation method</description>
+        <externalId>false</externalId>
+        <label>Calc Method</label>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Picklist</type>
+        <valueSet>
+            <restricted>true</restricted>
+            <valueSetDefinition>
+                <sorted>false</sorted>
+                <value>
+                    <fullName>flat</fullName>
+                    <default>true</default>
+                    <label>Flat</label>
+                </value>
+                <value>
+                    <fullName>percentage</fullName>
+                    <default>false</default>
+                    <label>Percentage</label>
+                </value>
+                <value>
+                    <fullName>tier</fullName>
+                    <default>false</default>
+                    <label>Tier</label>
+                </value>
+            </valueSetDefinition>
+        </valueSet>
+    </fields>
+    <fields>
+        <fullName>Applies_Scope__c</fullName>
+        <description>Where the surcharge applies</description>
+        <externalId>false</externalId>
+        <label>Applies Scope</label>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Picklist</type>
+        <valueSet>
+            <restricted>true</restricted>
+            <valueSetDefinition>
+                <sorted>false</sorted>
+                <value>
+                    <fullName>origin</fullName>
+                    <default>false</default>
+                    <label>Origin</label>
+                </value>
+                <value>
+                    <fullName>port</fullName>
+                    <default>false</default>
+                    <label>Port</label>
+                </value>
+                <value>
+                    <fullName>freight</fullName>
+                    <default>false</default>
+                    <label>Freight</label>
+                </value>
+                <value>
+                    <fullName>dest</fullName>
+                    <default>false</default>
+                    <label>Destination</label>
+                </value>
+                <value>
+                    <fullName>door</fullName>
+                    <default>false</default>
+                    <label>Door</label>
+                </value>
+                <value>
+                    <fullName>other</fullName>
+                    <default>false</default>
+                    <label>Other</label>
+                </value>
+            </valueSetDefinition>
+        </valueSet>
+    </fields>
+    <fields>
+        <fullName>POL_Code__c</fullName>
+        <description>Port of Loading Code (for origin/port scope)</description>
+        <externalId>false</externalId>
+        <label>POL Code</label>
+        <length>10</length>
+        <required>false</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>POD_Code__c</fullName>
+        <description>Port of Discharge Code (for dest/door scope)</description>
+        <externalId>false</externalId>
+        <label>POD Code</label>
+        <length>10</length>
+        <required>false</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>Container_Type__c</fullName>
+        <description>Container type (20GP, 40HC, etc.)</description>
+        <externalId>false</externalId>
+        <label>Container Type</label>
+        <length>10</length>
+        <required>false</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>Valid_From__c</fullName>
+        <description>Surcharge validity start date</description>
+        <externalId>false</externalId>
+        <label>Valid From</label>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Date</type>
+    </fields>
+    <fields>
+        <fullName>Valid_To__c</fullName>
+        <description>Surcharge validity end date</description>
+        <externalId>false</externalId>
+        <label>Valid To</label>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Date</type>
+    </fields>
+    <fields>
+        <fullName>Is_Active__c</fullName>
+        <description>Is this surcharge active?</description>
+        <defaultValue>true</defaultValue>
+        <externalId>false</externalId>
+        <label>Is Active</label>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Checkbox</type>
+    </fields>
+    <fields>
+        <fullName>RMS_ID__c</fullName>
+        <description>RMS system record ID</description>
+        <externalId>true</externalId>
+        <label>RMS ID</label>
+        <length>255</length>
+        <required>false</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>true</unique>
+    </fields>
+    <fields>
+        <fullName>Tenant_ID__c</fullName>
+        <description>Tenant ID for multi-tenant isolation</description>
+        <externalId>false</externalId>
+        <label>Tenant ID</label>
+        <length>255</length>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <label>Surcharge</label>
+    <nameField>
+        <displayFormat>SUR-{00000000}</displayFormat>
+        <label>Surcharge Name</label>
+        <type>AutoNumber</type>
+    </nameField>
+    <pluralLabel>Surcharges</pluralLabel>
+    <searchLayouts>
+        <customTabListAdditionalFields>Charge_Code__c</customTabListAdditionalFields>
+        <customTabListAdditionalFields>Amount__c</customTabListAdditionalFields>
+        <customTabListAdditionalFields>Currency__c</customTabListAdditionalFields>
+        <customTabListAdditionalFields>Applies_Scope__c</customTabListAdditionalFields>
+        <lookupDialogsAdditionalFields>Charge_Code__c</lookupDialogsAdditionalFields>
+        <lookupDialogsAdditionalFields>Amount__c</lookupDialogsAdditionalFields>
+        <lookupDialogsAdditionalFields>Currency__c</lookupDialogsAdditionalFields>
+        <lookupDialogsAdditionalFields>Applies_Scope__c</lookupDialogsAdditionalFields>
+        <searchFilterFields>Charge_Code__c</searchFilterFields>
+        <searchFilterFields>Currency__c</searchFilterFields>
+        <searchFilterFields>Applies_Scope__c</searchFilterFields>
+        <searchResultsAdditionalFields>Charge_Code__c</searchResultsAdditionalFields>
+        <searchResultsAdditionalFields>Amount__c</searchResultsAdditionalFields>
+        <searchResultsAdditionalFields>Currency__c</searchResultsAdditionalFields>
+        <searchResultsAdditionalFields>Applies_Scope__c</searchResultsAdditionalFields>
+    </searchLayouts>
+    <sharingModel>ReadWrite</sharingModel>
+    <visibility>Public</visibility>
+</CustomObject>

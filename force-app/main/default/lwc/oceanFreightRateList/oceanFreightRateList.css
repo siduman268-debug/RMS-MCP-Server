@@ -1,0 +1,16 @@
+.slds-scrollable_x {
+    overflow-x: auto;
+}
+
+.slds-table th {
+    background-color: #f3f3f3;
+    font-weight: bold;
+}
+
+.slds-button-group .slds-button {
+    margin-right: 0.25rem;
+}
+
+.slds-button-group .slds-button:last-child {
+    margin-right: 0;
+}

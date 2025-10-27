@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <actionOverrides>
+        <actionName>Accept</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>CancelEdit</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>Clone</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>Delete</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>Edit</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>List</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>New</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>SaveEdit</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>Tab</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>View</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <allowInChatterGroups>false</allowInChatterGroups>
+    <compactLayoutAssignment>SYSTEM</compactLayoutAssignment>
+    <deploymentStatus>Deployed</deploymentStatus>
+    <description>Ocean Freight Rates for RMS - stores shipping rates between ports</description>
+    <enableActivities>true</enableActivities>
+    <enableBulkApi>true</enableBulkApi>
+    <enableEnhancedLookup>true</enableEnhancedLookup>
+    <enableFeeds>true</enableFeeds>
+    <enableHistory>true</enableHistory>
+    <enableLicensing>false</enableLicensing>
+    <enableReports>true</enableReports>
+    <enableSearch>true</enableSearch>
+    <enableSharing>true</enableSharing>
+    <enableStreamingApi>true</enableStreamingApi>
+    <externalSharingModel>Private</externalSharingModel>
+    <fields>
+        <fullName>Contract_ID__c</fullName>
+        <description>Contract ID from RMS system</description>
+        <externalId>false</externalId>
+        <label>Contract ID</label>
+        <precision>18</precision>
+        <required>true</required>
+        <scale>0</scale>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Number</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>POL_Code__c</fullName>
+        <description>Port of Loading Code (UN/LOCODE)</description>
+        <externalId>false</externalId>
+        <label>POL Code</label>
+        <length>10</length>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>POD_Code__c</fullName>
+        <description>Port of Discharge Code (UN/LOCODE)</description>
+        <externalId>false</externalId>
+        <label>POD Code</label>
+        <length>10</length>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>Container_Type__c</fullName>
+        <description>Container type (20GP, 40HC, etc.)</description>
+        <externalId>false</externalId>
+        <label>Container Type</label>
+        <length>10</length>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>Buy_Amount__c</fullName>
+        <description>Buy rate amount</description>
+        <externalId>false</externalId>
+        <label>Buy Amount</label>
+        <precision>18</precision>
+        <required>true</required>
+        <scale>2</scale>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Number</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>Currency__c</fullName>
+        <description>Currency code (USD, EUR, etc.)</description>
+        <externalId>false</externalId>
+        <label>Currency</label>
+        <length>3</length>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>Transit_Days__c</fullName>
+        <description>Transit time in days</description>
+        <externalId>false</externalId>
+        <label>Transit Days</label>
+        <precision>18</precision>
+        <required>false</required>
+        <scale>0</scale>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Number</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>Valid_From__c</fullName>
+        <description>Rate validity start date</description>
+        <externalId>false</externalId>
+        <label>Valid From</label>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Date</type>
+    </fields>
+    <fields>
+        <fullName>Valid_To__c</fullName>
+        <description>Rate validity end date</description>
+        <externalId>false</externalId>
+        <label>Valid To</label>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Date</type>
+    </fields>
+    <fields>
+        <fullName>Is_Preferred__c</fullName>
+        <description>Is this a preferred rate?</description>
+        <defaultValue>false</defaultValue>
+        <externalId>false</externalId>
+        <label>Is Preferred</label>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Checkbox</type>
+    </fields>
+    <fields>
+        <fullName>RMS_ID__c</fullName>
+        <description>RMS system record ID</description>
+        <externalId>true</externalId>
+        <label>RMS ID</label>
+        <length>255</length>
+        <required>false</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>true</unique>
+    </fields>
+    <fields>
+        <fullName>Tenant_ID__c</fullName>
+        <description>Tenant ID for multi-tenant isolation</description>
+        <externalId>false</externalId>
+        <label>Tenant ID</label>
+        <length>255</length>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <label>Ocean Freight Rate</label>
+    <nameField>
+        <displayFormat>OFR-{00000000}</displayFormat>
+        <label>Ocean Freight Rate Name</label>
+        <type>AutoNumber</type>
+    </nameField>
+    <pluralLabel>Ocean Freight Rates</pluralLabel>
+    <searchLayouts>
+        <customTabListAdditionalFields>POL_Code__c</customTabListAdditionalFields>
+        <customTabListAdditionalFields>POD_Code__c</customTabListAdditionalFields>
+        <customTabListAdditionalFields>Container_Type__c</customTabListAdditionalFields>
+        <customTabListAdditionalFields>Buy_Amount__c</customTabListAdditionalFields>
+        <customTabListAdditionalFields>Currency__c</customTabListAdditionalFields>
+        <lookupDialogsAdditionalFields>POL_Code__c</lookupDialogsAdditionalFields>
+        <lookupDialogsAdditionalFields>POD_Code__c</lookupDialogsAdditionalFields>
+        <lookupDialogsAdditionalFields>Container_Type__c</lookupDialogsAdditionalFields>
+        <lookupDialogsAdditionalFields>Buy_Amount__c</lookupDialogsAdditionalFields>
+        <lookupDialogsAdditionalFields>Currency__c</lookupDialogsAdditionalFields>
+        <searchFilterFields>POL_Code__c</searchFilterFields>
+        <searchFilterFields>POD_Code__c</searchFilterFields>
+        <searchFilterFields>Container_Type__c</searchFilterFields>
+        <searchFilterFields>Currency__c</searchFilterFields>
+        <searchResultsAdditionalFields>POL_Code__c</searchResultsAdditionalFields>
+        <searchResultsAdditionalFields>POD_Code__c</searchResultsAdditionalFields>
+        <searchResultsAdditionalFields>Container_Type__c</searchResultsAdditionalFields>
+        <searchResultsAdditionalFields>Buy_Amount__c</searchResultsAdditionalFields>
+        <searchResultsAdditionalFields>Currency__c</searchResultsAdditionalFields>
+    </searchLayouts>
+    <sharingModel>ReadWrite</sharingModel>
+    <visibility>Public</visibility>
+</CustomObject>

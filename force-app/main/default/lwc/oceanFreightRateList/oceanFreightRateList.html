@@ -1,0 +1,184 @@
+<template>
+    <lightning-card title="Ocean Freight Rates" icon-name="standard:ship">
+        
+        <!-- Filters Section -->
+        <div class="slds-p-around_medium">
+            <div class="slds-grid slds-wrap slds-gutters">
+                <div class="slds-col slds-size_1-of-3">
+                    <lightning-input
+                        type="text"
+                        label="POL Code"
+                        value={polCode}
+                        data-field="polCode"
+                        onchange={handleFilterChange}
+                        placeholder="e.g., INNSA">
+                    </lightning-input>
+                </div>
+                <div class="slds-col slds-size_1-of-3">
+                    <lightning-input
+                        type="text"
+                        label="POD Code"
+                        value={podCode}
+                        data-field="podCode"
+                        onchange={handleFilterChange}
+                        placeholder="e.g., USLAX">
+                    </lightning-input>
+                </div>
+                <div class="slds-col slds-size_1-of-3">
+                    <lightning-input
+                        type="text"
+                        label="Container Type"
+                        value={containerType}
+                        data-field="containerType"
+                        onchange={handleFilterChange}
+                        placeholder="e.g., 40HC">
+                    </lightning-input>
+                </div>
+            </div>
+            
+            <div class="slds-m-top_medium">
+                <lightning-button
+                    variant="brand"
+                    label="Search"
+                    onclick={handleSearch}
+                    class="slds-m-right_x-small">
+                </lightning-button>
+                <lightning-button
+                    variant="neutral"
+                    label="Clear Filters"
+                    onclick={handleClearFilters}>
+                </lightning-button>
+                <lightning-button
+                    variant="success"
+                    label="Create Rate"
+                    onclick={handleCreateRate}
+                    class="slds-m-left_large">
+                </lightning-button>
+            </div>
+        </div>
+
+        <!-- Loading Spinner -->
+        <template if:true={isLoading}>
+            <div class="slds-is-relative slds-p-around_large">
+                <lightning-spinner alternative-text="Loading rates..."></lightning-spinner>
+            </div>
+        </template>
+
+        <!-- Rates Table -->
+        <template if:false={isLoading}>
+            <div class="slds-p-around_medium">
+                <template if:true={rates.length}>
+                    <div class="slds-scrollable_x">
+                        <table class="slds-table slds-table_cell-buffer slds-table_bordered">
+                            <thead>
+                                <tr class="slds-line-height_reset">
+                                    <th class="slds-text-title_caps">POL Code</th>
+                                    <th class="slds-text-title_caps">POD Code</th>
+                                    <th class="slds-text-title_caps">Container Type</th>
+                                    <th class="slds-text-title_caps">Buy Amount</th>
+                                    <th class="slds-text-title_caps">Currency</th>
+                                    <th class="slds-text-title_caps">Transit Days</th>
+                                    <th class="slds-text-title_caps">Valid From</th>
+                                    <th class="slds-text-title_caps">Valid To</th>
+                                    <th class="slds-text-title_caps">Preferred</th>
+                                    <th class="slds-text-title_caps">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template for:each={filteredRates} for:item="rate">
+                                    <tr key={rate.Id}>
+                                        <td>{rate.POL_Code__c}</td>
+                                        <td>{rate.POD_Code__c}</td>
+                                        <td>{rate.Container_Type__c}</td>
+                                        <td>{rate.Buy_Amount__c}</td>
+                                        <td>{rate.Currency__c}</td>
+                                        <td>{rate.Transit_Days__c}</td>
+                                        <td>{rate.Valid_From__c}</td>
+                                        <td>{rate.Valid_To__c}</td>
+                                        <td>
+                                            <template if:true={rate.Is_Preferred__c}>
+                                                <lightning-icon icon-name="utility:check" size="x-small" variant="success"></lightning-icon>
+                                            </template>
+                                        </td>
+                                        <td>
+                                            <lightning-button-group>
+                                                <lightning-button
+                                                    variant="brand"
+                                                    size="small"
+                                                    label="Edit"
+                                                    data-id={rate.Id}
+                                                    onclick={handleEditRate}>
+                                                </lightning-button>
+                                                <lightning-button
+                                                    variant="destructive"
+                                                    size="small"
+                                                    label="Delete"
+                                                    data-id={rate.Id}
+                                                    onclick={handleDeleteRate}>
+                                                </lightning-button>
+                                            </lightning-button-group>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <template if:true={totalPages}>
+                        <div class="slds-p-around_medium">
+                            <div class="slds-grid slds-grid_align-center">
+                                <div class="slds-col slds-size_1-of-2">
+                                    <p class="slds-text-body_small">
+                                        Showing {currentPage} of {totalPages} pages ({totalRecords} total records)
+                                    </p>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <div class="slds-button-group slds-float_right">
+                                        <lightning-button
+                                            variant="neutral"
+                                            label="Previous"
+                                            disabled={hasPreviousPage}
+                                            onclick={handlePreviousPage}>
+                                        </lightning-button>
+                                        <lightning-button
+                                            variant="neutral"
+                                            label="Next"
+                                            disabled={hasNextPage}
+                                            onclick={handleNextPage}>
+                                        </lightning-button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </template>
+                
+                <template if:false={rates.length}>
+                    <div class="slds-text-align_center slds-p-around_large">
+                        <lightning-icon icon-name="utility:info" size="large" variant="inverse"></lightning-icon>
+                        <p class="slds-text-heading_medium slds-m-top_medium">No rates found</p>
+                        <p class="slds-text-body_regular slds-m-top_small">Try adjusting your filters or create a new rate.</p>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <!-- Create/Edit Modal -->
+        <template if:true={showCreateModal}>
+            <c-ocean-freight-rate-form
+                onrate-saved={handleRateSaved}
+                onclose={handleModalClose}>
+            </c-ocean-freight-rate-form>
+        </template>
+        
+        <template if:true={showEditModal}>
+            <c-ocean-freight-rate-form
+                rate={selectedRate}
+                onrate-saved={handleRateSaved}
+                onclose={handleModalClose}>
+            </c-ocean-freight-rate-form>
+        </template>
+        
+    </lightning-card>
+</template>

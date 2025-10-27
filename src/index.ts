@@ -2335,6 +2335,1044 @@ async function createHttpServer() {
     }
   });
 
+  // ==========================================
+  // OCEAN FREIGHT RATE CRUD APIs
+  // ==========================================
+
+  // Create Ocean Freight Rate
+  fastify.post('/api/ocean-freight-rates', async (request, reply) => {
+    try {
+      const { 
+        pol_code, 
+        pod_code, 
+        container_type, 
+        buy_amount, 
+        currency,
+        tt_days, 
+        is_preferred, 
+        valid_from, 
+        valid_to,
+        contract_id,
+        via_port_code
+      } = request.body as any;
+
+      // Validate required fields
+      if (!pol_code || !pod_code || !container_type || !buy_amount || !currency || !contract_id) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Missing required fields: pol_code, pod_code, container_type, buy_amount, currency, contract_id'
+        });
+      }
+
+      // Get location IDs using unlocode (like MCP tool)
+      const { data: polData, error: polError } = await supabase
+        .from('locations')
+        .select('id')
+        .eq('unlocode', pol_code)
+        .eq('is_active', true)
+        .single();
+
+      if (polError || !polData) {
+        return reply.status(404).send({
+          success: false,
+          error: `POL location not found: ${pol_code}`
+        });
+      }
+
+      const { data: podData, error: podError } = await supabase
+        .from('locations')
+        .select('id')
+        .eq('unlocode', pod_code)
+        .eq('is_active', true)
+        .single();
+
+      if (podError || !podData) {
+        return reply.status(404).send({
+          success: false,
+          error: `POD location not found: ${pod_code}`
+        });
+      }
+
+      // Get via port ID if provided
+      let viaPortId = null;
+      if (via_port_code) {
+        const { data: viaPortData, error: viaPortError } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('unlocode', via_port_code)
+          .eq('is_active', true)
+          .single();
+
+        if (viaPortError || !viaPortData) {
+          return reply.status(404).send({
+            success: false,
+            error: `Via port location not found: ${via_port_code}`
+          });
+        }
+        viaPortId = viaPortData.id;
+      }
+
+      // Create the ocean freight rate with correct schema fields
+      const { data, error } = await supabase
+        .from('ocean_freight_rate')
+        .insert({
+          pol_id: polData.id,
+          pod_id: podData.id,
+          contract_id: contract_id,
+          container_type,
+          buy_amount,
+          currency,
+          tt_days: tt_days || null,
+          via_port_id: viaPortId,
+          is_preferred: is_preferred || false,
+          valid_from: valid_from || new Date().toISOString().split('T')[0],
+          valid_to: valid_to || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          tenant_id: (request as any).tenant_id
+        })
+        .select(`
+          id,
+          contract_id,
+          pol_id,
+          pod_id,
+          container_type,
+          buy_amount,
+          currency,
+          tt_days,
+          via_port_id,
+          is_preferred,
+          valid_from,
+          valid_to,
+          tenant_id
+        `)
+        .single();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Update Ocean Freight Rate
+  fastify.put('/api/ocean-freight-rates/:rateId', async (request, reply) => {
+    try {
+      const { rateId } = request.params as any;
+      const { 
+        buy_amount, 
+        currency,
+        tt_days, 
+        is_preferred, 
+        valid_from, 
+        valid_to 
+      } = request.body as any;
+
+      const updates: any = {};
+
+      if (buy_amount !== undefined) updates.buy_amount = buy_amount;
+      if (currency !== undefined) updates.currency = currency;
+      if (tt_days !== undefined) updates.tt_days = tt_days;
+      if (is_preferred !== undefined) updates.is_preferred = is_preferred;
+      if (valid_from !== undefined) updates.valid_from = valid_from;
+      if (valid_to !== undefined) updates.valid_to = valid_to;
+
+      const { data, error } = await supabase
+        .from('ocean_freight_rate')
+        .update(updates)
+        .eq('id', rateId)
+        .eq('tenant_id', (request as any).tenant_id)
+        .select(`
+          id,
+          contract_id,
+          pol_id,
+          pod_id,
+          container_type,
+          buy_amount,
+          currency,
+          tt_days,
+          via_port_id,
+          is_preferred,
+          valid_from,
+          valid_to,
+          tenant_id
+        `)
+        .single();
+
+      if (error) throw error;
+
+      if (!data) {
+        return reply.status(404).send({
+          success: false,
+          error: `Ocean freight rate not found: ${rateId}`
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Delete Ocean Freight Rate
+  fastify.delete('/api/ocean-freight-rates/:rateId', async (request, reply) => {
+    try {
+      const { rateId } = request.params as any;
+
+      // Soft delete by setting is_active to false
+      const { data, error } = await supabase
+        .from('ocean_freight_rate')
+        .update({
+          is_active: false,
+          updated_by: 'api_user',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', rateId)
+        .select('id, is_active')
+        .single();
+
+      if (error) throw error;
+
+      if (!data) {
+        return reply.status(404).send({
+          success: false,
+          error: `Ocean freight rate not found: ${rateId}`
+        });
+      }
+
+      return reply.send({
+        success: true,
+        message: `Ocean freight rate ${rateId} deleted successfully`
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Get Ocean Freight Rate by ID
+  fastify.get('/api/ocean-freight-rates/:rateId', async (request, reply) => {
+    try {
+      const { rateId } = request.params as any;
+
+      // Use the same materialized view that the working APIs use
+      const { data, error } = await supabase
+        .from('mv_freight_sell_prices')
+        .select('*')
+        .eq('rate_id', rateId)
+        .single();
+
+      if (error) throw error;
+
+      if (!data) {
+        return reply.status(404).send({
+          success: false,
+          error: `Ocean freight rate not found: ${rateId}`
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // List Ocean Freight Rates
+  fastify.get('/api/ocean-freight-rates', async (request, reply) => {
+    try {
+      const { 
+        pol_code, 
+        pod_code, 
+        vendor_name, 
+        container_type, 
+        is_preferred, 
+        is_active = 'true',
+        page = '1',
+        limit = '50'
+      } = request.query as any;
+
+      let query = supabase
+        .from('mv_freight_sell_prices')
+        .select('*');
+
+      // Apply filters using materialized view fields
+      if (container_type) {
+        query = query.eq('container_type', container_type);
+      }
+
+      if (is_preferred !== undefined) {
+        query = query.eq('is_preferred', is_preferred === 'true');
+      }
+
+      if (pol_code) {
+        query = query.eq('pol_code', pol_code);
+      }
+
+      if (pod_code) {
+        query = query.eq('pod_code', pod_code);
+      }
+
+      if (vendor_name) {
+        query = query.eq('carrier', vendor_name);
+      }
+
+      // Order by rate_id
+      query = query.order('rate_id', { ascending: false });
+
+      // Apply pagination
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const offset = (pageNum - 1) * limitNum;
+      query = query.range(offset, offset + limitNum - 1);
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data || [],
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          count: data?.length || 0
+        }
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // ==========================================
+  // SURCHARGE CRUD APIs (using surcharge table directly)
+  // ==========================================
+
+  // Create Surcharge
+  fastify.post('/api/surcharges', async (request, reply) => {
+    try {
+      console.log('🔍 [SURCHARGE CREATE] Starting surcharge creation request');
+      console.log('🔍 [SURCHARGE CREATE] Tenant ID:', (request as any).tenant_id);
+      console.log('🔍 [SURCHARGE CREATE] Request body:', request.body);
+      
+      const { 
+        vendor_id,
+        contract_id,
+        charge_code,
+        amount,
+        currency,
+        uom,
+        pol_code,
+        pod_code,
+        container_type,
+        applies_scope,
+        valid_from,
+        valid_to
+      } = request.body as any;
+
+      // Validate required fields
+      console.log('🔍 [SURCHARGE CREATE] Validating required fields...');
+      if (!vendor_id || !charge_code || !amount || !valid_from || !valid_to || !applies_scope) {
+        console.log('❌ [SURCHARGE CREATE] Missing required fields:', { vendor_id, charge_code, amount, valid_from, valid_to, applies_scope });
+        return reply.status(400).send({
+          success: false,
+          error: 'Missing required fields: vendor_id, charge_code, amount, valid_from, valid_to, applies_scope'
+        });
+      }
+
+      // Validate applies_scope
+      console.log('🔍 [SURCHARGE CREATE] Validating applies_scope:', applies_scope);
+      if (!['origin', 'port', 'freight', 'dest', 'door', 'other'].includes(applies_scope)) {
+        console.log('❌ [SURCHARGE CREATE] Invalid applies_scope:', applies_scope);
+        return reply.status(400).send({
+          success: false,
+          error: 'applies_scope must be one of: "origin", "port", "freight", "dest", "door", "other"'
+        });
+      }
+
+      // Validate uom
+      const finalUom = uom || 'per_cntr';
+      console.log('🔍 [SURCHARGE CREATE] Validating uom:', finalUom);
+      if (!['per_cntr', 'per_bl', 'per_shipment', 'per_kg', 'per_cbm'].includes(finalUom)) {
+        console.log('❌ [SURCHARGE CREATE] Invalid uom:', finalUom);
+        return reply.status(400).send({
+          success: false,
+          error: 'uom must be one of: "per_cntr", "per_bl", "per_shipment", "per_kg", "per_cbm"'
+        });
+      }
+
+      // Validate calc_method
+      const calcMethod = 'flat'; // Default to flat for now
+      console.log('🔍 [SURCHARGE CREATE] Using calc_method:', calcMethod);
+      if (!['flat', 'percentage', 'tier'].includes(calcMethod)) {
+        console.log('❌ [SURCHARGE CREATE] Invalid calc_method:', calcMethod);
+        return reply.status(400).send({
+          success: false,
+          error: 'calc_method must be one of: "flat", "percentage", "tier"'
+        });
+      }
+
+      console.log('🔍 [SURCHARGE CREATE] Creating insert data...');
+      const insertData: any = {
+        vendor_id,
+        contract_id: contract_id || 1, // Required field - use default if not provided
+        charge_code,
+        amount,
+        currency: currency || 'USD',
+        uom: finalUom,
+        calc_method: calcMethod, // Required field - validated above
+        container_type: container_type || null,
+        applies_scope,
+        valid_from,
+        valid_to,
+        tenant_id: (request as any).tenant_id
+      };
+      console.log('🔍 [SURCHARGE CREATE] Insert data created:', insertData);
+
+      // Get location IDs based on applies_scope
+      if ((applies_scope === 'origin' || applies_scope === 'port') && pol_code) {
+        console.log('🔍 [SURCHARGE CREATE] Looking up origin/port location:', pol_code);
+        const { data: polData, error: polError } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('unlocode', pol_code)
+          .eq('is_active', true)
+          .single();
+
+        if (polError || !polData) {
+          console.log('❌ [SURCHARGE CREATE] Origin/port location not found:', pol_code, polError);
+          return reply.status(404).send({
+            success: false,
+            error: `Origin/port location not found: ${pol_code}`
+          });
+        }
+        insertData.pol_id = polData.id;
+        console.log('✅ [SURCHARGE CREATE] Origin/port location found:', polData.id);
+      }
+
+      if ((applies_scope === 'dest' || applies_scope === 'door') && pod_code) {
+        console.log('🔍 [SURCHARGE CREATE] Looking up destination/door location:', pod_code);
+        const { data: podData, error: podError } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('unlocode', pod_code)
+          .eq('is_active', true)
+          .single();
+
+        if (podError || !podData) {
+          console.log('❌ [SURCHARGE CREATE] Destination/door location not found:', pod_code, podError);
+          return reply.status(404).send({
+            success: false,
+            error: `Destination/door location not found: ${pod_code}`
+          });
+        }
+        insertData.pod_id = podData.id;
+        console.log('✅ [SURCHARGE CREATE] Destination/door location found:', podData.id);
+      }
+
+      // Create the surcharge
+      console.log('🔍 [SURCHARGE CREATE] Inserting surcharge into database...');
+      console.log('🔍 [SURCHARGE CREATE] Final insert data:', insertData);
+      
+      const { data, error } = await supabase
+        .from('surcharge')
+        .insert(insertData)
+        .select('*')
+        .single();
+
+      if (error) {
+        console.error('❌ [SURCHARGE CREATE] Database insert error:', error);
+        throw error;
+      }
+
+      console.log('✅ [SURCHARGE CREATE] Surcharge created successfully:', data);
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      console.error('❌ [SURCHARGE CREATE] Unexpected error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Update Surcharge
+  fastify.put('/api/surcharges/:surchargeId', async (request, reply) => {
+    try {
+      const { surchargeId } = request.params as any;
+      const { 
+        amount,
+        currency,
+        uom,
+        valid_from,
+        valid_to
+      } = request.body as any;
+
+      const updates: any = {};
+
+      if (amount !== undefined) updates.amount = amount;
+      if (currency !== undefined) updates.currency = currency;
+      if (uom !== undefined) updates.uom = uom;
+      if (valid_from !== undefined) updates.valid_from = valid_from;
+      if (valid_to !== undefined) updates.valid_to = valid_to;
+
+      const { data, error } = await supabase
+        .from('surcharge')
+        .update(updates)
+        .eq('id', surchargeId)
+        .eq('tenant_id', request.headers['x-tenant-id'] || 'default_tenant')
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      if (!data) {
+        return reply.status(404).send({
+          success: false,
+          error: `Surcharge not found: ${surchargeId}`
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Delete Surcharge
+  fastify.delete('/api/surcharges/:surchargeId', async (request, reply) => {
+    try {
+      const { surchargeId } = request.params as any;
+
+      // Soft delete by setting is_active to false
+      const { data, error } = await supabase
+        .from('surcharge')
+        .update({
+          is_active: false
+        })
+        .eq('id', surchargeId)
+        .eq('tenant_id', (request as any).tenant_id)
+        .select('id, is_active')
+        .single();
+
+      if (error) throw error;
+
+      if (!data) {
+        return reply.status(404).send({
+          success: false,
+          error: `Surcharge not found: ${surchargeId}`
+        });
+      }
+
+      return reply.send({
+        success: true,
+        message: `Surcharge ${surchargeId} deleted successfully`
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Get Surcharge by ID
+  fastify.get('/api/surcharges/:surchargeId', async (request, reply) => {
+    try {
+      const { surchargeId } = request.params as any;
+
+      const { data, error } = await supabase
+        .from('surcharge')
+        .select('*')
+        .eq('id', surchargeId)
+        .eq('tenant_id', request.headers['x-tenant-id'] || 'default_tenant')
+        .single();
+
+      if (error) throw error;
+
+      if (!data) {
+        return reply.status(404).send({
+          success: false,
+          error: `Surcharge not found: ${surchargeId}`
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // List Surcharges
+  fastify.get('/api/surcharges', async (request, reply) => {
+    try {
+      console.log('🔍 [SURCHARGE LIST] Starting surcharge list request');
+      console.log('🔍 [SURCHARGE LIST] Tenant ID:', (request as any).tenant_id);
+      
+      const { 
+        vendor_id,
+        contract_id,
+        charge_code,
+        container_type,
+        applies_scope,
+        is_active = 'true',
+        page = '1',
+        limit = '50'
+      } = request.query as any;
+
+      console.log('🔍 [SURCHARGE LIST] Query params:', { vendor_id, contract_id, charge_code, container_type, applies_scope, is_active, page, limit });
+
+      let query = supabase
+        .from('surcharge')
+        .select('*')
+        .eq('tenant_id', (request as any).tenant_id);
+
+      console.log('🔍 [SURCHARGE LIST] Base query created');
+
+      // Apply filters
+      if (is_active !== undefined) {
+        query = query.eq('is_active', is_active === 'true');
+        console.log('🔍 [SURCHARGE LIST] Applied is_active filter:', is_active === 'true');
+      }
+
+      if (vendor_id) {
+        query = query.eq('vendor_id', vendor_id);
+        console.log('🔍 [SURCHARGE LIST] Applied vendor_id filter:', vendor_id);
+      }
+
+      if (contract_id) {
+        query = query.eq('contract_id', contract_id);
+        console.log('🔍 [SURCHARGE LIST] Applied contract_id filter:', contract_id);
+      }
+
+      if (charge_code) {
+        query = query.eq('charge_code', charge_code);
+        console.log('🔍 [SURCHARGE LIST] Applied charge_code filter:', charge_code);
+      }
+
+      if (container_type) {
+        query = query.eq('container_type', container_type);
+        console.log('🔍 [SURCHARGE LIST] Applied container_type filter:', container_type);
+      }
+
+      if (applies_scope) {
+        query = query.eq('applies_scope', applies_scope);
+        console.log('🔍 [SURCHARGE LIST] Applied applies_scope filter:', applies_scope);
+      }
+
+      // Order by ID (since created_at doesn't exist)
+      query = query.order('id', { ascending: false });
+      console.log('🔍 [SURCHARGE LIST] Applied ordering by ID');
+
+      // Apply pagination
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const offset = (pageNum - 1) * limitNum;
+      query = query.range(offset, offset + limitNum - 1);
+      console.log('🔍 [SURCHARGE LIST] Applied pagination:', { pageNum, limitNum, offset });
+
+      console.log('🔍 [SURCHARGE LIST] Executing query...');
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('❌ [SURCHARGE LIST] Database error:', error);
+        throw error;
+      }
+
+      console.log('✅ [SURCHARGE LIST] Query successful, data count:', data?.length || 0);
+
+      return reply.send({
+        success: true,
+        data: data || [],
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          count: data?.length || 0
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ [SURCHARGE LIST] Error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // ==========================================
+  // MARGIN RULE CRUD APIs
+  // ==========================================
+
+  // Create Margin Rule
+  fastify.post('/api/margin-rules', async (request, reply) => {
+    try {
+      const { 
+        level,
+        pol_code,
+        pod_code,
+        tz_o,
+        tz_d,
+        mode,
+        container_type,
+        component_type,
+        mark_kind,
+        mark_value,
+        valid_from,
+        valid_to,
+        priority
+      } = request.body as any;
+
+      // Validate required fields
+      if (!level || !mark_kind || !mark_value) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Missing required fields: level, mark_kind, mark_value'
+        });
+      }
+
+      // Get location IDs if pol_code/pod_code provided
+      let polId = null;
+      let podId = null;
+
+      if (pol_code) {
+        const { data: polData, error: polError } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('unlocode', pol_code)
+          .eq('is_active', true)
+          .single();
+
+        if (polError || !polData) {
+          return reply.status(404).send({
+            success: false,
+            error: `POL location not found: ${pol_code}`
+          });
+        }
+        polId = polData.id;
+      }
+
+      if (pod_code) {
+        const { data: podData, error: podError } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('unlocode', pod_code)
+          .eq('is_active', true)
+          .single();
+
+        if (podError || !podData) {
+          return reply.status(404).send({
+            success: false,
+            error: `POD location not found: ${pod_code}`
+          });
+        }
+        podId = podData.id;
+      }
+
+      // Create the margin rule
+      const { data, error } = await supabase
+        .from('margin_rule_v2')
+        .insert({
+          level,
+          pol_id: polId,
+          pod_id: podId,
+          tz_o,
+          tz_d,
+          mode,
+          container_type,
+          component_type,
+          mark_kind,
+          mark_value,
+          valid_from: valid_from || new Date().toISOString().split('T')[0],
+          valid_to: valid_to || '2099-12-31',
+          priority: priority || 100,
+          tenant_id: (request as any).tenant_id
+        })
+        .select(`
+          id,
+          level,
+          pol_id,
+          pod_id,
+          tz_o,
+          tz_d,
+          mode,
+          container_type,
+          component_type,
+          mark_kind,
+          mark_value,
+          valid_from,
+          valid_to,
+          priority,
+          tenant_id
+        `)
+        .single();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Update Margin Rule
+  fastify.put('/api/margin-rules/:ruleId', async (request, reply) => {
+    try {
+      const { ruleId } = request.params as any;
+      const { 
+        mark_value,
+        valid_from,
+        valid_to,
+        priority
+      } = request.body as any;
+
+      const updates: any = {};
+
+      if (mark_value !== undefined) updates.mark_value = mark_value;
+      if (valid_from !== undefined) updates.valid_from = valid_from;
+      if (valid_to !== undefined) updates.valid_to = valid_to;
+      if (priority !== undefined) updates.priority = priority;
+
+      const { data, error } = await supabase
+        .from('margin_rule_v2')
+        .update(updates)
+        .eq('id', ruleId)
+        .eq('tenant_id', (request as any).tenant_id)
+        .select(`
+          id,
+          level,
+          pol_id,
+          pod_id,
+          tz_o,
+          tz_d,
+          mode,
+          container_type,
+          component_type,
+          mark_kind,
+          mark_value,
+          valid_from,
+          valid_to,
+          priority,
+          tenant_id
+        `)
+        .single();
+
+      if (error) throw error;
+
+      if (!data) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Margin rule not found'
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Get Single Margin Rule
+  fastify.get('/api/margin-rules/:ruleId', async (request, reply) => {
+    try {
+      const { ruleId } = request.params as any;
+
+      const { data, error } = await supabase
+        .from('margin_rule_v2')
+        .select(`
+          id,
+          level,
+          pol_id,
+          pod_id,
+          tz_o,
+          tz_d,
+          mode,
+          container_type,
+          component_type,
+          mark_kind,
+          mark_value,
+          valid_from,
+          valid_to,
+          priority,
+          tenant_id
+        `)
+        .eq('id', ruleId)
+        .eq('tenant_id', (request as any).tenant_id)
+        .single();
+
+      if (error) throw error;
+
+      if (!data) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Margin rule not found'
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // List Margin Rules
+  fastify.get('/api/margin-rules', async (request, reply) => {
+    try {
+      const { 
+        level,
+        mark_kind,
+        component_type,
+        page = 1,
+        limit = 50
+      } = request.query as any;
+
+      const pageNum = parseInt(page) || 1;
+      const limitNum = Math.min(parseInt(limit) || 50, 100);
+      const offset = (pageNum - 1) * limitNum;
+
+      let query = supabase
+        .from('margin_rule_v2')
+        .select(`
+          id,
+          level,
+          pol_id,
+          pod_id,
+          tz_o,
+          tz_d,
+          mode,
+          container_type,
+          component_type,
+          mark_kind,
+          mark_value,
+          valid_from,
+          valid_to,
+          priority,
+          tenant_id
+        `)
+        .eq('tenant_id', (request as any).tenant_id)
+        .order('priority', { ascending: false })
+        .order('id', { ascending: false })
+        .range(offset, offset + limitNum - 1);
+
+      // Apply filters
+      if (level) query = query.eq('level', level);
+      if (mark_kind) query = query.eq('mark_kind', mark_kind);
+      if (component_type) query = query.eq('component_type', component_type);
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data || [],
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          count: data?.length || 0
+        }
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Delete Margin Rule
+  fastify.delete('/api/margin-rules/:ruleId', async (request, reply) => {
+    try {
+      const { ruleId } = request.params as any;
+
+      const { error } = await supabase
+        .from('margin_rule_v2')
+        .delete()
+        .eq('id', ruleId)
+        .eq('tenant_id', (request as any).tenant_id);
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        message: `Margin rule ${ruleId} deleted successfully`
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
 
   return fastify;
 }
@@ -2360,11 +3398,25 @@ async function main() {
       console.error("  POST /api/search-rates");
       console.error("  POST /api/get-local-charges");
       console.error("  POST /api/prepare-quote");
-      console.error("  POST /api/v2/add-rate-to-quote");
-      console.error("  POST /api/v2/get-quote-session");
+      console.error("  POST /api/v2/search-rates");
       console.error("  POST /api/v2/prepare-quote");
       console.error("  POST /api/v3/prepare-quote");
       console.error("  POST /api/v3/get-inland-haulage");
+      console.error("  POST /api/ocean-freight-rates");
+      console.error("  PUT  /api/ocean-freight-rates/:rateId");
+      console.error("  GET  /api/ocean-freight-rates/:rateId");
+      console.error("  GET  /api/ocean-freight-rates");
+      console.error("  DELETE /api/ocean-freight-rates/:rateId");
+      console.error("  POST /api/surcharges");
+      console.error("  PUT  /api/surcharges/:surchargeId");
+      console.error("  GET  /api/surcharges/:surchargeId");
+      console.error("  GET  /api/surcharges");
+      console.error("  DELETE /api/surcharges/:surchargeId");
+      console.error("  POST /api/margin-rules");
+      console.error("  PUT  /api/margin-rules/:ruleId");
+      console.error("  GET  /api/margin-rules/:ruleId");
+      console.error("  GET  /api/margin-rules");
+      console.error("  DELETE /api/margin-rules/:ruleId");
     } catch (error) {
       console.error("Failed to start HTTP server:", error);
     }

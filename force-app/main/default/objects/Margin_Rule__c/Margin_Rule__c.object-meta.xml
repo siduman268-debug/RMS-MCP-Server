@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <actionOverrides>
+        <actionName>Accept</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>CancelEdit</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>Clone</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>Delete</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>Edit</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>List</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>New</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>SaveEdit</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>Tab</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <actionOverrides>
+        <actionName>View</actionName>
+        <type>Default</type>
+    </actionOverrides>
+    <allowInChatterGroups>false</allowInChatterGroups>
+    <compactLayoutAssignment>SYSTEM</compactLayoutAssignment>
+    <deploymentStatus>Deployed</deploymentStatus>
+    <description>Margin Rules for RMS - defines margin calculations for different scenarios</description>
+    <enableActivities>true</enableActivities>
+    <enableBulkApi>true</enableBulkApi>
+    <enableEnhancedLookup>true</enableEnhancedLookup>
+    <enableFeeds>true</enableFeeds>
+    <enableHistory>true</enableHistory>
+    <enableLicensing>false</enableLicensing>
+    <enableReports>true</enableReports>
+    <enableSearch>true</enableSearch>
+    <enableSharing>true</enableSharing>
+    <enableStreamingApi>true</enableStreamingApi>
+    <externalSharingModel>Private</externalSharingModel>
+    <fields>
+        <fullName>Level__c</fullName>
+        <description>Rule level (global, trade_zone, port_pair)</description>
+        <externalId>false</externalId>
+        <label>Level</label>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Picklist</type>
+        <valueSet>
+            <restricted>true</restricted>
+            <valueSetDefinition>
+                <sorted>false</sorted>
+                <value>
+                    <fullName>global</fullName>
+                    <default>false</default>
+                    <label>Global</label>
+                </value>
+                <value>
+                    <fullName>trade_zone</fullName>
+                    <default>false</default>
+                    <label>Trade Zone</label>
+                </value>
+                <value>
+                    <fullName>port_pair</fullName>
+                    <default>false</default>
+                    <label>Port Pair</label>
+                </value>
+            </valueSetDefinition>
+        </valueSet>
+    </fields>
+    <fields>
+        <fullName>POL_Code__c</fullName>
+        <description>Port of Loading Code (for port_pair level)</description>
+        <externalId>false</externalId>
+        <label>POL Code</label>
+        <length>10</length>
+        <required>false</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>POD_Code__c</fullName>
+        <description>Port of Discharge Code (for port_pair level)</description>
+        <externalId>false</externalId>
+        <label>POD Code</label>
+        <length>10</length>
+        <required>false</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>Mark_Kind__c</fullName>
+        <description>Margin type (pct for percentage, flat for fixed amount)</description>
+        <externalId>false</externalId>
+        <label>Mark Kind</label>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Picklist</type>
+        <valueSet>
+            <restricted>true</restricted>
+            <valueSetDefinition>
+                <sorted>false</sorted>
+                <value>
+                    <fullName>pct</fullName>
+                    <default>false</default>
+                    <label>Percentage</label>
+                </value>
+                <value>
+                    <fullName>flat</fullName>
+                    <default>false</default>
+                    <label>Flat Amount</label>
+                </value>
+            </valueSetDefinition>
+        </valueSet>
+    </fields>
+    <fields>
+        <fullName>Mark_Value__c</fullName>
+        <description>Margin value (percentage or amount)</description>
+        <externalId>false</externalId>
+        <label>Mark Value</label>
+        <precision>18</precision>
+        <required>true</required>
+        <scale>4</scale>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Number</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>Priority__c</fullName>
+        <description>Rule priority (higher number = higher priority)</description>
+        <externalId>false</externalId>
+        <label>Priority</label>
+        <precision>18</precision>
+        <required>true</required>
+        <scale>0</scale>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Number</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>Valid_From__c</fullName>
+        <description>Rule validity start date</description>
+        <externalId>false</externalId>
+        <label>Valid From</label>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Date</type>
+    </fields>
+    <fields>
+        <fullName>Valid_To__c</fullName>
+        <description>Rule validity end date</description>
+        <externalId>false</externalId>
+        <label>Valid To</label>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Date</type>
+    </fields>
+    <fields>
+        <fullName>RMS_ID__c</fullName>
+        <description>RMS system record ID</description>
+        <externalId>true</externalId>
+        <label>RMS ID</label>
+        <length>255</length>
+        <required>false</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>true</unique>
+    </fields>
+    <fields>
+        <fullName>Tenant_ID__c</fullName>
+        <description>Tenant ID for multi-tenant isolation</description>
+        <externalId>false</externalId>
+        <label>Tenant ID</label>
+        <length>255</length>
+        <required>true</required>
+        <trackFeedHistory>false</trackFeedHistory>
+        <trackHistory>false</trackHistory>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <label>Margin Rule</label>
+    <nameField>
+        <displayFormat>MR-{00000000}</displayFormat>
+        <label>Margin Rule Name</label>
+        <type>AutoNumber</type>
+    </nameField>
+    <pluralLabel>Margin Rules</pluralLabel>
+    <searchLayouts>
+        <customTabListAdditionalFields>Level__c</customTabListAdditionalFields>
+        <customTabListAdditionalFields>Mark_Kind__c</customTabListAdditionalFields>
+        <customTabListAdditionalFields>Mark_Value__c</customTabListAdditionalFields>
+        <customTabListAdditionalFields>Priority__c</customTabListAdditionalFields>
+        <lookupDialogsAdditionalFields>Level__c</lookupDialogsAdditionalFields>
+        <lookupDialogsAdditionalFields>Mark_Kind__c</lookupDialogsAdditionalFields>
+        <lookupDialogsAdditionalFields>Mark_Value__c</lookupDialogsAdditionalFields>
+        <lookupDialogsAdditionalFields>Priority__c</lookupDialogsAdditionalFields>
+        <searchFilterFields>Level__c</searchFilterFields>
+        <searchFilterFields>Mark_Kind__c</searchFilterFields>
+        <searchFilterFields>Priority__c</searchFilterFields>
+        <searchResultsAdditionalFields>Level__c</searchResultsAdditionalFields>
+        <searchResultsAdditionalFields>Mark_Kind__c</searchResultsAdditionalFields>
+        <searchResultsAdditionalFields>Mark_Value__c</searchResultsAdditionalFields>
+        <searchResultsAdditionalFields>Priority__c</searchResultsAdditionalFields>
+    </searchLayouts>
+    <sharingModel>ReadWrite</sharingModel>
+    <visibility>Public</visibility>
+</CustomObject>
