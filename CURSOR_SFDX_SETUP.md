@@ -245,3 +245,4 @@ Once setup is complete, you can:
 - ✅ **Manage** your Salesforce org from Cursor
 
 Cursor + Salesforce CLI + AI = Powerful development environment! 🚀
+

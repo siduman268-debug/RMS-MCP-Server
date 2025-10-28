@@ -128,3 +128,4 @@ public class MarginRuleService {
         return listRules(filters);
     }
 }
+

@@ -242,3 +242,4 @@ Once setup is complete, you can:
 - ✅ **Manage** your Salesforce org from VS Code
 
 Let me know when you've completed the setup and I'll help you deploy your custom objects!
+

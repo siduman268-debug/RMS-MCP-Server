@@ -195,3 +195,4 @@ public class RMSApiUtil {
      */
     public class RMSApiException extends Exception {}
 }
+

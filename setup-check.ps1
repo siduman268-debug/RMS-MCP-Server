@@ -91,3 +91,4 @@ Write-Host "   - Look for your custom objects" -ForegroundColor Yellow
 
 Write-Host "`n✅ Setup check complete!" -ForegroundColor Green
 Write-Host "Ready to start developing your RMS Salesforce frontend! 🚀" -ForegroundColor Cyan
+
