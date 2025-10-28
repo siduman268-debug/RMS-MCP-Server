@@ -191,6 +191,68 @@ public class RMSApiUtil {
     }
     
     /**
+     * @description Build endpoint URL with query parameters
+     * @param endpoint Base endpoint
+     * @param queryParams Query parameters map
+     * @return String Complete endpoint URL
+     */
+    public static String buildEndpoint(String endpoint, Map<String, String> queryParams) {
+        if (queryParams == null || queryParams.isEmpty()) {
+            return endpoint;
+        }
+        
+        String queryString = '';
+        for (String key : queryParams.keySet()) {
+            if (String.isNotBlank(queryParams.get(key))) {
+                if (String.isNotBlank(queryString)) {
+                    queryString += '&';
+                }
+                queryString += key + '=' + EncodingUtil.urlEncode(queryParams.get(key), 'UTF-8');
+            }
+        }
+        
+        return String.isNotBlank(queryString) ? endpoint + '?' + queryString : endpoint;
+    }
+    
+    /**
+     * @description Make GET request to RMS API
+     * @param endpoint API endpoint
+     * @return HttpResponse
+     */
+    public static HttpResponse makeGetRequest(String endpoint) {
+        return makeApiCall(endpoint, 'GET', null);
+    }
+    
+    /**
+     * @description Make POST request to RMS API
+     * @param endpoint API endpoint
+     * @param body Request body
+     * @return HttpResponse
+     */
+    public static HttpResponse makePostRequest(String endpoint, String body) {
+        return makeApiCall(endpoint, 'POST', body);
+    }
+    
+    /**
+     * @description Make PUT request to RMS API
+     * @param endpoint API endpoint
+     * @param body Request body
+     * @return HttpResponse
+     */
+    public static HttpResponse makePutRequest(String endpoint, String body) {
+        return makeApiCall(endpoint, 'PUT', body);
+    }
+    
+    /**
+     * @description Make DELETE request to RMS API
+     * @param endpoint API endpoint
+     * @return HttpResponse
+     */
+    public static HttpResponse makeDeleteRequest(String endpoint) {
+        return makeApiCall(endpoint, 'DELETE', null);
+    }
+    
+    /**
      * @description Custom exception for RMS API errors
      */
     public class RMSApiException extends Exception {}

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>POL__c</fullName>
+    <description>Port of Loading - Lookup to Location Master</description>
+    <externalId>false</externalId>
+    <label>Port of Loading</label>
+    <referenceTo>Catupult__Location_Master__c</referenceTo>
+    <relationshipLabel>Ocean Freight Rates POL</relationshipLabel>
+    <relationshipName>OceanFreightRatesPOL</relationshipName>
+    <required>false</required>
+    <trackFeedHistory>false</trackFeedHistory>
+    <trackHistory>false</trackHistory>
+    <trackTrending>false</trackTrending>
+    <type>Lookup</type>
+</CustomField>
