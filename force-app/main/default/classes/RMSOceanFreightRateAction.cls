@@ -37,13 +37,20 @@ public with sharing class RMSOceanFreightRateAction {
                 }
                 
                 // Call RMS API
-                String endpoint = RMSApiUtil.buildEndpoint('/api/ocean-freight-rates', queryParams);
-                HttpResponse httpResponse = RMSApiUtil.makeGetRequest(endpoint);
+                String endpoint = '/api/search-rates';
+                String requestBody = JSON.serialize(new Map<String, Object>{
+                    'pol_code' => request.polCode,
+                    'pod_code' => request.podCode,
+                    'container_type' => request.containerType,
+                    'contract_id' => request.contractId
+                });
+                HttpResponse httpResponse = RMSApiUtil.makePostRequest(endpoint, requestBody);
                 
                 if (httpResponse.getStatusCode() == 200) {
                     response.isSuccess = true;
-                    response.rates = parseOceanFreightRates(httpResponse.getBody());
-                    response.message = 'Successfully retrieved ' + response.rates.size() + ' rates';
+                    List<OceanFreightRateWrapper> ratesList = parseOceanFreightRates(httpResponse.getBody());
+                    response.rates = JSON.serialize(ratesList);
+                    response.message = 'Successfully retrieved ' + ratesList.size() + ' rates';
                 } else {
                     response.isSuccess = false;
                     response.message = 'API Error: ' + httpResponse.getStatusCode() + ' - ' + httpResponse.getBody();
@@ -63,6 +70,7 @@ public with sharing class RMSOceanFreightRateAction {
     }
     
     // Helper methods for parsing API responses
+    // Maps materialized view response fields to wrapper fields
     private static List<OceanFreightRateWrapper> parseOceanFreightRates(String jsonResponse) {
         List<OceanFreightRateWrapper> rates = new List<OceanFreightRateWrapper>();
         try {
@@ -73,21 +81,48 @@ public with sharing class RMSOceanFreightRateAction {
                 for (Object data : dataList) {
                     Map<String, Object> rateData = (Map<String, Object>) data;
                     OceanFreightRateWrapper rate = new OceanFreightRateWrapper();
-                    rate.id = (String) rateData.get('id');
+                    
+                    // Map API response fields (from materialized view) to wrapper fields
+                    // API returns: rate_id, ocean_freight_buy, transit_days, etc.
+                    Object rateIdObj = rateData.get('rate_id');
+                    rate.id = rateIdObj != null ? String.valueOf(rateIdObj) : null;
+                    
                     rate.polCode = (String) rateData.get('pol_code');
                     rate.podCode = (String) rateData.get('pod_code');
                     rate.containerType = (String) rateData.get('container_type');
-                    rate.buyAmount = (Decimal) rateData.get('buy_amount');
-                    rate.currencyCode = (String) rateData.get('currency');
-                    rate.ttDays = (Integer) rateData.get('tt_days');
-                    rate.contractId = (Integer) rateData.get('contract_id');
-                    rate.validFrom = (String) rateData.get('valid_from');
-                    rate.validTo = (String) rateData.get('valid_to');
+                    
+                    // Get pricing from nested pricing object
+                    Map<String, Object> pricing = (Map<String, Object>) rateData.get('pricing');
+                    if (pricing != null) {
+                        Object buyAmountObj = pricing.get('ocean_freight_buy');
+                        rate.buyAmount = buyAmountObj != null ? (Decimal) Double.valueOf(buyAmountObj) : null;
+                        rate.currencyCode = (String) pricing.get('currency');
+                    }
+                    
+                    // transit_days from materialized view
+                    Object ttDaysObj = rateData.get('transit_days');
+                    rate.ttDays = ttDaysObj != null ? Integer.valueOf(ttDaysObj) : null;
+                    
+                    // contract_id might not be in materialized view, check both field names
+                    Object contractIdObj = rateData.get('contract_id');
+                    if (contractIdObj == null) {
+                        contractIdObj = rateData.get('contractId'); // Try camelCase
+                    }
+                    rate.contractId = contractIdObj != null ? Integer.valueOf(contractIdObj) : null;
+                    
+                    // Get validity from nested validity object
+                    Map<String, Object> validity = (Map<String, Object>) rateData.get('validity');
+                    if (validity != null) {
+                        rate.validFrom = (String) validity.get('from');
+                        rate.validTo = (String) validity.get('to');
+                    }
+                    
                     rates.add(rate);
                 }
             }
         } catch (Exception e) {
             System.debug('Error parsing ocean freight rates: ' + e.getMessage());
+            System.debug('Stack trace: ' + e.getStackTraceString());
         }
         return rates;
     }
@@ -115,8 +150,8 @@ public with sharing class RMSOceanFreightRateAction {
         @InvocableVariable(label='Message' description='Response message')
         public String message;
         
-        @InvocableVariable(label='Rates' description='List of ocean freight rates')
-        public List<OceanFreightRateWrapper> rates;
+        @InvocableVariable(label='Rates' description='Rates data as JSON string')
+        public String rates;
     }
     
     // Wrapper classes for data transfer

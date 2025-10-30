@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <description>Simple Ocean Freight Rate Search Flow</description>
+    <label>RMS Ocean Freight Rate Search Simple</label>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processMetadataValues>
+        <name>BuilderVersion</name>
+        <value>
+            <stringValue>240.0</stringValue>
+        </value>
+    </processMetadataValues>
+    <processType>Flow</processType>
+    <start>
+        <locationX>50</locationX>
+        <locationY>0</locationY>
+        <connector>
+            <targetReference>Screen_Input</targetReference>
+        </connector>
+    </start>
+    <variables>
+        <name>Sample_Rate_Lookup</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>true</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>ContainerType</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <screens>
+        <name>Screen_Input</name>
+        <label>Search Ocean Freight Rates</label>
+        <locationX>50</locationX>
+        <locationY>210</locationY>
+        <allowBack>true</allowBack>
+        <allowFinish>false</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>ContainerType_Display</name>
+            <fieldText>Container Type (20GP, 40GP, 40HC, 45HC)</fieldText>
+            <fieldType>DisplayText</fieldType>
+            <isRequired>false</isRequired>
+            <scale>0</scale>
+        </fields>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+        <connector>
+            <targetReference>Screen_Results</targetReference>
+        </connector>
+    </screens>
+    <screens>
+        <name>Screen_Results</name>
+        <label>Search Results</label>
+        <locationX>300</locationX>
+        <locationY>210</locationY>
+        <allowBack>true</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>Result_Message</name>
+            <fieldText>Flow executed successfully! Container Type: {!ContainerType}</fieldText>
+            <fieldType>DisplayText</fieldType>
+            <isRequired>false</isRequired>
+            <scale>0</scale>
+        </fields>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+</Flow>

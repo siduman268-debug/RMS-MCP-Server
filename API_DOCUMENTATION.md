@@ -3,7 +3,8 @@
 ## Overview
 The RMS MCP Server provides RESTful API endpoints for freight rate management, local charges retrieval, and quote generation. Built with Fastify and Supabase, it supports both MCP (Model Context Protocol) for Claude Desktop and HTTP API for n8n workflow automation.
 
-**Base URL**: `http://localhost:3000`  
+**Base URL**: `http://13.204.127.113:3000` (Production Server)  
+**Development**: `http://localhost:3000` (Local development)  
 **Server**: Fastify with CORS enabled  
 **Security**: JWT Authentication with Multi-Tenant Isolation
 
@@ -238,7 +239,7 @@ Content-Type: application/json
   "data": [
     {
       "vendor": "MSC",
-      "route": "Nhava Sheva (JNPT) (INNSA) → Rotterdam (NLRTM)",
+      "route": "Nhava Sheva (JNPT) → Rotterdam",
       "container_type": "40HC",
       "transit_days": 18,
       "pricing": {
@@ -421,8 +422,7 @@ Content-Type: application/json
 }
 ```
 
-**Response**:
-```json
+
 {
   "success": true,
   "data": {
@@ -1274,7 +1274,686 @@ The same server also runs an MCP interface for Claude Desktop via stdio, allowin
 
 ---
 
+## CRUD APIs
+
+The RMS MCP Server provides comprehensive CRUD (Create, Read, Update, Delete) APIs for managing Ocean Freight Rates, Surcharges, and Margin Rules. These endpoints support full lifecycle management of rate data with proper tenant isolation.
+
+---
+
+### Ocean Freight Rate CRUD APIs
+
+#### Create Ocean Freight Rate
+
+**Endpoint**: `POST /api/ocean-freight-rates`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Create a new ocean freight rate with automatic location lookup by UN/LOCODE.
+
+**Headers**:
+```
+Authorization: Bearer <jwt_token>
+x-tenant-id: <tenant_uuid>
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "pol_code": "INNSA",              // Required: Port of Loading UN/LOCODE
+  "pod_code": "USLSA",              // Required: Port of Discharge UN/LOCODE
+  "container_type": "40HC",         // Required: Container type (20GP, 40GP, 40HC, 45HC)
+  "buy_amount": 1950,               // Required: Buy rate amount
+  "currency": "USD",                // Required: Currency code
+  "contract_id": 4,                 // Required: Contract ID
+  "tt_days": 18,                    // Optional: Transit time in days
+  "is_preferred": false,            // Optional: Preferred rate flag (default: false)
+  "valid_from": "2025-10-28",       // Optional: Validity start date (default: today)
+  "valid_to": "2026-10-28",         // Optional: Validity end date (default: 1 year from today)
+  "via_port_code": "USNYC"          // Optional: Via port UN/LOCODE
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 123,
+    "contract_id": 4,
+    "pol_id": 45,
+    "pod_id": 78,
+    "container_type": "40HC",
+    "buy_amount": 1950,
+    "currency": "USD",
+    "tt_days": 18,
+    "via_port_id": null,
+    "is_preferred": false,
+    "valid_from": "2025-10-28",
+    "valid_to": "2026-10-28",
+    "tenant_id": "00000000-0000-0000-0000-000000000001"
+  }
+}
+```
+
+**Validation**:
+- `pol_code`, `pod_code`, `container_type`, `buy_amount`, `currency`, and `contract_id` are required
+- Location codes must exist and be active in the `locations` table
+- Duplicate rates (same `contract_id`, `pol_id`, `pod_id`, `container_type`) are prevented by unique constraint
+
+**Error Responses**:
+```json
+// Missing required fields
+{
+  "success": false,
+  "error": "Missing required fields: pol_code, pod_code, container_type, buy_amount, currency, contract_id"
+}
+
+// Location not found
+{
+  "success": false,
+  "error": "POL location not found: INNSA"
+}
+
+// Duplicate rate
+{
+  "success": false,
+  "error": "duplicate key value violates unique constraint..."
+}
+```
+
+**Example**:
+```bash
+curl -X POST http://13.204.127.113:3000/api/ocean-freight-rates \
+  -H "Authorization: Bearer <token>" \
+  -H "x-tenant-id: <tenant_id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pol_code": "INNSA",
+    "pod_code": "USLSA",
+    "container_type": "40HC",
+    "buy_amount": 1950,
+    "currency": "USD",
+    "contract_id": 4,
+    "tt_days": 18,
+    "is_preferred": false,
+    "valid_from": "2025-10-28",
+    "valid_to": "2026-10-28"
+  }'
+```
+
+---
+
+#### Update Ocean Freight Rate
+
+**Endpoint**: `PUT /api/ocean-freight-rates/:rateId`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Update an existing ocean freight rate.
+
+**Path Parameters**:
+- `rateId` (integer, required): The ID of the rate to update
+
+**Request Body** (all fields optional):
+```json
+{
+  "buy_amount": 2000,               // Optional: Updated buy amount
+  "currency": "USD",                // Optional: Updated currency
+  "tt_days": 20,                    // Optional: Updated transit days
+  "is_preferred": true,             // Optional: Updated preferred flag
+  "valid_from": "2025-11-01",       // Optional: Updated validity start
+  "valid_to": "2026-11-01"          // Optional: Updated validity end
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 123,
+    "contract_id": 4,
+    "pol_id": 45,
+    "pod_id": 78,
+    "container_type": "40HC",
+    "buy_amount": 2000,
+    "currency": "USD",
+    "tt_days": 20,
+    "via_port_id": null,
+    "is_preferred": true,
+    "valid_from": "2025-11-01",
+    "valid_to": "2026-11-01",
+    "tenant_id": "00000000-0000-0000-0000-000000000001"
+  }
+}
+```
+
+**Example**:
+```bash
+curl -X PUT http://13.204.127.113:3000/api/ocean-freight-rates/123 \
+  -H "Authorization: Bearer <token>" \
+  -H "x-tenant-id: <tenant_id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "buy_amount": 2000,
+    "is_preferred": true
+  }'
+```
+
+---
+
+#### Get Ocean Freight Rate by ID
+
+**Endpoint**: `GET /api/ocean-freight-rates/:rateId`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Retrieve a single ocean freight rate by ID from the materialized view (includes pricing details).
+
+**Path Parameters**:
+- `rateId` (integer, required): The ID of the rate to retrieve
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "rate_id": 123,
+    "pol_code": "INNSA",
+    "pod_code": "USLSA",
+    "container_type": "40HC",
+    "carrier": "MSC",
+    "ocean_freight_buy": 1950,
+    "freight_surcharges": 289.85,
+    "all_in_freight_buy": 2239.85,
+    "all_in_freight_sell": 2463.84,
+    "currency": "USD",
+    "transit_days": 18,
+    "is_preferred": false,
+    "valid_from": "2025-10-28",
+    "valid_to": "2026-10-28"
+  }
+}
+```
+
+**Example**:
+```bash
+curl -X GET http://13.204.127.113:3000/api/ocean-freight-rates/123 \
+  -H "Authorization: Bearer <token>" \
+  -H "x-tenant-id: <tenant_id>"
+```
+
+---
+
+#### List Ocean Freight Rates
+
+**Endpoint**: `GET /api/ocean-freight-rates`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: List ocean freight rates with optional filtering and pagination.
+
+**Query Parameters** (all optional):
+- `pol_code` (string): Filter by Port of Loading code
+- `pod_code` (string): Filter by Port of Discharge code
+- `container_type` (string): Filter by container type (20GP, 40GP, 40HC, 45HC)
+- `vendor_name` (string): Filter by carrier/vendor name (exact match)
+- `is_preferred` (boolean): Filter by preferred rate flag
+- `is_active` (string): Filter by active status (default: 'true')
+- `page` (integer): Page number for pagination (default: 1)
+- `limit` (integer): Results per page (default: 50)
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "rate_id": 123,
+      "pol_code": "INNSA",
+      "pod_code": "USLSA",
+      "container_type": "40HC",
+      "carrier": "MSC",
+      "ocean_freight_buy": 1950,
+      "all_in_freight_sell": 2463.84,
+      "currency": "USD",
+      "transit_days": 18,
+      "is_preferred": false,
+      "valid_from": "2025-10-28",
+      "valid_to": "2026-10-28"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "count": 1
+  }
+}
+```
+
+**Example**:
+```bash
+curl -X GET "http://13.204.127.113:3000/api/ocean-freight-rates?pol_code=INNSA&pod_code=USLSA&container_type=40HC&page=1&limit=10" \
+  -H "Authorization: Bearer <token>" \
+  -H "x-tenant-id: <tenant_id>"
+```
+
+---
+
+#### Delete Ocean Freight Rate
+
+**Endpoint**: `DELETE /api/ocean-freight-rates/:rateId`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Soft delete an ocean freight rate by setting `is_active` to false.
+
+**Path Parameters**:
+- `rateId` (integer, required): The ID of the rate to delete
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Ocean freight rate 123 deleted successfully"
+}
+```
+
+**Example**:
+```bash
+curl -X DELETE http://13.204.127.113:3000/api/ocean-freight-rates/123 \
+  -H "Authorization: Bearer <token>" \
+  -H "x-tenant-id: <tenant_id>"
+```
+
+---
+
+### Surcharge CRUD APIs
+
+#### Create Surcharge
+
+**Endpoint**: `POST /api/surcharges`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Create a new surcharge with automatic location lookup based on `applies_scope`.
+
+**Headers**:
+```
+Authorization: Bearer <jwt_token>
+x-tenant-id: <tenant_uuid>
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "vendor_id": 5,                   // Required: Vendor ID
+  "charge_code": "THC",             // Required: Charge code (e.g., THC, BAF, DOC_FEE)
+  "amount": 100,                    // Required: Charge amount
+  "currency": "USD",                // Optional: Currency (default: "USD")
+  "uom": "per_cntr",                // Optional: Unit of measure (default: "per_cntr")
+  "contract_id": 4,                 // Optional: Contract ID (default: 1)
+  "applies_scope": "origin",        // Required: Scope (origin, port, freight, dest, door, other)
+  "pol_code": "INNSA",              // Optional: POL code (required if applies_scope is "origin" or "port")
+  "pod_code": "USLSA",              // Optional: POD code (required if applies_scope is "dest" or "door")
+  "container_type": "40HC",         // Optional: Container type filter
+  "valid_from": "2025-10-28",       // Required: Validity start date
+  "valid_to": "2026-10-28"          // Required: Validity end date
+}
+```
+
+**Valid Values**:
+- `applies_scope`: `"origin"`, `"port"`, `"freight"`, `"dest"`, `"door"`, `"other"`
+- `uom`: `"per_cntr"`, `"per_bl"`, `"per_shipment"`, `"per_kg"`, `"per_cbm"`
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 456,
+    "vendor_id": 5,
+    "contract_id": 4,
+    "charge_code": "THC",
+    "amount": 100,
+    "currency": "USD",
+    "uom": "per_cntr",
+    "calc_method": "flat",
+    "pol_id": 45,
+    "pod_id": null,
+    "container_type": "40HC",
+    "applies_scope": "origin",
+    "valid_from": "2025-10-28",
+    "valid_to": "2026-10-28",
+    "is_active": true,
+    "tenant_id": "00000000-0000-0000-0000-000000000001"
+  }
+}
+```
+
+**Location Lookup Logic**:
+- If `applies_scope` is `"origin"` or `"port"` → `pol_code` is required, creates `pol_id`
+- If `applies_scope` is `"dest"` or `"door"` → `pod_code` is required, creates `pod_id`
+- If `applies_scope` is `"freight"` or `"other"` → no location lookup needed
+
+**Example**:
+```bash
+curl -X POST http://13.204.127.113:3000/api/surcharges \
+  -H "Authorization: Bearer <token>" \
+  -H "x-tenant-id: <tenant_id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vendor_id": 5,
+    "charge_code": "THC",
+    "amount": 100,
+    "currency": "USD",
+    "uom": "per_cntr",
+    "applies_scope": "origin",
+    "pol_code": "INNSA",
+    "container_type": "40HC",
+    "valid_from": "2025-10-28",
+    "valid_to": "2026-10-28"
+  }'
+```
+
+---
+
+#### Update Surcharge
+
+**Endpoint**: `PUT /api/surcharges/:surchargeId`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Update an existing surcharge (updatable fields only).
+
+**Path Parameters**:
+- `surchargeId` (integer, required): The ID of the surcharge to update
+
+**Request Body** (all fields optional):
+```json
+{
+  "amount": 120,                    // Optional: Updated charge amount
+  "currency": "EUR",                // Optional: Updated currency
+  "uom": "per_bl",                  // Optional: Updated unit of measure
+  "valid_from": "2025-11-01",       // Optional: Updated validity start
+  "valid_to": "2026-11-01"          // Optional: Updated validity end
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 456,
+    "vendor_id": 5,
+    "contract_id": 4,
+    "charge_code": "THC",
+    "amount": 120,
+    "currency": "EUR",
+    "uom": "per_bl",
+    "calc_method": "flat",
+    "pol_id": 45,
+    "container_type": "40HC",
+    "applies_scope": "origin",
+    "valid_from": "2025-11-01",
+    "valid_to": "2026-11-01",
+    "is_active": true,
+    "tenant_id": "00000000-0000-0000-0000-000000000001"
+  }
+}
+```
+
+---
+
+#### Get Surcharge by ID
+
+**Endpoint**: `GET /api/surcharges/:surchargeId`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Retrieve a single surcharge by ID.
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 456,
+    "vendor_id": 5,
+    "contract_id": 4,
+    "charge_code": "THC",
+    "amount": 100,
+    "currency": "USD",
+    "uom": "per_cntr",
+    "calc_method": "flat",
+    "pol_id": 45,
+    "container_type": "40HC",
+    "applies_scope": "origin",
+    "valid_from": "2025-10-28",
+    "valid_to": "2026-10-28",
+    "is_active": true,
+    "tenant_id": "00000000-0000-0000-0000-000000000001"
+  }
+}
+```
+
+---
+
+#### List Surcharges
+
+**Endpoint**: `GET /api/surcharges`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: List surcharges with optional filtering and pagination.
+
+**Query Parameters** (all optional):
+- `vendor_id` (integer): Filter by vendor ID
+- `charge_code` (string): Filter by charge code
+- `container_type` (string): Filter by container type
+- `applies_scope` (string): Filter by applies scope
+- `page` (integer): Page number (default: 1)
+- `limit` (integer): Results per page (default: 50)
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 456,
+      "vendor_id": 5,
+      "charge_code": "THC",
+      "amount": 100,
+      "currency": "USD",
+      "uom": "per_cntr",
+      "applies_scope": "origin",
+      "container_type": "40HC",
+      "valid_from": "2025-10-28",
+      "valid_to": "2026-10-28",
+      "is_active": true
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "count": 1
+  }
+}
+```
+
+---
+
+#### Delete Surcharge
+
+**Endpoint**: `DELETE /api/surcharges/:surchargeId`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Delete a surcharge permanently.
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Surcharge 456 deleted successfully"
+}
+```
+
+---
+
+### Margin Rule CRUD APIs
+
+#### Create Margin Rule
+
+**Endpoint**: `POST /api/margin-rules`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Create a new margin rule with support for global, port-pair, or trade zone scopes.
+
+**Headers**:
+```
+Authorization: Bearer <jwt_token>
+x-tenant-id: <tenant_uuid>
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "level": "port-pair",             // Required: Rule level (global, port-pair, trade-zone)
+  "pol_code": "INNSA",              // Optional: Port of Loading code (for port-pair rules)
+  "pod_code": "USLSA",              // Optional: Port of Discharge code (for port-pair rules)
+  "tz_o": "ASIA",                   // Optional: Origin trade zone code
+  "tz_d": "NORTH_AMERICA",          // Optional: Destination trade zone code
+  "mode": "FCL",                    // Optional: Mode (FCL, LCL)
+  "container_type": "40HC",         // Optional: Container type filter
+  "component_type": "freight",      // Optional: Component type
+  "mark_kind": "pct",               // Required: Margin type ("pct" or "flat")
+  "mark_value": 15,                 // Required: Margin value (15 for 15% or 500 for $500)
+  "valid_from": "2025-10-28",       // Optional: Validity start (default: today)
+  "valid_to": "2026-10-28",         // Optional: Validity end (default: 2099-12-31)
+  "priority": 100                   // Optional: Priority (default: 100, higher = applied first)
+}
+```
+
+**Valid Values**:
+- `level`: `"global"`, `"port-pair"`, `"trade-zone"`
+- `mark_kind`: `"pct"` (percentage), `"flat"` (fixed amount)
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 789,
+    "level": "port-pair",
+    "pol_id": 45,
+    "pod_id": 78,
+    "tz_o": null,
+    "tz_d": null,
+    "mode": "FCL",
+    "container_type": "40HC",
+    "component_type": "freight",
+    "mark_kind": "pct",
+    "mark_value": 15,
+    "valid_from": "2025-10-28",
+    "valid_to": "2026-10-28",
+    "priority": 100,
+    "tenant_id": "00000000-0000-0000-0000-000000000001"
+  }
+}
+```
+
+**Example - Global Rule**:
+```bash
+curl -X POST http://13.204.127.113:3000/api/margin-rules \
+  -H "Authorization: Bearer <token>" \
+  -H "x-tenant-id: <tenant_id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "level": "global",
+    "mark_kind": "pct",
+    "mark_value": 10
+  }'
+```
+
+**Example - Port-Pair Rule**:
+```bash
+curl -X POST http://13.204.127.113:3000/api/margin-rules \
+  -H "Authorization: Bearer <token>" \
+  -H "x-tenant-id: <tenant_id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "level": "port-pair",
+    "pol_code": "INNSA",
+    "pod_code": "USLSA",
+    "mark_kind": "pct",
+    "mark_value": 15,
+    "container_type": "40HC"
+  }'
+```
+
+---
+
+#### Update Margin Rule
+
+**Endpoint**: `PUT /api/margin-rules/:ruleId`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Update an existing margin rule.
+
+**Request Body** (all fields optional):
+```json
+{
+  "mark_value": 20,                 // Optional: Updated margin value
+  "priority": 150,                  // Optional: Updated priority
+  "valid_from": "2025-11-01",       // Optional: Updated validity start
+  "valid_to": "2026-11-01",         // Optional: Updated validity end
+  "is_active": false                // Optional: Deactivate rule
+}
+```
+
+---
+
+#### Get Margin Rule by ID
+
+**Endpoint**: `GET /api/margin-rules/:ruleId`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Retrieve a single margin rule by ID.
+
+---
+
+#### List Margin Rules
+
+**Endpoint**: `GET /api/margin-rules`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: List margin rules with optional filtering.
+
+**Query Parameters** (all optional):
+- `level` (string): Filter by rule level
+- `mark_kind` (string): Filter by margin type ("pct" or "flat")
+- `pol_code` (string): Filter by POL code
+- `pod_code` (string): Filter by POD code
+- `page` (integer): Page number (default: 1)
+- `limit` (integer): Results per page (default: 50)
+
+---
+
+#### Delete Margin Rule
+
+**Endpoint**: `DELETE /api/margin-rules/:ruleId`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Delete a margin rule permanently.
+
+---
+
 ## Changelog
+
+### Version 3.0.0 (2025-10-28)
+- **NEW**: Ocean Freight Rate CRUD APIs (POST, PUT, GET, DELETE)
+- **NEW**: Surcharge CRUD APIs (POST, PUT, GET, DELETE)
+- **NEW**: Margin Rule CRUD APIs (POST, PUT, GET, DELETE)
+- **ENHANCED**: Automatic location lookup by UN/LOCODE for all CRUD operations
+- **ENHANCED**: Comprehensive validation and error handling for CRUD endpoints
+- **FEATURE**: Pagination support for list endpoints
+- **FEATURE**: Flexible filtering options for list queries
 
 ### Version 2.0.0 (2025-10-15)
 - **NEW**: V2 API endpoints for Salesforce integration

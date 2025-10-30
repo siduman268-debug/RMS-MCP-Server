@@ -815,7 +815,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // Format the response nicely
       const formattedData = data?.map(rate => ({
         vendor: rate.carrier,
-        route: `${rate.pol_name} (${rate.pol_code}) → ${rate.pod_name} (${rate.pod_code})`,
+        // Display only location names; omit UNLOCODEs to avoid duplication in client UI
+        route: `${rate.pol_name} → ${rate.pod_name}`,
         container_type: rate.container_type,
         transit_days: rate.transit_days,
         pricing: {

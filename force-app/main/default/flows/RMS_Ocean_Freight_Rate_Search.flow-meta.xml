@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Flow xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>65.0</apiVersion>
-    <description>Simple Ocean Freight Rate Search Flow for RMS</description>
+    <description>Rebuilt Ocean Freight Rate Search Flow - Step by step with proper error handling</description>
     <label>RMS Ocean Freight Rate Search</label>
     <processMetadataValues>
         <name>BuilderType</name>
@@ -19,26 +19,340 @@
     <start>
         <locationX>50</locationX>
         <locationY>0</locationY>
+        <connector>
+            <targetReference>Screen_Input_Search_Criteria</targetReference>
+        </connector>
     </start>
     <variables>
-        <name>POLCode</name>
-        <dataType>String</dataType>
+        <name>Sample_Rate_Record</name>
+        <dataType>SObject</dataType>
         <isCollection>false</isCollection>
-        <isInput>true</isInput>
+        <isInput>false</isInput>
         <isOutput>false</isOutput>
-    </variables>
-    <variables>
-        <name>PODCode</name>
-        <dataType>String</dataType>
-        <isCollection>false</isCollection>
-        <isInput>true</isInput>
-        <isOutput>false</isOutput>
+        <objectType>Ocean_Freight_Rate__c</objectType>
     </variables>
     <variables>
         <name>ContainerType</name>
         <dataType>String</dataType>
         <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>Sample_Rate_Lookup</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
         <isInput>true</isInput>
         <isOutput>false</isOutput>
     </variables>
+    <variables>
+        <name>POL_Location_Record</name>
+        <dataType>SObject</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+        <objectType>Catupult__Location_Master__c</objectType>
+    </variables>
+    <variables>
+        <name>POD_Location_Record</name>
+        <dataType>SObject</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+        <objectType>Catupult__Location_Master__c</objectType>
+    </variables>
+    <variables>
+        <name>POL_Code</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>POD_Code</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>Rates_Response_List</name>
+        <dataType>SObject</dataType>
+        <isCollection>true</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>API_Success</name>
+        <dataType>Boolean</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>API_Message</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>Rates_Count</name>
+        <dataType>Number</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>false</isOutput>
+        <scale>0</scale>
+    </variables>
+    <screens>
+        <screen>
+            <name>Screen_Input_Search_Criteria</name>
+        <label>Search Ocean Freight Rates</label>
+        <locationX>50</locationX>
+        <locationY>210</locationY>
+        <allowBack>true</allowBack>
+        <allowFinish>false</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>ContainerType</name>
+            <fieldText>Container Type (20GP, 40GP, 40HC, 45HC)</fieldText>
+            <fieldType>DisplayText</fieldType>
+            <isRequired>false</isRequired>
+            <scale>0</scale>
+        </fields>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+        <connector>
+            <targetReference>Get_Sample_Rate</targetReference>
+        </connector>
+    </screen>
+    <recordLookups>
+        <name>Get_Sample_Rate</name>
+        <label>Get Sample Ocean Freight Rate Record</label>
+        <locationX>430</locationX>
+        <locationY>210</locationY>
+        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <connector>
+            <targetReference>Get_POL_Location</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Screen_Error</targetReference>
+        </faultConnector>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>Sample_Rate_Lookup</elementReference>
+            </value>
+        </filters>
+        <getFirstRecordOnly>true</getFirstRecordOnly>
+        <queriedFields>POL__c</queriedFields>
+        <queriedFields>POD__c</queriedFields>
+        <queriedFields>Container_Type__c</queriedFields>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+        <object>Ocean_Freight_Rate__c</object>
+        <outputReference>Sample_Rate_Record</outputReference>
+    </recordLookups>
+    <recordLookups>
+        <name>Get_POL_Location</name>
+        <label>Get POL Location via POL__c relationship</label>
+        <locationX>620</locationX>
+        <locationY>210</locationY>
+        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <connector>
+            <targetReference>Get_POD_Location</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Screen_Error</targetReference>
+        </faultConnector>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>Sample_Rate_Record.POL__c</elementReference>
+            </value>
+        </filters>
+        <getFirstRecordOnly>true</getFirstRecordOnly>
+        <queriedFields>Catupult__Unlocode__c</queriedFields>
+        <queriedFields>Name</queriedFields>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+        <object>Catupult__Location_Master__c</object>
+        <outputReference>POL_Location_Record</outputReference>
+    </recordLookups>
+    <recordLookups>
+        <name>Get_POD_Location</name>
+        <label>Get POD Location via POD__c relationship</label>
+        <locationX>620</locationX>
+        <locationY>360</locationY>
+        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <connector>
+            <targetReference>Assignment_Extract_Codes</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Screen_Error</targetReference>
+        </faultConnector>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>Sample_Rate_Record.POD__c</elementReference>
+            </value>
+        </filters>
+        <getFirstRecordOnly>true</getFirstRecordOnly>
+        <queriedFields>Catupult__Unlocode__c</queriedFields>
+        <queriedFields>Name</queriedFields>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+        <object>Catupult__Location_Master__c</object>
+        <outputReference>POD_Location_Record</outputReference>
+    </recordLookups>
+    <assignments>
+        <name>Assignment_Extract_Codes</name>
+        <label>Extract UNLOCODEs</label>
+        <locationX>430</locationX>
+        <locationY>285</locationY>
+        <connector>
+            <targetReference>Action_Get_Rates</targetReference>
+        </connector>
+        <assignmentItems>
+            <assignToReference>POL_Code</assignToReference>
+            <value>
+                <elementReference>POL_Location_Record.Catupult__Unlocode__c</elementReference>
+            </value>
+        </assignmentItems>
+        <assignmentItems>
+            <assignToReference>POD_Code</assignToReference>
+            <value>
+                <elementReference>POD_Location_Record.Catupult__Unlocode__c</elementReference>
+            </value>
+        </assignmentItems>
+    </assignments>
+    <assignments>
+        <name>Assignment_Extract_Response</name>
+        <label>Extract Response Data</label>
+        <locationX>810</locationX>
+        <locationY>285</locationY>
+        <connector>
+            <targetReference>Decision_Check_Success</targetReference>
+        </connector>
+        <assignmentItems>
+            <assignToReference>API_Success</assignToReference>
+            <value>
+                <elementReference>Rates_Response_List[0].isSuccess</elementReference>
+            </value>
+        </assignmentItems>
+        <assignmentItems>
+            <assignToReference>API_Message</assignToReference>
+            <value>
+                <elementReference>Rates_Response_List[0].message</elementReference>
+            </value>
+        </assignmentItems>
+        <assignmentItems>
+            <assignToReference>Rates_Count</assignToReference>
+            <value>
+                <elementReference>Rates_Response_List[0].rates.size()</elementReference>
+            </value>
+        </assignmentItems>
+    </assignments>
+    <actionCalls>
+        <name>Action_Get_Rates</name>
+        <label>Get Ocean Freight Rates</label>
+        <locationX>620</locationX>
+        <locationY>285</locationY>
+        <actionName>RMSOceanFreightRateAction.getOceanFreightRates</actionName>
+        <actionType>apex</actionType>
+        <connector>
+            <targetReference>Assignment_Extract_Response</targetReference>
+        </connector>
+        <faultConnector>
+            <targetReference>Screen_Error</targetReference>
+        </faultConnector>
+        <inputParameters>
+            <name>polCode</name>
+            <value>
+                <elementReference>POL_Code</elementReference>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>podCode</name>
+            <value>
+                <elementReference>POD_Code</elementReference>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>containerType</name>
+            <value>
+                <elementReference>ContainerType</elementReference>
+            </value>
+        </inputParameters>
+        <outputParameters>
+            <assignToReference>Rates_Response_List</assignToReference>
+            <name>outputParameters</name>
+        </outputParameters>
+    </actionCalls>
+    <decisions>
+        <name>Decision_Check_Success</name>
+        <label>Check API Success</label>
+        <locationX>1000</locationX>
+        <locationY>285</locationY>
+        <defaultConnector>
+            <targetReference>Screen_Error</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Default</defaultConnectorLabel>
+        <rules>
+            <name>Success</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>API_Success</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <booleanValue>true</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Screen_Results</targetReference>
+            </connector>
+            <label>Success</label>
+        </rules>
+    </decisions>
+        <screen>
+            <name>Screen_Results</name>
+            <label>Search Results</label>
+            <locationX>1000</locationX>
+            <locationY>285</locationY>
+            <allowBack>true</allowBack>
+            <allowFinish>true</allowFinish>
+            <allowPause>false</allowPause>
+            <fields>
+                <name>Display_Message</name>
+                <fieldText>Found {!Rates_Count} rate(s). {!API_Message} POL: {!POL_Location_Record.Name} ({!POL_Code}) POD: {!POD_Location_Record.Name} ({!POD_Code}) Container: {!ContainerType}</fieldText>
+                <fieldType>DisplayText</fieldType>
+                <isRequired>false</isRequired>
+                <scale>0</scale>
+            </fields>
+            <showFooter>true</showFooter>
+            <showHeader>true</showHeader>
+        </screen>
+        <screen>
+            <name>Screen_Error</name>
+            <label>Error</label>
+            <locationX>1000</locationX>
+            <locationY>435</locationY>
+            <allowBack>true</allowBack>
+            <allowFinish>true</allowFinish>
+            <allowPause>false</allowPause>
+            <fields>
+                <name>Display_Error</name>
+                <fieldText>An error occurred while searching for rates. {!API_Message} If you see this error repeatedly, please contact your system administrator. Fault Message: {!$Flow.FaultMessage}</fieldText>
+                <fieldType>DisplayText</fieldType>
+                <isRequired>false</isRequired>
+                <scale>0</scale>
+            </fields>
+            <showFooter>true</showFooter>
+            <showHeader>true</showHeader>
+        </screen>
+    </screens>
+    <status>Draft</status>
 </Flow>
