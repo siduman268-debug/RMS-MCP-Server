@@ -813,10 +813,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (error) throw error;
 
       // Format the response nicely
+      // Helper to strip UN/LOCODE or similar codes in parentheses from names
+      const stripCode = (s: any) => String(s || '').replace(/\s*\([A-Z0-9]{3,6}\)/g, '');
+
       const formattedData = data?.map(rate => ({
         vendor: rate.carrier,
-        // Display only location names; omit UNLOCODEs to avoid duplication in client UI
-        route: `${rate.pol_name} → ${rate.pod_name}`,
+        // Display only location names; strip any code-in-parentheses to avoid duplication
+        route: `${stripCode(rate.pol_name)} → ${stripCode(rate.pod_name)}`,
         container_type: rate.container_type,
         transit_days: rate.transit_days,
         pricing: {
