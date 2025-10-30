@@ -1489,11 +1489,10 @@ async function createHttpServer() {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Format the response nicely
-      const stripCode = (s: any) => String(s || '').replace(/\s*\([A-Z0-9]{3,6}\)/g, '');
+      // Format the response nicely (DB names already contain a single code in brackets)
       const formattedData = data?.map(rate => ({
         vendor: rate.carrier,
-        route: `${stripCode(rate.pol_name)} → ${stripCode(rate.pod_name)}`,
+        route: `${rate.pol_name} → ${rate.pod_name}`,
         container_type: rate.container_type,
         transit_days: rate.transit_days,
         pricing: {
@@ -1953,7 +1952,7 @@ async function createHttpServer() {
       // Format the response nicely
       const formattedData = data?.map(rate => ({
         vendor: rate.carrier,
-        route: `${rate.pol_name} (${rate.pol_code}) → ${rate.pod_name} (${rate.pod_code})`,
+        route: `${rate.pol_name} → ${rate.pod_name}`,
         container_type: rate.container_type,
         transit_days: rate.transit_days,
         pricing: {
