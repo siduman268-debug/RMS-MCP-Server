@@ -1489,7 +1489,7 @@ async function createHttpServer() {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Format the response nicely (DB names already contain a single code in brackets)
+      // Format the response nicely (use DB-provided names as-is)
       const formattedData = data?.map(rate => ({
         vendor: rate.carrier,
         route: `${rate.pol_name} → ${rate.pod_name}`,
@@ -1949,7 +1949,7 @@ async function createHttpServer() {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Format the response nicely
+      // Format the response nicely (use DB-provided names as-is)
       const formattedData = data?.map(rate => ({
         vendor: rate.carrier,
         route: `${rate.pol_name} → ${rate.pod_name}`,
