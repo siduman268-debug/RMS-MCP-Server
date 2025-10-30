@@ -239,7 +239,7 @@ Content-Type: application/json
   "data": [
     {
       "vendor": "MSC",
-      "route": "Nhava Sheva (JNPT) → Rotterdam",
+      "route": "Nhava Sheva (INNSA) → Rotterdam (NLRTM)",
       "container_type": "40HC",
       "transit_days": 18,
       "pricing": {
