@@ -1490,9 +1490,10 @@ async function createHttpServer() {
       if (error) throw error;
 
       // Format the response nicely
+      const stripCode = (s: any) => String(s || '').replace(/\s*\([A-Z0-9]{3,6}\)/g, '');
       const formattedData = data?.map(rate => ({
         vendor: rate.carrier,
-        route: `${rate.pol_name} (${rate.pol_code}) → ${rate.pod_name} (${rate.pod_code})`,
+        route: `${stripCode(rate.pol_name)} → ${stripCode(rate.pod_name)}`,
         container_type: rate.container_type,
         transit_days: rate.transit_days,
         pricing: {
