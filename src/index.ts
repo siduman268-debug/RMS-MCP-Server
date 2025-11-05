@@ -1389,8 +1389,12 @@ async function createHttpServer() {
 
   // Add authentication middleware directly to fastify
   fastify.addHook('preHandler', async (request: any, reply: any) => {
-    // Skip health check and auth endpoints
-    if (request.url === '/health' || request.url === '/api/auth/token') return;
+    // Skip health check, auth endpoints, and webhook endpoints (they have their own auth)
+    if (request.url === '/health' || 
+        request.url === '/api/auth/token' ||
+        request.url.startsWith('/api/dcsa/webhook') ||
+        request.url.startsWith('/api/dcsa/sync') ||
+        request.url.startsWith('/api/dcsa/discover-services')) return;
 
     // Only apply to /api routes
     if (!request.url.startsWith('/api/')) return;
@@ -1489,7 +1493,7 @@ async function createHttpServer() {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Format the response nicely (use DB-provided names as-is)
+      // Format the response nicely (DB names already contain a single code in brackets)
       const formattedData = data?.map(rate => ({
         vendor: rate.carrier,
         route: `${rate.pol_name} → ${rate.pod_name}`,
@@ -1949,7 +1953,7 @@ async function createHttpServer() {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Format the response nicely (use DB-provided names as-is)
+      // Format the response nicely
       const formattedData = data?.map(rate => ({
         vendor: rate.carrier,
         route: `${rate.pol_name} → ${rate.pod_name}`,
