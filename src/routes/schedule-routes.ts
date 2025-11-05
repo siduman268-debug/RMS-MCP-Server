@@ -98,6 +98,13 @@ export function addScheduleRoutes(
       }
 
       console.log('Processing schedule:', schedule.carrierName, schedule.carrierServiceCode, schedule.carrierVoyageNumber);
+      console.log('Schedule payload structure:', {
+        hasCarrierName: !!schedule.carrierName,
+        hasServiceCode: !!schedule.carrierServiceCode,
+        hasVoyageNumber: !!schedule.carrierVoyageNumber,
+        portCallsCount: Array.isArray(schedule.portCalls) ? schedule.portCalls.length : 0,
+        keys: Object.keys(schedule)
+      });
       await dcsaClient.processSchedule(schedule);
 
       return reply.code(200).send({
