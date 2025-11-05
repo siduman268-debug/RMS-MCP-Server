@@ -91,7 +91,7 @@ export class MaerskDCSAAdapter extends BaseDCSAAdapter {
           `Maersk API error: ${error.response?.status} ${error.response?.statusText}`
         );
       }
-      throw error;
+      throw error instanceof Error ? error : new Error(String(error));
     }
   }
 
@@ -269,7 +269,7 @@ export class MaerskDCSAAdapter extends BaseDCSAAdapter {
           `Maersk Point-to-Point API error: ${error.response?.status} ${error.response?.statusText}`
         );
       }
-      throw error;
+      throw error instanceof Error ? error : new Error(String(error));
     }
   }
 
@@ -327,7 +327,7 @@ export class MaerskDCSAAdapter extends BaseDCSAAdapter {
           `Maersk service discovery error: ${error.response?.status} ${error.response?.statusText}`
         );
       }
-      throw error;
+      throw error instanceof Error ? error : new Error(String(error));
     }
   }
 
@@ -367,7 +367,7 @@ export class MaerskDCSAAdapter extends BaseDCSAAdapter {
           `Maersk Port Schedule API error: ${error.response?.status} ${error.response?.statusText}`
         );
       }
-      throw error;
+      throw error instanceof Error ? error : new Error(String(error));
     }
   }
 }

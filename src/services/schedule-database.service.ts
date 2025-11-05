@@ -80,7 +80,7 @@ export class ScheduleDatabaseService {
       .from('v_next_departures')
       .select('*')
       .eq('origin_location_id', originLocationId)
-      .order('etd', { ascending: true, nullsLast: true })
+      .order('etd', { ascending: true, nullsFirst: false })
       .limit(limit);
 
     if (error) {
@@ -153,7 +153,7 @@ export class ScheduleDatabaseService {
       query = query.eq('container_type', params.containerType);
     }
 
-    query = query.order('next_etd', { ascending: true, nullsLast: true });
+    query = query.order('next_etd', { ascending: true, nullsFirst: false });
 
     if (params.limit) {
       query = query.limit(params.limit);
