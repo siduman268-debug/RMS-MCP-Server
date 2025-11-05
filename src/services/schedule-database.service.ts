@@ -53,101 +53,124 @@ export class ScheduleDatabaseService {
 
     try {
       // 1. Upsert carrier (table is in schedules schema, accessed via table name only)
-      const { data: carrierData, error: carrierError } = await this.supabase
-        .from('carrier')
-        .upsert({ name: cleanPayload.carrierName }, { onConflict: 'name', ignoreDuplicates: true })
-        .select('id')
-        .single();
-
-      if (carrierError && !carrierError.message.includes('duplicate') && !carrierError.message.includes('violates unique')) {
-        throw new Error(`Failed to upsert carrier: ${carrierError.message}`);
-      }
-
-      // Get carrier ID (either from insert or existing)
+      // First try to get existing carrier
       let carrierId: string;
-      if (carrierData?.id) {
-        carrierId = carrierData.id;
+      const { data: existingCarrier } = await this.supabase
+        .from('carrier')
+        .select('id')
+        .eq('name', cleanPayload.carrierName)
+        .maybeSingle();
+      
+      if (existingCarrier?.id) {
+        carrierId = existingCarrier.id;
       } else {
-        const { data: existingCarrier, error: fetchError } = await this.supabase
+        // Insert new carrier
+        const { data: newCarrier, error: carrierError } = await this.supabase
           .from('carrier')
+          .insert({ name: cleanPayload.carrierName })
           .select('id')
-          .eq('name', cleanPayload.carrierName)
           .single();
         
-        if (fetchError || !existingCarrier) {
-          throw new Error(`Failed to get carrier ID: ${fetchError?.message || 'Carrier not found'}`);
+        if (carrierError || !newCarrier) {
+          throw new Error(`Failed to insert carrier: ${carrierError?.message || 'Unknown error'}`);
         }
-        carrierId = existingCarrier.id;
+        carrierId = newCarrier.id;
       }
 
       // 2. Upsert vessel
-      const { data: vesselData, error: vesselError } = await this.supabase
+      let vesselId: string;
+      const { data: existingVessel } = await this.supabase
         .from('vessel')
-        .upsert(
-          { imo: cleanPayload.vesselIMO, name: cleanPayload.vesselName },
-          { onConflict: 'imo' }
-        )
         .select('id')
-        .single();
-
-      if (vesselError) {
-        throw new Error(`Failed to upsert vessel: ${vesselError.message}`);
+        .eq('imo', cleanPayload.vesselIMO)
+        .maybeSingle();
+      
+      if (existingVessel?.id) {
+        vesselId = existingVessel.id;
+        // Update vessel name if it changed
+        await this.supabase
+          .from('vessel')
+          .update({ name: cleanPayload.vesselName })
+          .eq('id', vesselId);
+      } else {
+        const { data: newVessel, error: vesselError } = await this.supabase
+          .from('vessel')
+          .insert({ imo: cleanPayload.vesselIMO, name: cleanPayload.vesselName })
+          .select('id')
+          .single();
+        
+        if (vesselError || !newVessel) {
+          throw new Error(`Failed to insert vessel: ${vesselError?.message || 'Unknown error'}`);
+        }
+        vesselId = newVessel.id;
       }
-      const vesselId = vesselData!.id;
 
       // 3. Upsert service
-      const { data: serviceData, error: serviceError } = await this.supabase
+      let serviceId: string;
+      const { data: existingService } = await this.supabase
         .from('service')
-        .upsert(
-          {
+        .select('id')
+        .eq('carrier_id', carrierId)
+        .eq('carrier_service_code', cleanPayload.carrierServiceCode)
+        .maybeSingle();
+      
+      if (existingService?.id) {
+        serviceId = existingService.id;
+        // Update service name if provided
+        if (cleanPayload.serviceName) {
+          await this.supabase
+            .from('service')
+            .update({ carrier_service_name: cleanPayload.serviceName })
+            .eq('id', serviceId);
+        }
+      } else {
+        const { data: newService, error: serviceError } = await this.supabase
+          .from('service')
+          .insert({
             carrier_id: carrierId,
             carrier_service_code: cleanPayload.carrierServiceCode,
             carrier_service_name: cleanPayload.serviceName || null,
-          },
-          { onConflict: 'carrier_id,carrier_service_code' }
-        )
-        .select('id')
-        .single();
-
-      if (serviceError) {
-        throw new Error(`Failed to upsert service: ${serviceError.message}`);
+          })
+          .select('id')
+          .single();
+        
+        if (serviceError || !newService) {
+          throw new Error(`Failed to insert service: ${serviceError?.message || 'Unknown error'}`);
+        }
+        serviceId = newService.id;
       }
-      const serviceId = serviceData!.id;
 
       // 4. Upsert voyage
-      const { data: voyageData, error: voyageError } = await this.supabase
+      let voyageId: string;
+      const { data: existingVoyage } = await this.supabase
         .from('voyage')
-        .upsert(
-          {
+        .select('id')
+        .eq('service_id', serviceId)
+        .eq('carrier_voyage_number', cleanPayload.carrierVoyageNumber)
+        .maybeSingle();
+      
+      if (existingVoyage?.id) {
+        voyageId = existingVoyage.id;
+        // Update vessel_id if it changed
+        await this.supabase
+          .from('voyage')
+          .update({ vessel_id: vesselId })
+          .eq('id', voyageId);
+      } else {
+        const { data: newVoyage, error: voyageError } = await this.supabase
+          .from('voyage')
+          .insert({
             service_id: serviceId,
             carrier_voyage_number: cleanPayload.carrierVoyageNumber,
             vessel_id: vesselId,
-          },
-          { onConflict: 'service_id,carrier_voyage_number' }
-        )
-        .select('id')
-        .single();
-
-      if (voyageError && !voyageError.message.includes('duplicate')) {
-        throw new Error(`Failed to upsert voyage: ${voyageError.message}`);
-      }
-
-      // Get voyage ID (might be existing or new)
-      let voyageId: string;
-      if (voyageData?.id) {
-        voyageId = voyageData.id;
-      } else {
-        const { data: existingVoyage, error: fetchVoyageError } = await this.supabase
-          .from('voyage')
+          })
           .select('id')
-          .eq('service_id', serviceId)
-          .eq('carrier_voyage_number', cleanPayload.carrierVoyageNumber)
           .single();
         
-        if (fetchVoyageError || !existingVoyage) {
-          throw new Error(`Failed to get voyage ID: ${fetchVoyageError?.message || 'Voyage not found'}`);
+        if (voyageError || !newVoyage) {
+          throw new Error(`Failed to insert voyage: ${voyageError?.message || 'Unknown error'}`);
         }
-        voyageId = existingVoyage.id;
+        voyageId = newVoyage.id;
       }
 
       // 5. Process port calls
@@ -197,41 +220,68 @@ export class ScheduleDatabaseService {
     // Upsert facility if SMDG code provided
     let facilityId: string | null = null;
     if (portCall.facilitySMDG) {
-      const { data: facilityData, error: facilityError } = await this.supabase
+      const { data: existingFacility } = await this.supabase
         .from('facility')
-        .upsert(
-          {
+        .select('id')
+        .eq('smdg_code', portCall.facilitySMDG)
+        .eq('location_id', locationId)
+        .maybeSingle();
+      
+      if (existingFacility?.id) {
+        facilityId = existingFacility.id;
+        // Update name if provided
+        if (portCall.facilityName) {
+          await this.supabase
+            .from('facility')
+            .update({ name: portCall.facilityName })
+            .eq('id', facilityId);
+        }
+      } else {
+        const { data: newFacility, error: facilityError } = await this.supabase
+          .from('facility')
+          .insert({
             smdg_code: portCall.facilitySMDG,
             name: portCall.facilityName || null,
             location_id: locationId,
-          },
-          { onConflict: 'smdg_code,location_id' }
-        )
-        .select('id')
-        .single();
-
-      if (!facilityError && facilityData) {
-        facilityId = facilityData.id;
-      } else if (facilityError && !facilityError.message.includes('duplicate')) {
-        // If facility exists, fetch it
-        const { data: existingFacility } = await this.supabase
-          .from('facility')
+          })
           .select('id')
-          .eq('smdg_code', portCall.facilitySMDG)
-          .eq('location_id', locationId)
           .single();
         
-        if (existingFacility) {
-          facilityId = existingFacility.id;
+        if (!facilityError && newFacility) {
+          facilityId = newFacility.id;
         }
       }
     }
 
     // Upsert transport call
-    const { data: transportCallData, error: transportCallError } = await this.supabase
+    let transportCallId: string;
+    const { data: existingTransportCall } = await this.supabase
       .from('transport_call')
-      .upsert(
-        {
+      .select('id')
+      .eq('voyage_id', voyageId)
+      .eq('sequence_no', portCall.sequence)
+      .maybeSingle();
+    
+    if (existingTransportCall?.id) {
+      transportCallId = existingTransportCall.id;
+      // Update transport call data
+      await this.supabase
+        .from('transport_call')
+        .update({
+          location_id: locationId,
+          facility_id: facilityId,
+          carrier_import_voyage_number: portCall.carrierImportVoyageNumber || null,
+          carrier_export_voyage_number: portCall.carrierExportVoyageNumber || null,
+          universal_import_voyage_reference: portCall.universalImportVoyageReference || null,
+          universal_export_voyage_reference: portCall.universalExportVoyageReference || null,
+          status_code: portCall.statusCode || null,
+          transport_call_reference: portCall.transportCallReference || null,
+        })
+        .eq('id', transportCallId);
+    } else {
+      const { data: newTransportCall, error: transportCallError } = await this.supabase
+        .from('transport_call')
+        .insert({
           voyage_id: voyageId,
           sequence_no: portCall.sequence,
           location_id: locationId,
@@ -242,27 +292,14 @@ export class ScheduleDatabaseService {
           universal_export_voyage_reference: portCall.universalExportVoyageReference || null,
           status_code: portCall.statusCode || null,
           transport_call_reference: portCall.transportCallReference || null,
-        },
-        { onConflict: 'voyage_id,sequence_no' }
-      )
-      .select('id')
-      .single();
-
-    let transportCallId: string;
-    if (transportCallData?.id) {
-      transportCallId = transportCallData.id;
-    } else {
-      const { data: existingTransportCall } = await this.supabase
-        .from('transport_call')
+        })
         .select('id')
-        .eq('voyage_id', voyageId)
-        .eq('sequence_no', portCall.sequence)
         .single();
       
-      if (!existingTransportCall) {
-        throw new Error(`Failed to get transport call ID for sequence ${portCall.sequence}`);
+      if (transportCallError || !newTransportCall) {
+        throw new Error(`Failed to insert transport call: ${transportCallError?.message || 'Unknown error'}`);
       }
-      transportCallId = existingTransportCall.id;
+      transportCallId = newTransportCall.id;
     }
 
     // Insert port call times
@@ -279,17 +316,32 @@ export class ScheduleDatabaseService {
       for (const { key, eventType, timeKind } of timeEntries) {
         const timeValue = portCall.times[key as keyof typeof portCall.times];
         if (timeValue) {
-          await this.supabase
+          // Check if time entry exists
+          const { data: existingTime } = await this.supabase
             .from('port_call_time')
-            .upsert(
-              {
+            .select('id')
+            .eq('transport_call_id', transportCallId)
+            .eq('event_type', eventType)
+            .eq('time_kind', timeKind)
+            .maybeSingle();
+          
+          if (existingTime?.id) {
+            // Update existing time
+            await this.supabase
+              .from('port_call_time')
+              .update({ event_datetime: timeValue })
+              .eq('id', existingTime.id);
+          } else {
+            // Insert new time
+            await this.supabase
+              .from('port_call_time')
+              .insert({
                 transport_call_id: transportCallId,
                 event_type: eventType,
                 time_kind: timeKind,
                 event_datetime: timeValue,
-              },
-              { onConflict: 'transport_call_id,event_type,time_kind' }
-            );
+              });
+          }
         }
       }
     }
