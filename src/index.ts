@@ -17,6 +17,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import { addScheduleRoutes } from './routes/schedule-routes.js';
 
 // Load environment variables
 dotenv.config();
@@ -3381,6 +3382,8 @@ async function createHttpServer() {
     }
   });
 
+  // Add schedule routes (DCSA webhook, sync, etc.)
+  addScheduleRoutes(fastify, supabase);
 
   return fastify;
 }
