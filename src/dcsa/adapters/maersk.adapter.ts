@@ -85,7 +85,7 @@ export class MaerskDCSAAdapter extends BaseDCSAAdapter {
       }
 
       return schedules;
-    } catch (error) {
+    } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
         throw new Error(
           `Maersk API error: ${error.response?.status} ${error.response?.statusText}`
@@ -263,7 +263,7 @@ export class MaerskDCSAAdapter extends BaseDCSAAdapter {
       );
 
       return response.data;
-    } catch (error) {
+    } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
         throw new Error(
           `Maersk Point-to-Point API error: ${error.response?.status} ${error.response?.statusText}`
@@ -321,7 +321,7 @@ export class MaerskDCSAAdapter extends BaseDCSAAdapter {
       }
 
       return Array.from(serviceMap.values());
-    } catch (error) {
+    } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
         throw new Error(
           `Maersk service discovery error: ${error.response?.status} ${error.response?.statusText}`
@@ -361,7 +361,7 @@ export class MaerskDCSAAdapter extends BaseDCSAAdapter {
       );
 
       return response.data;
-    } catch (error) {
+    } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
         throw new Error(
           `Maersk Port Schedule API error: ${error.response?.status} ${error.response?.statusText}`
