@@ -85,14 +85,18 @@ export function addScheduleRoutes(
     try {
       const payload = request.body as any;
       
-      if (!payload.schedule) {
+      // Accept both formats: { schedule: {...} } or direct schedule object
+      const schedule = payload.schedule || payload;
+      
+      // Validate it's a schedule object (has required fields)
+      if (!schedule || !schedule.carrierName || !schedule.carrierServiceCode) {
         return reply.code(400).send({
           error: 'Bad Request',
-          message: 'Missing schedule in payload',
+          message: 'Missing or invalid schedule data. Expected schedule object with carrierName and carrierServiceCode.',
         });
       }
 
-      await dcsaClient.processSchedule(payload.schedule);
+      await dcsaClient.processSchedule(schedule);
 
       return reply.code(200).send({
         success: true,
