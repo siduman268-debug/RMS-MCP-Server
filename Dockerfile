@@ -10,8 +10,11 @@ COPY tsconfig.json ./
 # Install dependencies
 RUN npm ci
 
-# Verify axios is installed (for debugging)
-RUN npm list axios || echo "WARNING: axios not found"
+# Explicitly install axios if missing (workaround)
+RUN npm list axios || npm install axios
+
+# Verify axios is installed
+RUN npm list axios
 
 # Copy source code
 COPY src/ ./src/
