@@ -52,9 +52,9 @@ export class ScheduleDatabaseService {
     }
 
     try {
-      // 1. Upsert carrier
+      // 1. Upsert carrier (table is in schedules schema, accessed via table name only)
       const { data: carrierData, error: carrierError } = await this.supabase
-        .from('schedules.carrier')
+        .from('carrier')
         .upsert({ name: cleanPayload.carrierName }, { onConflict: 'name', ignoreDuplicates: true })
         .select('id')
         .single();
@@ -69,7 +69,7 @@ export class ScheduleDatabaseService {
         carrierId = carrierData.id;
       } else {
         const { data: existingCarrier, error: fetchError } = await this.supabase
-          .from('schedules.carrier')
+          .from('carrier')
           .select('id')
           .eq('name', cleanPayload.carrierName)
           .single();
@@ -82,7 +82,7 @@ export class ScheduleDatabaseService {
 
       // 2. Upsert vessel
       const { data: vesselData, error: vesselError } = await this.supabase
-        .from('schedules.vessel')
+        .from('vessel')
         .upsert(
           { imo: cleanPayload.vesselIMO, name: cleanPayload.vesselName },
           { onConflict: 'imo' }
@@ -97,7 +97,7 @@ export class ScheduleDatabaseService {
 
       // 3. Upsert service
       const { data: serviceData, error: serviceError } = await this.supabase
-        .from('schedules.service')
+        .from('service')
         .upsert(
           {
             carrier_id: carrierId,
@@ -116,7 +116,7 @@ export class ScheduleDatabaseService {
 
       // 4. Upsert voyage
       const { data: voyageData, error: voyageError } = await this.supabase
-        .from('schedules.voyage')
+        .from('voyage')
         .upsert(
           {
             service_id: serviceId,
@@ -138,7 +138,7 @@ export class ScheduleDatabaseService {
         voyageId = voyageData.id;
       } else {
         const { data: existingVoyage, error: fetchVoyageError } = await this.supabase
-          .from('schedules.voyage')
+          .from('voyage')
           .select('id')
           .eq('service_id', serviceId)
           .eq('carrier_voyage_number', cleanPayload.carrierVoyageNumber)
@@ -159,7 +159,7 @@ export class ScheduleDatabaseService {
 
       // 6. Insert audit record
       const { error: auditError } = await this.supabase
-        .from('schedules.schedule_source_audit')
+        .from('schedule_source_audit')
         .insert({
           carrier_id: carrierId,
           source_system: cleanPayload.source || 'UNKNOWN',
@@ -198,7 +198,7 @@ export class ScheduleDatabaseService {
     let facilityId: string | null = null;
     if (portCall.facilitySMDG) {
       const { data: facilityData, error: facilityError } = await this.supabase
-        .from('schedules.facility')
+        .from('facility')
         .upsert(
           {
             smdg_code: portCall.facilitySMDG,
@@ -215,7 +215,7 @@ export class ScheduleDatabaseService {
       } else if (facilityError && !facilityError.message.includes('duplicate')) {
         // If facility exists, fetch it
         const { data: existingFacility } = await this.supabase
-          .from('schedules.facility')
+          .from('facility')
           .select('id')
           .eq('smdg_code', portCall.facilitySMDG)
           .eq('location_id', locationId)
@@ -229,7 +229,7 @@ export class ScheduleDatabaseService {
 
     // Upsert transport call
     const { data: transportCallData, error: transportCallError } = await this.supabase
-      .from('schedules.transport_call')
+      .from('transport_call')
       .upsert(
         {
           voyage_id: voyageId,
@@ -253,7 +253,7 @@ export class ScheduleDatabaseService {
       transportCallId = transportCallData.id;
     } else {
       const { data: existingTransportCall } = await this.supabase
-        .from('schedules.transport_call')
+        .from('transport_call')
         .select('id')
         .eq('voyage_id', voyageId)
         .eq('sequence_no', portCall.sequence)
@@ -280,7 +280,7 @@ export class ScheduleDatabaseService {
         const timeValue = portCall.times[key as keyof typeof portCall.times];
         if (timeValue) {
           await this.supabase
-            .from('schedules.port_call_time')
+            .from('port_call_time')
             .upsert(
               {
                 transport_call_id: transportCallId,
