@@ -1,0 +1,34 @@
+/* Lightning Web Component Styles - Seamless Integration */
+:host {
+    display: block;
+    width: 100%;
+    height: 100vh;
+    min-height: 800px;
+    margin: 0;
+    padding: 0;
+}
+
+.iframe-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.rms-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+    display: block;
+    margin: 0;
+    padding: 0;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    :host {
+        min-height: 600px;
+    }
+}

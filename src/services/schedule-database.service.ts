@@ -51,21 +51,38 @@ export class ScheduleDatabaseService {
       throw new Error('Missing required field: carrierVoyageNumber');
     }
 
-    const payloadString = JSON.stringify(cleanPayload);
-    
-    // Try the v2 function first (fresh schema)
+    // Try passing object directly first (Supabase handles JSONB conversion)
+    // If that fails, fall back to stringified JSON
     let { error } = await this.supabase.rpc('upsert_dcsa_schedule_v2', {
-      payload: payloadString,
+      payload: cleanPayload,
     });
 
-    // If v2 doesn't exist or fails, try the original function
+    // If v2 doesn't exist or fails with JSON error, try stringified version
     if (error && (error.message.includes('Could not find') || error.message.includes('upsert_dcsa_schedule_v2'))) {
+      // Try original function
       const { error: error2 } = await this.supabase.rpc('upsert_dcsa_schedule', {
-        payload: payloadString,
+        payload: cleanPayload,
       });
       
       if (error2) {
         throw new Error(`Failed to upsert DCSA schedule: ${error2.message}`);
+      }
+    } else if (error && error.message.includes('invalid input syntax for type json')) {
+      // If JSON syntax error, try stringified version
+      let payloadString: string;
+      try {
+        payloadString = JSON.stringify(cleanPayload);
+      } catch (jsonError) {
+        console.error('Invalid JSON payload:', cleanPayload);
+        throw new Error(`Failed to serialize schedule payload: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`);
+      }
+      
+      const { error: error3 } = await this.supabase.rpc('upsert_dcsa_schedule_v2', {
+        payload: payloadString,
+      });
+      
+      if (error3) {
+        throw new Error(`Failed to upsert DCSA schedule: ${error3.message}`);
       }
     } else if (error) {
       throw new Error(`Failed to upsert DCSA schedule: ${error.message}`);

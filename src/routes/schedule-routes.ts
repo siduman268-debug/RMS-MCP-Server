@@ -90,12 +90,14 @@ export function addScheduleRoutes(
       
       // Validate it's a schedule object (has required fields)
       if (!schedule || !schedule.carrierName || !schedule.carrierServiceCode) {
+        console.error('Invalid schedule payload:', JSON.stringify(schedule, null, 2));
         return reply.code(400).send({
           error: 'Bad Request',
           message: 'Missing or invalid schedule data. Expected schedule object with carrierName and carrierServiceCode.',
         });
       }
 
+      console.log('Processing schedule:', schedule.carrierName, schedule.carrierServiceCode, schedule.carrierVoyageNumber);
       await dcsaClient.processSchedule(schedule);
 
       return reply.code(200).send({

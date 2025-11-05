@@ -104,3 +104,7 @@ docker-compose.yml
 !sfdx-project.json
 !tsconfig.json
 
+
+**/jsconfig.json
+
+**/.eslintrc.json
