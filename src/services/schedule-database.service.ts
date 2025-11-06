@@ -14,7 +14,7 @@ export class ScheduleDatabaseService {
   constructor(private supabase: SupabaseClient) {}
 
   /**
-   * Upsert DCSA schedule using direct table inserts (bypasses RPC function)
+   * Upsert DCSA schedule using direct table inserts (tables should be in public schema)
    */
   async upsertDcsaSchedule(payload: UpsertDcsaSchedulePayload): Promise<void> {
     // Normalize payload: remove undefined, convert dates, ensure clean structure
@@ -52,8 +52,8 @@ export class ScheduleDatabaseService {
     }
 
     try {
-      // 1. Upsert carrier (table is in schedules schema, accessed via table name only)
-      // First try to get existing carrier
+
+      // 1. Upsert carrier
       let carrierId: string;
       const { data: existingCarrier } = await this.supabase
         .from('carrier')
@@ -71,10 +71,27 @@ export class ScheduleDatabaseService {
           .select('id')
           .single();
         
-        if (carrierError || !newCarrier) {
-          throw new Error(`Failed to insert carrier: ${carrierError?.message || 'Unknown error'}`);
+        if (carrierError) {
+          // If duplicate key error, fetch the existing carrier
+          if (carrierError.message.includes('duplicate key') || carrierError.message.includes('violates unique constraint')) {
+            const { data: existingCarrier2 } = await this.supabase
+              .from('carrier')
+              .select('id')
+              .eq('name', cleanPayload.carrierName)
+              .single();
+            
+            if (!existingCarrier2?.id) {
+              throw new Error(`Carrier exists but could not be retrieved: ${carrierError.message}`);
+            }
+            carrierId = existingCarrier2.id;
+          } else {
+            throw new Error(`Failed to insert carrier: ${carrierError.message}`);
+          }
+        } else if (!newCarrier) {
+          throw new Error('Failed to insert carrier: Unknown error');
+        } else {
+          carrierId = newCarrier.id;
         }
-        carrierId = newCarrier.id;
       }
 
       // 2. Upsert vessel
@@ -99,10 +116,33 @@ export class ScheduleDatabaseService {
           .select('id')
           .single();
         
-        if (vesselError || !newVessel) {
-          throw new Error(`Failed to insert vessel: ${vesselError?.message || 'Unknown error'}`);
+        if (vesselError) {
+          // If duplicate key error, fetch the existing vessel
+          if (vesselError.message.includes('duplicate key') || vesselError.message.includes('violates unique constraint')) {
+            const { data: existingVessel2 } = await this.supabase
+              .from('vessel')
+              .select('id')
+              .eq('imo', cleanPayload.vesselIMO)
+              .single();
+            
+            if (!existingVessel2?.id) {
+              throw new Error(`Vessel exists but could not be retrieved: ${vesselError.message}`);
+            }
+            vesselId = existingVessel2.id;
+            
+            // Update vessel name
+            await this.supabase
+              .from('vessel')
+              .update({ name: cleanPayload.vesselName })
+              .eq('id', vesselId);
+          } else {
+            throw new Error(`Failed to insert vessel: ${vesselError.message}`);
+          }
+        } else if (!newVessel) {
+          throw new Error('Failed to insert vessel: Unknown error');
+        } else {
+          vesselId = newVessel.id;
         }
-        vesselId = newVessel.id;
       }
 
       // 3. Upsert service
@@ -134,10 +174,36 @@ export class ScheduleDatabaseService {
           .select('id')
           .single();
         
-        if (serviceError || !newService) {
-          throw new Error(`Failed to insert service: ${serviceError?.message || 'Unknown error'}`);
+        if (serviceError) {
+          // If duplicate key error, fetch the existing service
+          if (serviceError.message.includes('duplicate key') || serviceError.message.includes('violates unique constraint')) {
+            const { data: existingService2 } = await this.supabase
+              .from('service')
+              .select('id')
+              .eq('carrier_id', carrierId)
+              .eq('carrier_service_code', cleanPayload.carrierServiceCode)
+              .single();
+            
+            if (!existingService2?.id) {
+              throw new Error(`Service exists but could not be retrieved: ${serviceError.message}`);
+            }
+            serviceId = existingService2.id;
+            
+            // Update service name if provided
+            if (cleanPayload.serviceName) {
+              await this.supabase
+                .from('service')
+                .update({ carrier_service_name: cleanPayload.serviceName })
+                .eq('id', serviceId);
+            }
+          } else {
+            throw new Error(`Failed to insert service: ${serviceError.message}`);
+          }
+        } else if (!newService) {
+          throw new Error('Failed to insert service: Unknown error');
+        } else {
+          serviceId = newService.id;
         }
-        serviceId = newService.id;
       }
 
       // 4. Upsert voyage
@@ -167,10 +233,34 @@ export class ScheduleDatabaseService {
           .select('id')
           .single();
         
-        if (voyageError || !newVoyage) {
-          throw new Error(`Failed to insert voyage: ${voyageError?.message || 'Unknown error'}`);
+        if (voyageError) {
+          // If duplicate key error, fetch the existing voyage
+          if (voyageError.message.includes('duplicate key') || voyageError.message.includes('violates unique constraint')) {
+            const { data: existingVoyage2 } = await this.supabase
+              .from('voyage')
+              .select('id')
+              .eq('service_id', serviceId)
+              .eq('carrier_voyage_number', cleanPayload.carrierVoyageNumber)
+              .single();
+            
+            if (!existingVoyage2?.id) {
+              throw new Error(`Voyage exists but could not be retrieved: ${voyageError.message}`);
+            }
+            voyageId = existingVoyage2.id;
+            
+            // Update vessel_id if it changed
+            await this.supabase
+              .from('voyage')
+              .update({ vessel_id: vesselId })
+              .eq('id', voyageId);
+          } else {
+            throw new Error(`Failed to insert voyage: ${voyageError.message}`);
+          }
+        } else if (!newVoyage) {
+          throw new Error('Failed to insert voyage: Unknown error');
+        } else {
+          voyageId = newVoyage.id;
         }
-        voyageId = newVoyage.id;
       }
 
       // 5. Process port calls
