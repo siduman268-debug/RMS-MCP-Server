@@ -521,17 +521,20 @@ export class ScheduleDatabaseService {
               .eq('id', existingTime.id);
           } else {
             // Insert new time
+            // Note: time_kind is an enum (event_time_kind), PostgreSQL should handle it automatically
+            // But we'll cast it explicitly to be safe
             const { error: insertTimeError } = await this.supabase
               .from('port_call_time')
               .insert({
                 transport_call_id: transportCallId,
-                event_type: eventType,
-                time_kind: timeKind,
+                event_type: eventType, // 'ARRIVAL' or 'DEPARTURE' (text with CHECK constraint)
+                time_kind: timeKind as 'PLANNED' | 'ESTIMATED' | 'ACTUAL', // enum: event_time_kind
                 event_datetime: timeValue,
               });
             
             if (insertTimeError) {
               console.error(`[Port Call ${portCall.sequence}] Failed to insert ${timeKind} ${eventType}:`, insertTimeError.message);
+              console.error(`  Details:`, JSON.stringify(insertTimeError, null, 2));
             } else {
               timesInserted++;
             }
