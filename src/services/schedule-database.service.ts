@@ -52,13 +52,15 @@ export class ScheduleDatabaseService {
     }
 
     try {
-
-      // 1. Upsert carrier
+      // 1. Upsert carrier - normalize name to uppercase for consistency
+      const normalizedCarrierName = cleanPayload.carrierName.toUpperCase().trim();
       let carrierId: string;
+      
+      // First try to get existing carrier (case-insensitive lookup)
       const { data: existingCarrier } = await this.supabase
         .from('carrier')
-        .select('id')
-        .eq('name', cleanPayload.carrierName)
+        .select('id, name')
+        .ilike('name', normalizedCarrierName)
         .maybeSingle();
       
       if (existingCarrier?.id) {
