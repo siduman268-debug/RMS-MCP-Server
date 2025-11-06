@@ -63,27 +63,40 @@ export class ScheduleDatabaseService {
       
       if (existingCarrier?.id) {
         carrierId = existingCarrier.id;
+        // Update name to normalized version if it's different
+        if (existingCarrier.name !== normalizedCarrierName) {
+          await this.supabase
+            .from('carrier')
+            .update({ name: normalizedCarrierName })
+            .eq('id', carrierId);
+        }
       } else {
-        // Insert new carrier
+        // Insert new carrier with normalized name
         const { data: newCarrier, error: carrierError } = await this.supabase
           .from('carrier')
-          .insert({ name: cleanPayload.carrierName })
+          .insert({ name: normalizedCarrierName })
           .select('id')
           .single();
         
         if (carrierError) {
-          // If duplicate key error, fetch the existing carrier
+          // If duplicate key error, fetch the existing carrier (case-insensitive)
           if (carrierError.message.includes('duplicate key') || carrierError.message.includes('violates unique constraint')) {
             const { data: existingCarrier2 } = await this.supabase
               .from('carrier')
               .select('id')
-              .eq('name', cleanPayload.carrierName)
+              .ilike('name', normalizedCarrierName)
               .single();
             
             if (!existingCarrier2?.id) {
               throw new Error(`Carrier exists but could not be retrieved: ${carrierError.message}`);
             }
             carrierId = existingCarrier2.id;
+            
+            // Update name to normalized version
+            await this.supabase
+              .from('carrier')
+              .update({ name: normalizedCarrierName })
+              .eq('id', carrierId);
           } else {
             throw new Error(`Failed to insert carrier: ${carrierError.message}`);
           }
