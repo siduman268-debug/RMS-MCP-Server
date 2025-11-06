@@ -490,6 +490,7 @@ export class ScheduleDatabaseService {
 
     // Insert port call times
     if (portCall.times) {
+      console.log(`[Port Call ${portCall.sequence}] Inserting times for ${portCall.unlocode}:`, Object.keys(portCall.times).join(', '));
       const timeEntries = [
         { key: 'plannedArrival', eventType: 'ARRIVAL', timeKind: 'PLANNED' },
         { key: 'plannedDeparture', eventType: 'DEPARTURE', timeKind: 'PLANNED' },
@@ -499,6 +500,7 @@ export class ScheduleDatabaseService {
         { key: 'actualDeparture', eventType: 'DEPARTURE', timeKind: 'ACTUAL' },
       ];
 
+      let timesInserted = 0;
       for (const { key, eventType, timeKind } of timeEntries) {
         const timeValue = portCall.times[key as keyof typeof portCall.times];
         if (timeValue) {
@@ -519,7 +521,7 @@ export class ScheduleDatabaseService {
               .eq('id', existingTime.id);
           } else {
             // Insert new time
-            await this.supabase
+            const { error: insertTimeError } = await this.supabase
               .from('port_call_time')
               .insert({
                 transport_call_id: transportCallId,
@@ -527,9 +529,18 @@ export class ScheduleDatabaseService {
                 time_kind: timeKind,
                 event_datetime: timeValue,
               });
+            
+            if (insertTimeError) {
+              console.error(`[Port Call ${portCall.sequence}] Failed to insert ${timeKind} ${eventType}:`, insertTimeError.message);
+            } else {
+              timesInserted++;
+            }
           }
         }
       }
+      console.log(`[Port Call ${portCall.sequence}] Inserted ${timesInserted} time record(s) for ${portCall.unlocode}`);
+    } else {
+      console.log(`[Port Call ${portCall.sequence}] No times provided for ${portCall.unlocode}`);
     }
   }
 

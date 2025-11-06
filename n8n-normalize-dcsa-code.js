@@ -77,23 +77,61 @@ for (let i = 0; i < allItems.length; i++) {
         const times = {};
         
         // Extract times from timestamps
-        for (const ts of (tc.timestamps || [])) {
-          const isArrival = ts.eventTypeCode === 'ARRI';
-          const isDeparture = ts.eventTypeCode === 'DEPA';
-          
-          if (isArrival && ts.eventClassifierCode === 'PLN') {
-            times.plannedArrival = ts.eventDateTime;
-          } else if (isArrival && ts.eventClassifierCode === 'EST') {
-            times.estimatedArrival = ts.eventDateTime;
-          } else if (isArrival && ts.eventClassifierCode === 'ACT') {
-            times.actualArrival = ts.eventDateTime;
-          } else if (isDeparture && ts.eventClassifierCode === 'PLN') {
-            times.plannedDeparture = ts.eventDateTime;
-          } else if (isDeparture && ts.eventClassifierCode === 'EST') {
-            times.estimatedDeparture = ts.eventDateTime;
-          } else if (isDeparture && ts.eventClassifierCode === 'ACT') {
-            times.actualDeparture = ts.eventDateTime;
+        const timestamps = tc.timestamps || [];
+        
+        if (timestamps.length === 0) {
+          // Log missing timestamps for first port call to help debug
+          if (index === 0) {
+            console.log(`  ⚠️  No timestamps found for transport call ${index + 1} (${tc.location?.UNLocationCode || 'UNKNOWN'})`);
+            console.log(`     Available keys: ${Object.keys(tc).join(', ')}`);
+            
+            // Check for alternative timestamp formats
+            if (tc.arrival) {
+              console.log(`     Found 'arrival' field:`, tc.arrival);
+              if (tc.arrival.planned) times.plannedArrival = tc.arrival.planned;
+              if (tc.arrival.estimated) times.estimatedArrival = tc.arrival.estimated;
+              if (tc.arrival.actual) times.actualArrival = tc.arrival.actual;
+            }
+            if (tc.departure) {
+              console.log(`     Found 'departure' field:`, tc.departure);
+              if (tc.departure.planned) times.plannedDeparture = tc.departure.planned;
+              if (tc.departure.estimated) times.estimatedDeparture = tc.departure.estimated;
+              if (tc.departure.actual) times.actualDeparture = tc.departure.actual;
+            }
+            if (tc.plannedArrival) times.plannedArrival = tc.plannedArrival;
+            if (tc.plannedDeparture) times.plannedDeparture = tc.plannedDeparture;
+            if (tc.estimatedArrival) times.estimatedArrival = tc.estimatedArrival;
+            if (tc.estimatedDeparture) times.estimatedDeparture = tc.estimatedDeparture;
+            if (tc.actualArrival) times.actualArrival = tc.actualArrival;
+            if (tc.actualDeparture) times.actualDeparture = tc.actualDeparture;
           }
+        } else {
+          // Process timestamps array (DCSA format)
+          for (const ts of timestamps) {
+            const isArrival = ts.eventTypeCode === 'ARRI';
+            const isDeparture = ts.eventTypeCode === 'DEPA';
+            
+            if (isArrival && ts.eventClassifierCode === 'PLN') {
+              times.plannedArrival = ts.eventDateTime;
+            } else if (isArrival && ts.eventClassifierCode === 'EST') {
+              times.estimatedArrival = ts.eventDateTime;
+            } else if (isArrival && ts.eventClassifierCode === 'ACT') {
+              times.actualArrival = ts.eventDateTime;
+            } else if (isDeparture && ts.eventClassifierCode === 'PLN') {
+              times.plannedDeparture = ts.eventDateTime;
+            } else if (isDeparture && ts.eventClassifierCode === 'EST') {
+              times.estimatedDeparture = ts.eventDateTime;
+            } else if (isDeparture && ts.eventClassifierCode === 'ACT') {
+              times.actualDeparture = ts.eventDateTime;
+            }
+          }
+        }
+        
+        const hasTimes = Object.keys(times).length > 0;
+        if (hasTimes && index === 0) {
+          console.log(`  ✅ Times extracted for first port call: ${Object.keys(times).join(', ')}`);
+        } else if (!hasTimes && index === 0) {
+          console.log(`  ⚠️  No times extracted for first port call`);
         }
         
         return {
@@ -104,7 +142,7 @@ for (let i = 0; i < allItems.length; i++) {
           carrierImportVoyageNumber: tc.carrierImportVoyageNumber || null,
           carrierExportVoyageNumber: tc.carrierExportVoyageNumber || voyageNumber,
           transportCallReference: tc.transportCallReference || null,
-          times: Object.keys(times).length > 0 ? times : undefined
+          times: hasTimes ? times : undefined
         };
       });
       
