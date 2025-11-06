@@ -389,6 +389,9 @@ export class ScheduleDatabaseService {
    * Process a single port call
    */
   private async processPortCall(portCall: PortCallPayload, voyageId: string): Promise<void> {
+    // Log at the start to see if method is called and what data it receives
+    console.warn(`[processPortCall] Processing port call: sequence=${portCall.sequence}, unlocode=${portCall.unlocode}, hasTimes=${!!portCall.times}, timesKeys=${portCall.times ? Object.keys(portCall.times).join(',') : 'none'}`);
+    
     // Get location ID from unlocode
     const { data: locationData, error: locationError } = await this.supabase
       .from('locations')
