@@ -485,10 +485,46 @@ export class ScheduleDatabaseService {
         .select('id')
         .single();
       
-      if (transportCallError || !newTransportCall) {
-        throw new Error(`Failed to insert transport call: ${transportCallError?.message || 'Unknown error'}`);
+      if (transportCallError) {
+        // Handle duplicate key error - another process might have inserted it
+        if (transportCallError.message.includes('duplicate key') || 
+            transportCallError.message.includes('violates unique constraint') ||
+            transportCallError.message.includes('transport_call_voyage_id_sequence_no_key')) {
+          // Try to fetch the existing transport call
+          const { data: existingTransportCall2 } = await this.supabase
+            .from('transport_call')
+            .select('id')
+            .eq('voyage_id', voyageId)
+            .eq('sequence_no', portCall.sequence)
+            .maybeSingle();
+          
+          if (existingTransportCall2?.id) {
+            transportCallId = existingTransportCall2.id;
+            // Update the existing transport call with latest data
+            await this.supabase
+              .from('transport_call')
+              .update({
+                location_id: locationId,
+                facility_id: facilityId,
+                carrier_import_voyage_number: portCall.carrierImportVoyageNumber || null,
+                carrier_export_voyage_number: portCall.carrierExportVoyageNumber || null,
+                universal_import_voyage_reference: portCall.universalImportVoyageReference || null,
+                universal_export_voyage_reference: portCall.universalExportVoyageReference || null,
+                status_code: portCall.statusCode || null,
+                transport_call_reference: portCall.transportCallReference || null,
+              })
+              .eq('id', transportCallId);
+          } else {
+            throw new Error(`Failed to insert transport call: duplicate key but could not retrieve existing record: ${transportCallError.message}`);
+          }
+        } else {
+          throw new Error(`Failed to insert transport call: ${transportCallError.message}`);
+        }
+      } else if (!newTransportCall) {
+        throw new Error('Failed to insert transport call: Unknown error');
+      } else {
+        transportCallId = newTransportCall.id;
       }
-      transportCallId = newTransportCall.id;
     }
 
     // Insert port call times
