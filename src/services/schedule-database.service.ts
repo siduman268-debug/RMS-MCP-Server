@@ -489,8 +489,9 @@ export class ScheduleDatabaseService {
     }
 
     // Insert port call times
+    console.warn(`[Port Call ${portCall.sequence}] Processing ${portCall.unlocode} - has times: ${!!portCall.times}`);
     if (portCall.times) {
-      console.log(`[Port Call ${portCall.sequence}] Inserting times for ${portCall.unlocode}:`, Object.keys(portCall.times).join(', '));
+      console.warn(`[Port Call ${portCall.sequence}] Inserting times for ${portCall.unlocode}:`, Object.keys(portCall.times).join(', '));
       const timeEntries = [
         { key: 'plannedArrival', eventType: 'ARRIVAL', timeKind: 'PLANNED' },
         { key: 'plannedDeparture', eventType: 'DEPARTURE', timeKind: 'PLANNED' },
@@ -535,15 +536,17 @@ export class ScheduleDatabaseService {
             if (insertTimeError) {
               console.error(`[Port Call ${portCall.sequence}] Failed to insert ${timeKind} ${eventType}:`, insertTimeError.message);
               console.error(`  Details:`, JSON.stringify(insertTimeError, null, 2));
+              console.error(`  Transport Call ID:`, transportCallId);
+              console.error(`  Time Value:`, timeValue);
             } else {
               timesInserted++;
             }
           }
         }
       }
-      console.log(`[Port Call ${portCall.sequence}] Inserted ${timesInserted} time record(s) for ${portCall.unlocode}`);
+      console.warn(`[Port Call ${portCall.sequence}] Inserted ${timesInserted} time record(s) for ${portCall.unlocode}`);
     } else {
-      console.log(`[Port Call ${portCall.sequence}] No times provided for ${portCall.unlocode}`);
+      console.warn(`[Port Call ${portCall.sequence}] No times provided for ${portCall.unlocode}`);
     }
   }
 
