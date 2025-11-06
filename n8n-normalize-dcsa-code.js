@@ -1,125 +1,143 @@
 // Transform Maersk vessel schedules to DCSA format
 // This normalizes the payload for our API
 // Input: Each item from "Fetch Vessel Schedules" contains the Maersk API response
+// FIXED: Process ALL items, not just the first one
 
-const inputData = $input.item.json;
+const allItems = $input.all();
 const normalizedSchedules = [];
 
-// The Maersk vessel schedules API returns an array of schedule responses
-// Each response contains: carrierServiceCode, carrierServiceName, vesselSchedules[]
-let vesselSchedulesData = inputData;
+console.log(`Processing ${allItems.length} service responses from Fetch Vessel Schedules...`);
 
-// Handle case where response is wrapped in an array
-if (Array.isArray(inputData) && inputData.length > 0) {
-  vesselSchedulesData = inputData[0];
-}
+// Process each item from Fetch Vessel Schedules (one per service code)
+for (let i = 0; i < allItems.length; i++) {
+  const inputData = allItems[i].json;
+  console.log(`[${i + 1}/${allItems.length}] Processing service: ${inputData.carrierServiceCode || 'UNKNOWN'}`);
 
-// Ensure we have vesselSchedules array
-if (!vesselSchedulesData.vesselSchedules || !Array.isArray(vesselSchedulesData.vesselSchedules)) {
-  // If structure is different, try to extract from response
-  if (Array.isArray(inputData)) {
-    vesselSchedulesData = inputData;
-  } else {
-    console.log('Unexpected response structure:', JSON.stringify(inputData, null, 2));
-    return [{ json: { error: 'Unexpected response structure', received: Object.keys(inputData) } }];
+  // The Maersk vessel schedules API returns an array of schedule responses
+  // Each response contains: carrierServiceCode, carrierServiceName, vesselSchedules[]
+  let vesselSchedulesData = inputData;
+
+  // Handle case where response is wrapped in an array
+  if (Array.isArray(inputData) && inputData.length > 0) {
+    vesselSchedulesData = inputData[0];
   }
-}
 
-const serviceCode = vesselSchedulesData.carrierServiceCode || inputData.carrierServiceCode || 'UNKNOWN';
-const serviceName = vesselSchedulesData.carrierServiceName || inputData.carrierServiceName || 'Unknown Service';
-
-// Process vessel schedules
-const schedulesArray = Array.isArray(vesselSchedulesData.vesselSchedules) 
-  ? vesselSchedulesData.vesselSchedules 
-  : (Array.isArray(vesselSchedulesData) ? vesselSchedulesData : []);
-
-for (const vesselSchedule of schedulesArray) {
-  const vessel = vesselSchedule.vessel || {};
-  const transportCalls = vesselSchedule.transportCalls || [];
-  
-  // Group by voyage number (export voyage)
-  const voyageGroups = new Map();
-  
-  for (const tc of transportCalls) {
-    const voyageKey = tc.carrierExportVoyageNumber || 'UNKNOWN';
-    if (!voyageGroups.has(voyageKey)) {
-      voyageGroups.set(voyageKey, []);
+  // Ensure we have vesselSchedules array
+  if (!vesselSchedulesData.vesselSchedules || !Array.isArray(vesselSchedulesData.vesselSchedules)) {
+    // If structure is different, try to extract from response
+    if (Array.isArray(inputData)) {
+      vesselSchedulesData = inputData;
+    } else {
+      console.log(`  ⚠️ Unexpected response structure for item ${i + 1}:`, Object.keys(inputData));
+      continue; // Skip this item and continue with next
     }
-    voyageGroups.get(voyageKey).push(tc);
   }
-  
-  // Create a DCSA schedule for each voyage
-  for (const [voyageNumber, calls] of voyageGroups.entries()) {
-    // Sort transport calls by time
-    const sortedCalls = [...calls].sort((a, b) => {
-      const aTime = a.timestamps?.[0]?.eventDateTime || '';
-      const bTime = b.timestamps?.[0]?.eventDateTime || '';
-      return aTime.localeCompare(bTime);
-    });
+
+  const serviceCode = vesselSchedulesData.carrierServiceCode || inputData.carrierServiceCode || 'UNKNOWN';
+  const serviceName = vesselSchedulesData.carrierServiceName || inputData.carrierServiceName || 'Unknown Service';
+
+  // Process vessel schedules
+  const schedulesArray = Array.isArray(vesselSchedulesData.vesselSchedules) 
+    ? vesselSchedulesData.vesselSchedules 
+    : (Array.isArray(vesselSchedulesData) ? vesselSchedulesData : []);
+
+  if (schedulesArray.length === 0) {
+    console.log(`  ⚠️ No vessel schedules found for ${serviceCode}`);
+    continue; // Skip this service and continue with next
+  }
+
+  console.log(`  ✓ Found ${schedulesArray.length} vessel schedule(s) for ${serviceCode}`);
+
+  for (const vesselSchedule of schedulesArray) {
+    const vessel = vesselSchedule.vessel || {};
+    const transportCalls = vesselSchedule.transportCalls || [];
     
-    // Transform to DCSA port calls
-    const portCalls = sortedCalls.map((tc, index) => {
-      const times = {};
-      
-      // Extract times from timestamps
-      for (const ts of (tc.timestamps || [])) {
-        const isArrival = ts.eventTypeCode === 'ARRI';
-        const isDeparture = ts.eventTypeCode === 'DEPA';
-        
-        if (isArrival && ts.eventClassifierCode === 'PLN') {
-          times.plannedArrival = ts.eventDateTime;
-        } else if (isArrival && ts.eventClassifierCode === 'EST') {
-          times.estimatedArrival = ts.eventDateTime;
-        } else if (isArrival && ts.eventClassifierCode === 'ACT') {
-          times.actualArrival = ts.eventDateTime;
-        } else if (isDeparture && ts.eventClassifierCode === 'PLN') {
-          times.plannedDeparture = ts.eventDateTime;
-        } else if (isDeparture && ts.eventClassifierCode === 'EST') {
-          times.estimatedDeparture = ts.eventDateTime;
-        } else if (isDeparture && ts.eventClassifierCode === 'ACT') {
-          times.actualDeparture = ts.eventDateTime;
-        }
+    // Group by voyage number (export voyage)
+    const voyageGroups = new Map();
+    
+    for (const tc of transportCalls) {
+      const voyageKey = tc.carrierExportVoyageNumber || 'UNKNOWN';
+      if (!voyageGroups.has(voyageKey)) {
+        voyageGroups.set(voyageKey, []);
       }
-      
-      return {
-        unlocode: tc.location?.UNLocationCode || '',
-        sequence: index + 1,
-        facilitySMDG: tc.location?.facilitySMDGCode || null,
-        facilityName: tc.location?.locationName || '',
-        carrierImportVoyageNumber: tc.carrierImportVoyageNumber || null,
-        carrierExportVoyageNumber: tc.carrierExportVoyageNumber || voyageNumber,
-        transportCallReference: tc.transportCallReference || null,
-        times: Object.keys(times).length > 0 ? times : undefined
-      };
-    });
+      voyageGroups.get(voyageKey).push(tc);
+    }
     
-    // Create DCSA schedule message
-    normalizedSchedules.push({
-      carrierName: 'MAERSK',
-      carrierServiceCode: serviceCode,
-      serviceName: serviceName,
-      carrierVoyageNumber: voyageNumber,
-      vesselIMO: vessel.vesselIMONumber || null,
-      vesselName: vessel.name || 'Unknown',
-      source: 'MAERSK',
-      portCalls: portCalls
-    });
+    // Create a DCSA schedule for each voyage
+    for (const [voyageNumber, calls] of voyageGroups.entries()) {
+      // Sort transport calls by time
+      const sortedCalls = [...calls].sort((a, b) => {
+        const aTime = a.timestamps?.[0]?.eventDateTime || '';
+        const bTime = b.timestamps?.[0]?.eventDateTime || '';
+        return aTime.localeCompare(bTime);
+      });
+      
+      // Transform to DCSA port calls
+      const portCalls = sortedCalls.map((tc, index) => {
+        const times = {};
+        
+        // Extract times from timestamps
+        for (const ts of (tc.timestamps || [])) {
+          const isArrival = ts.eventTypeCode === 'ARRI';
+          const isDeparture = ts.eventTypeCode === 'DEPA';
+          
+          if (isArrival && ts.eventClassifierCode === 'PLN') {
+            times.plannedArrival = ts.eventDateTime;
+          } else if (isArrival && ts.eventClassifierCode === 'EST') {
+            times.estimatedArrival = ts.eventDateTime;
+          } else if (isArrival && ts.eventClassifierCode === 'ACT') {
+            times.actualArrival = ts.eventDateTime;
+          } else if (isDeparture && ts.eventClassifierCode === 'PLN') {
+            times.plannedDeparture = ts.eventDateTime;
+          } else if (isDeparture && ts.eventClassifierCode === 'EST') {
+            times.estimatedDeparture = ts.eventDateTime;
+          } else if (isDeparture && ts.eventClassifierCode === 'ACT') {
+            times.actualDeparture = ts.eventDateTime;
+          }
+        }
+        
+        return {
+          unlocode: tc.location?.UNLocationCode || '',
+          sequence: index + 1,
+          facilitySMDG: tc.location?.facilitySMDGCode || null,
+          facilityName: tc.location?.locationName || '',
+          carrierImportVoyageNumber: tc.carrierImportVoyageNumber || null,
+          carrierExportVoyageNumber: tc.carrierExportVoyageNumber || voyageNumber,
+          transportCallReference: tc.transportCallReference || null,
+          times: Object.keys(times).length > 0 ? times : undefined
+        };
+      });
+      
+      // Create DCSA schedule message
+      normalizedSchedules.push({
+        carrierName: 'MAERSK',
+        carrierServiceCode: serviceCode,
+        serviceName: serviceName,
+        carrierVoyageNumber: voyageNumber,
+        vesselIMO: vessel.vesselIMONumber || null,
+        vesselName: vessel.name || 'Unknown',
+        source: 'MAERSK',
+        portCalls: portCalls
+      });
+    }
   }
-}
+} // End of loop for each item from Fetch Vessel Schedules
 
 // Return each normalized schedule as a separate item
 // This ensures n8n processes each schedule separately
 if (normalizedSchedules.length === 0) {
   // Return empty array with error info for debugging
+  console.log('⚠️ WARNING: No normalized schedules created from any service');
   return [{ 
     json: { 
-      warning: 'No schedules found in response',
-      serviceCode: serviceCode,
-      serviceName: serviceName,
-      inputKeys: Object.keys(inputData)
+      warning: 'No schedules found in any response',
+      totalInputItems: allItems.length
     } 
   }];
 }
+
+console.log(`\n✅ Total normalized schedules created: ${normalizedSchedules.length}`);
+console.log(`Services processed: ${new Set(normalizedSchedules.map(s => s.carrierServiceCode)).size}`);
 
 return normalizedSchedules.map(schedule => ({
   json: schedule

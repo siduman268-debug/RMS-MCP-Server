@@ -56,54 +56,135 @@ export class ScheduleDatabaseService {
       const normalizedCarrierName = cleanPayload.carrierName.toUpperCase().trim();
       let carrierId: string;
       
-      // First try to get existing carrier (case-insensitive lookup)
-      const { data: existingCarrier } = await this.supabase
+      // Simplified approach: Try to find existing carrier first (case-insensitive)
+      // This handles cases where carrier might exist with different case
+      // IMPORTANT: If multiple matches exist (e.g., "Maersk" and "MAERSK"), prefer the normalized one
+      const { data: allMatches } = await this.supabase
         .from('carrier')
         .select('id, name')
-        .ilike('name', normalizedCarrierName)
-        .maybeSingle();
+        .ilike('name', normalizedCarrierName);
+      
+      let existingCarrier: { id: string; name: string } | null = null;
+      
+      if (allMatches && allMatches.length > 0) {
+        // If multiple matches, prefer the one that matches exactly (normalized)
+        existingCarrier = allMatches.find(c => c.name === normalizedCarrierName) || allMatches[0];
+        
+        // If there are multiple matches and we're using a non-normalized one,
+        // check if normalized version exists and use that instead
+        if (existingCarrier.name !== normalizedCarrierName && allMatches.length > 1) {
+          const normalizedMatch = allMatches.find(c => c.name === normalizedCarrierName);
+          if (normalizedMatch) {
+            existingCarrier = normalizedMatch;
+          }
+        }
+      }
       
       if (existingCarrier?.id) {
         carrierId = existingCarrier.id;
-        // Update name to normalized version if it's different
+        // Only update if name is different AND normalized version doesn't already exist
         if (existingCarrier.name !== normalizedCarrierName) {
-          await this.supabase
-            .from('carrier')
-            .update({ name: normalizedCarrierName })
-            .eq('id', carrierId);
+          // Check if normalized version already exists as a separate record
+          const normalizedExists = allMatches?.some(c => c.name === normalizedCarrierName && c.id !== existingCarrier.id);
+          
+          if (normalizedExists) {
+            // Normalized version exists as separate record - use that instead
+            const normalizedCarrier = allMatches!.find(c => c.name === normalizedCarrierName);
+            if (normalizedCarrier) {
+              carrierId = normalizedCarrier.id;
+              console.log(`Using normalized carrier "${normalizedCarrierName}" instead of "${existingCarrier.name}"`);
+            }
+          } else {
+            // Safe to update - no conflict
+            const { error: updateError } = await this.supabase
+              .from('carrier')
+              .update({ name: normalizedCarrierName })
+              .eq('id', carrierId);
+            
+            if (updateError) {
+              // If update fails (e.g., normalized version was just created), try to find it
+              if (updateError.message.includes('duplicate key') || updateError.message.includes('violates unique constraint')) {
+                const { data: normalizedCarrier } = await this.supabase
+                  .from('carrier')
+                  .select('id, name')
+                  .eq('name', normalizedCarrierName)
+                  .maybeSingle();
+                
+                if (normalizedCarrier?.id) {
+                  carrierId = normalizedCarrier.id;
+                  console.log(`Normalized carrier "${normalizedCarrierName}" exists, using that instead`);
+                } else {
+                  console.warn(`Failed to update carrier name and normalized version not found: ${updateError.message}`);
+                }
+              } else {
+                console.warn(`Failed to update carrier name: ${updateError.message}`);
+              }
+            }
+          }
         }
       } else {
-        // Insert new carrier with normalized name
-        const { data: newCarrier, error: carrierError } = await this.supabase
+        // Carrier doesn't exist, try to insert
+        const { data: newCarrier, error: insertError } = await this.supabase
           .from('carrier')
           .insert({ name: normalizedCarrierName })
           .select('id')
           .single();
         
-        if (carrierError) {
-          // If duplicate key error, fetch the existing carrier (case-insensitive)
-          if (carrierError.message.includes('duplicate key') || carrierError.message.includes('violates unique constraint')) {
-            const { data: existingCarrier2 } = await this.supabase
+        if (insertError) {
+          // If duplicate key error, the carrier must exist but lookup didn't find it
+          // This can happen due to race conditions or case sensitivity issues
+          if (insertError.message.includes('duplicate key') || insertError.message.includes('violates unique constraint')) {
+            // Retry lookup one more time (maybe it was just inserted by another request)
+            const { data: retryCarrier, error: retryError } = await this.supabase
               .from('carrier')
-              .select('id')
+              .select('id, name')
               .ilike('name', normalizedCarrierName)
-              .single();
+              .limit(1)
+              .maybeSingle();
             
-            if (!existingCarrier2?.id) {
-              throw new Error(`Carrier exists but could not be retrieved: ${carrierError.message}`);
+            if (retryError) {
+              console.error('Error retrying carrier lookup after duplicate key:', retryError);
+              throw new Error(`Carrier lookup failed: ${retryError.message}. Original insert error: ${insertError.message}`);
             }
-            carrierId = existingCarrier2.id;
             
-            // Update name to normalized version
-            await this.supabase
-              .from('carrier')
-              .update({ name: normalizedCarrierName })
-              .eq('id', carrierId);
+            if (!retryCarrier?.id) {
+              // This shouldn't happen - if duplicate key, carrier should exist
+              // But handle it gracefully - try exact match first
+              console.error(`Carrier duplicate key error but case-insensitive lookup returned no results. Trying exact match...`);
+              const { data: exactMatch } = await this.supabase
+                .from('carrier')
+                .select('id, name')
+                .eq('name', normalizedCarrierName)
+                .maybeSingle();
+              
+              if (exactMatch?.id) {
+                carrierId = exactMatch.id;
+                console.log(`Found carrier "${normalizedCarrierName}" using exact match`);
+              } else {
+                // Last resort: try to find ANY carrier with similar name (case variations)
+                const { data: allCarriers } = await this.supabase
+                  .from('carrier')
+                  .select('id, name')
+                  .ilike('name', normalizedCarrierName);
+                
+                if (allCarriers && allCarriers.length > 0) {
+                  // Use the first match (prefer exact if available)
+                  const preferred = allCarriers.find(c => c.name === normalizedCarrierName) || allCarriers[0];
+                  carrierId = preferred.id;
+                  console.log(`Found carrier using case-insensitive match: "${preferred.name}" (requested: "${normalizedCarrierName}")`);
+                } else {
+                  throw new Error(`Carrier duplicate key error but could not find existing carrier. This may indicate duplicate entries with different cases. Please run the cleanup script to remove duplicates. Error: ${insertError.message}`);
+                }
+              }
+            } else {
+              carrierId = retryCarrier.id;
+              console.log(`Found carrier "${retryCarrier.name}" after retry lookup`);
+            }
           } else {
-            throw new Error(`Failed to insert carrier: ${carrierError.message}`);
+            throw new Error(`Failed to insert carrier: ${insertError.message}`);
           }
         } else if (!newCarrier) {
-          throw new Error('Failed to insert carrier: Unknown error');
+          throw new Error('Failed to insert carrier: Unknown error - no data returned');
         } else {
           carrierId = newCarrier.id;
         }
