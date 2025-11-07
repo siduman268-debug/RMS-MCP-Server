@@ -1944,7 +1944,317 @@ curl -X POST http://13.204.127.113:3000/api/margin-rules \
 
 ---
 
+## V4 API Endpoints
+
+### Overview
+
+V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/`pod_code`), automatic inland haulage detection, and Maersk schedule integration for earliest departure information.
+
+**Key Features:**
+- ✅ New field names: `origin`/`destination` (instead of `pol_code`/`pod_code`)
+- ✅ Automatic inland port detection (ICD)
+- ✅ Automatic inland haulage calculation (IHE/IHI)
+- ✅ Optional earliest departure from Maersk schedules
+- ✅ Database migration support for origin/destination columns
+- ✅ Backward compatible (V1/V2/V3 unchanged)
+
+---
+
+### V4 Search Rates
+
+**Endpoint**: `POST /api/v4/search-rates`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Search for ocean freight rates using new field names with automatic inland haulage detection and optional schedule information.
+
+**Request Body**:
+```json
+{
+  "origin": "INNSA",                    // Required: Origin port UN/LOCODE
+  "destination": "NLRTM",               // Required: Destination port UN/LOCODE
+  "container_type": "40HC",             // Optional: Filter by container type
+  "vendor_name": "Maersk",              // Optional: Filter by carrier/vendor
+  "cargo_weight_mt": 10,                 // Required if origin/destination is inland
+  "haulage_type": "carrier",            // Required if inland: "carrier" or "merchant"
+  "include_earliest_departure": false   // Optional: Include schedule info (default: false)
+}
+```
+
+**Field Notes:**
+- `origin`/`destination`: Use UN/LOCODE (e.g., "INNSA", "NLRTM")
+- `cargo_weight_mt`: Required when origin or destination is an inland port (ICD)
+- `haulage_type`: "carrier" for IHE/IHI charges, "merchant" for no charges
+- `include_earliest_departure`: If `true`, includes earliest departure for each carrier
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "vendor": "Maersk",
+      "route": "Nhava Sheva (INNSA) → Rotterdam (NLRTM)",
+      "origin": "INNSA",
+      "destination": "NLRTM",
+      "container_type": "40HC",
+      "transit_days": 20,
+      "pricing": {
+        "ocean_freight_buy": 2000,
+        "freight_surcharges": 300,
+        "all_in_freight_buy": 2300,
+        "margin": {
+          "type": "pct",
+          "percentage": 10,
+          "amount": 230
+        },
+        "all_in_freight_sell": 2530,
+        "currency": "USD"
+      },
+      "validity": {
+        "from": "2025-10-07",
+        "to": "2026-01-05"
+      },
+      "is_preferred": false,
+      "rate_id": 74,
+      "inland_haulage": {
+        "ihe_charges": {
+          "found": false,
+          "message": "Origin is not inland, no IHE needed"
+        },
+        "ihi_charges": {
+          "found": false,
+          "message": "Destination is not inland, no IHI needed"
+        },
+        "total_haulage_usd": 0
+      },
+      "earliest_departure": {           // Only if include_earliest_departure = true
+        "found": true,
+        "carrier": "MAERSK",
+        "etd": "2025-11-06T21:12:00+05:30",
+        "vessel_name": "ALULA EXPRESS",
+        "carrier_voyage_number": "544W",
+        "transit_time_days": 34.4
+      }
+    }
+  ],
+  "metadata": {
+    "api_version": "v4",
+    "generated_at": "2025-11-07T06:37:09.433Z"
+  }
+}
+```
+
+**Inland Port Example**:
+```json
+{
+  "origin": "INTKD",                    // Inland port (ICD)
+  "destination": "AEJEA",
+  "container_type": "40HC",
+  "cargo_weight_mt": 10,                // Required for inland
+  "haulage_type": "carrier"              // Required for inland
+}
+```
+
+**Response with Inland Haulage**:
+```json
+{
+  "inland_haulage": {
+    "ihe_charges": {
+      "found": true,
+      "total_amount_usd": 624,
+      "charges": [...]
+    },
+    "ihi_charges": {
+      "found": false,
+      "message": "Destination is not inland, no IHI needed"
+    },
+    "total_haulage_usd": 624
+  }
+}
+```
+
+**Error Responses**:
+- `400 Bad Request`: Missing required fields or invalid parameters
+- `400 Bad Request`: Inland port detected but `cargo_weight_mt`/`haulage_type` missing
+
+---
+
+### V4 Prepare Quote
+
+**Endpoint**: `POST /api/v4/prepare-quote`  
+**Authentication**: Required (JWT + Tenant ID)
+
+**Description**: Generate a complete quote for a specific rate with automatic inland haulage and optional schedule information. Uses `rate_id` (like V2) instead of auto-selecting preferred rate.
+
+**Request Body**:
+```json
+{
+  "salesforce_org_id": "00DBE000002eBzh",  // Required: Salesforce Org ID
+  "rate_id": 74,                           // Required: Rate ID from search-rates
+  "container_count": 1,                    // Optional: Number of containers (default: 1, max: 10)
+  "cargo_weight_mt": 10,                   // Required if origin/destination is inland
+  "haulage_type": "carrier",                // Required if inland: "carrier" or "merchant"
+  "include_earliest_departure": true        // Optional: Include schedule info (default: true)
+}
+```
+
+**Field Notes:**
+- `rate_id`: Get from `POST /api/v4/search-rates` response
+- `cargo_weight_mt`: Required when origin or destination is an inland port (ICD)
+- `haulage_type`: "carrier" for IHE/IHI charges, "merchant" for no charges
+- `include_earliest_departure`: If `true`, includes earliest departure for the rate's carrier
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "salesforce_org_id": "00DBE000002eBzh",
+    "rate_id": 74,
+    "route": {
+      "origin": "INNSA",                  // ✅ NEW field name
+      "destination": "NLRTM",             // ✅ NEW field name
+      "origin_name": "Nhava Sheva (INNSA)", // ✅ NEW field
+      "destination_name": "Rotterdam (NLRTM)", // ✅ NEW field
+      "container_type": "40HC",
+      "container_count": 1
+    },
+    "quote_parts": {
+      "ocean_freight": {
+        "carrier": "Maersk",
+        "all_in_freight_sell": 2530,
+        "ocean_freight_buy": 2000,
+        "freight_surcharges": 300,
+        "margin": {
+          "type": "pct",
+          "percentage": 10,
+          "amount": 230
+        },
+        "currency": "USD",
+        "transit_days": 20,
+        "validity": {
+          "from": "2025-10-07",
+          "to": "2026-01-05"
+        },
+        "is_preferred": false,
+        "rate_id": 74
+      },
+      "origin_charges": {
+        "charges": [...],
+        "total_local": 139.76,
+        "total_usd": 139.76,
+        "count": 4
+      },
+      "destination_charges": {
+        "charges": [...],
+        "total_local": 420,
+        "total_usd": 420,
+        "count": 4
+      },
+      "other_charges": {
+        "charges": [],
+        "total_local": 0,
+        "total_usd": 0,
+        "count": 0
+      }
+    },
+    "totals": {
+      "ocean_freight_total": 2530,
+      "origin_total_local": 139.76,
+      "origin_total_usd": 139.76,
+      "destination_total_local": 420,
+      "destination_total_usd": 420,
+      "other_total_local": 0,
+      "other_total_usd": 0,
+      "inland_haulage_total_usd": 0,      // ✅ NEW: Inland haulage total
+      "grand_total_usd": 3089.76,
+      "currency": "USD",
+      "fx_rates": {...},
+      "currencies_used": [...]
+    },
+    "inland_haulage": {                    // ✅ NEW: Always included
+      "ihe_charges": {
+        "found": false,
+        "message": "Origin is not inland, no IHE needed"
+      },
+      "ihi_charges": {
+        "found": false,
+        "message": "Destination is not inland, no IHI needed"
+      },
+      "total_haulage_usd": 0
+    },
+    "earliest_departure": {                // ✅ NEW: If include_earliest_departure = true
+      "found": true,
+      "carrier": "MAERSK",
+      "etd": "2025-11-06T21:12:00+05:30",
+      "planned_departure": "2025-11-06T21:12:00+05:30",
+      "estimated_departure": "2025-11-06T21:12:00+05:30",
+      "carrier_service_code": "471",
+      "carrier_voyage_number": "544W",
+      "vessel_name": "ALULA EXPRESS",
+      "vessel_imo": "9667162",
+      "transit_time_days": 34.4
+    },
+    "quote_summary": {
+      "route_display": "Nhava Sheva (INNSA) → Rotterdam (NLRTM)",
+      "container_info": "1x 40HC",
+      "total_charges_breakdown": {
+        "ocean_freight_usd": 2530,
+        "local_charges_usd": 559.76,
+        "inland_haulage_usd": 0
+      },
+      "vendor_info": {
+        "carrier": "Maersk",
+        "transit_days": 20
+      }
+    },
+    "metadata": {
+      "generated_at": "2025-11-07T06:37:09.433Z",
+      "origin": "INNSA",
+      "destination": "NLRTM",
+      "container_type": "40HC"
+    }
+  }
+}
+```
+
+**Error Responses**:
+- `400 Bad Request`: Missing `salesforce_org_id` or `rate_id`
+- `400 Bad Request`: Invalid `container_count` (must be 1-10)
+- `400 Bad Request`: Inland port detected but `cargo_weight_mt`/`haulage_type` missing
+- `404 Not Found`: Rate not found for provided `rate_id`
+
+---
+
+### V4 API Differences from V1/V2/V3
+
+| Feature | V1/V2/V3 | V4 |
+|---------|----------|-----|
+| **Field Names** | `pol_code`, `pod_code` | `origin`, `destination` |
+| **Rate Selection** | Auto-select preferred (V1/V3) or by `rate_id` (V2) | By `rate_id` only |
+| **Inland Detection** | Manual (separate API call) | Automatic |
+| **Inland Haulage** | Separate endpoint (`/api/v3/get-inland-haulage`) | Included automatically |
+| **Earliest Departure** | Not available | Optional (Maersk schedules) |
+| **Local Charges** | Same logic | Same logic (fixed to match V2) |
+
+---
+
 ## Changelog
+
+### Version 4.0.0 (2025-01-07)
+- **NEW**: V4 API endpoints with `origin`/`destination` field names
+- **NEW**: `POST /api/v4/search-rates` - Enhanced search with automatic inland detection
+- **NEW**: `POST /api/v4/prepare-quote` - Rate-specific quotes with inland haulage
+- **NEW**: Automatic inland port detection (ICD)
+- **NEW**: Automatic inland haulage calculation (IHE/IHI)
+- **NEW**: Maersk point-to-point API integration for earliest departure
+- **NEW**: Database migration for `origin_code`/`destination_code` columns
+- **ENHANCED**: Transit time calculation from schedule dates (more accurate)
+- **FIXED**: Local charges calculation to match V2 behavior
+- **FIXED**: Added `applies_scope` filters for origin/destination charges
+- **FIXED**: Added "Other Charges" query and processing
+- **FEATURE**: Maersk API fallback when database transit time is incorrect
+- **COMPATIBLE**: V1/V2/V3 APIs remain unchanged
 
 ### Version 3.0.0 (2025-10-28)
 - **NEW**: Ocean Freight Rate CRUD APIs (POST, PUT, GET, DELETE)

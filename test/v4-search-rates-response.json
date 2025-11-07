@@ -1,0 +1,120 @@
+﻿{
+    "success":  true,
+    "data":  [
+                 {
+                     "vendor":  "Maersk",
+                     "route":  "Nhava Sheva (INNSA) → Rotterdam (NLRTM)",
+                     "origin":  "INNSA",
+                     "destination":  "NLRTM",
+                     "container_type":  "40HC",
+                     "transit_days":  20,
+                     "pricing":  {
+                                     "ocean_freight_buy":  2000,
+                                     "freight_surcharges":  300,
+                                     "all_in_freight_buy":  2300,
+                                     "margin":  {
+                                                    "type":  "pct",
+                                                    "percentage":  10,
+                                                    "amount":  230
+                                                },
+                                     "all_in_freight_sell":  2530,
+                                     "currency":  "USD"
+                                 },
+                     "validity":  {
+                                      "from":  "2025-10-07",
+                                      "to":  "2026-01-05"
+                                  },
+                     "is_preferred":  false,
+                     "rate_id":  74,
+                     "inland_haulage":  {
+                                            "ihe_charges":  {
+                                                                "found":  false,
+                                                                "message":  "Origin is not inland, no IHE needed"
+                                                            },
+                                            "ihi_charges":  {
+                                                                "found":  false,
+                                                                "message":  "Destination is not inland, no IHI needed"
+                                                            },
+                                            "total_haulage_usd":  0
+                                        }
+                 },
+                 {
+                     "vendor":  "MSC",
+                     "route":  "Nhava Sheva (INNSA) → Rotterdam (NLRTM)",
+                     "origin":  "INNSA",
+                     "destination":  "NLRTM",
+                     "container_type":  "40HC",
+                     "transit_days":  18,
+                     "pricing":  {
+                                     "ocean_freight_buy":  1950,
+                                     "freight_surcharges":  289.85,
+                                     "all_in_freight_buy":  2239.85,
+                                     "margin":  {
+                                                    "type":  "pct",
+                                                    "percentage":  10,
+                                                    "amount":  223.99
+                                                },
+                                     "all_in_freight_sell":  2463.84,
+                                     "currency":  "USD"
+                                 },
+                     "validity":  {
+                                      "from":  "2025-10-07",
+                                      "to":  "2026-01-05"
+                                  },
+                     "is_preferred":  true,
+                     "rate_id":  71,
+                     "inland_haulage":  {
+                                            "ihe_charges":  {
+                                                                "found":  false,
+                                                                "message":  "Origin is not inland, no IHE needed"
+                                                            },
+                                            "ihi_charges":  {
+                                                                "found":  false,
+                                                                "message":  "Destination is not inland, no IHI needed"
+                                                            },
+                                            "total_haulage_usd":  0
+                                        }
+                 },
+                 {
+                     "vendor":  "Hapag-Lloyd",
+                     "route":  "Nhava Sheva (INNSA) → Rotterdam (NLRTM)",
+                     "origin":  "INNSA",
+                     "destination":  "NLRTM",
+                     "container_type":  "40HC",
+                     "transit_days":  22,
+                     "pricing":  {
+                                     "ocean_freight_buy":  2200,
+                                     "freight_surcharges":  314.4,
+                                     "all_in_freight_buy":  2514.4,
+                                     "margin":  {
+                                                    "type":  "pct",
+                                                    "percentage":  10,
+                                                    "amount":  251.44
+                                                },
+                                     "all_in_freight_sell":  2765.84,
+                                     "currency":  "USD"
+                                 },
+                     "validity":  {
+                                      "from":  "2025-10-07",
+                                      "to":  "2026-01-05"
+                                  },
+                     "is_preferred":  false,
+                     "rate_id":  77,
+                     "inland_haulage":  {
+                                            "ihe_charges":  {
+                                                                "found":  false,
+                                                                "message":  "Origin is not inland, no IHE needed"
+                                                            },
+                                            "ihi_charges":  {
+                                                                "found":  false,
+                                                                "message":  "Destination is not inland, no IHI needed"
+                                                            },
+                                            "total_haulage_usd":  0
+                                        }
+                 }
+             ],
+    "metadata":  {
+                     "api_version":  "v4",
+                     "generated_at":  "2025-11-07T06:37:09.433Z"
+                 }
+}

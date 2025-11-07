@@ -18,6 +18,7 @@ import cors from '@fastify/cors';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import { addScheduleRoutes } from './routes/schedule-routes.js';
+import { addV4Routes } from './routes/v4-routes.js';
 
 // Load environment variables
 dotenv.config();
@@ -3385,6 +3386,9 @@ async function createHttpServer() {
   // Add schedule routes (DCSA webhook, sync, etc.)
   addScheduleRoutes(fastify, supabase);
 
+  // Add V4 API routes (search-rates and prepare-quote with origin/destination)
+  addV4Routes(fastify, supabase);
+
   return fastify;
 }
 
@@ -3413,6 +3417,8 @@ async function main() {
       console.error("  POST /api/v2/prepare-quote");
       console.error("  POST /api/v3/prepare-quote");
       console.error("  POST /api/v3/get-inland-haulage");
+      console.error("  POST /api/v4/search-rates");
+      console.error("  POST /api/v4/prepare-quote");
       console.error("  POST /api/ocean-freight-rates");
       console.error("  PUT  /api/ocean-freight-rates/:rateId");
       console.error("  GET  /api/ocean-freight-rates/:rateId");

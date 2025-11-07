@@ -96,9 +96,14 @@ The server runs a Fastify HTTP API on port 3000 alongside the MCP protocol.
 **Base URL**: `http://localhost:3000`
 
 - `GET /health` - Health check
-- `POST /api/search-rates` - Search ocean freight rates
+- `POST /api/search-rates` - Search ocean freight rates (V1)
+- `POST /api/v2/search-rates` - Enhanced rate search (V2)
+- `POST /api/v2/prepare-quote` - Rate-specific quote (V2)
+- `POST /api/v3/prepare-quote` - Enhanced quote with inland (V3)
+- `POST /api/v3/get-inland-haulage` - Get inland haulage charges (V3)
+- `POST /api/v4/search-rates` - Search with origin/destination fields (V4) ✨ NEW
+- `POST /api/v4/prepare-quote` - Quote with automatic inland & schedules (V4) ✨ NEW
 - `POST /api/get-local-charges` - Get origin/destination charges
-- `POST /api/prepare-quote` - Generate complete quote
 
 **Example**:
 ```bash

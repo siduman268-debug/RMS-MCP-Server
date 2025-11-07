@@ -1,0 +1,54 @@
+﻿{
+    "success":  true,
+    "data":  [
+                 {
+                     "vendor":  "Hapag-Lloyd",
+                     "route":  "Tughlakabad (INTKD) → Rotterdam (NLRTM)",
+                     "origin":  "INTKD",
+                     "destination":  "NLRTM",
+                     "container_type":  "40HC",
+                     "transit_days":  28,
+                     "pricing":  {
+                                     "ocean_freight_buy":  2500,
+                                     "freight_surcharges":  322.5,
+                                     "all_in_freight_buy":  2822.5,
+                                     "margin":  {
+                                                    "type":  "pct",
+                                                    "percentage":  10,
+                                                    "amount":  282.25
+                                                },
+                                     "all_in_freight_sell":  3104.75,
+                                     "currency":  "USD"
+                                 },
+                     "validity":  {
+                                      "from":  "2025-10-21",
+                                      "to":  "2026-01-21"
+                                  },
+                     "is_preferred":  true,
+                     "rate_id":  166,
+                     "inland_haulage":  {
+                                            "ihe_charges":  {
+                                                                "found":  true,
+                                                                "rate_id":  3,
+                                                                "currency":  "INR",
+                                                                "route_name":  "Tughlakabad ICD to Nhava Sheva Port (Road)",
+                                                                "vendor_name":  "Mahindra Logistics",
+                                                                "haulage_type":  "IHE",
+                                                                "exchange_rate":  83.33333333333333,
+                                                                "total_amount_inr":  52000,
+                                                                "total_amount_usd":  624,
+                                                                "rate_per_container_inr":  52000
+                                                            },
+                                            "ihi_charges":  {
+                                                                "found":  false,
+                                                                "message":  "POD is not inland, no IHI needed"
+                                                            },
+                                            "total_haulage_usd":  624
+                                        }
+                 }
+             ],
+    "metadata":  {
+                     "api_version":  "v4",
+                     "generated_at":  "2025-11-07T06:37:19.156Z"
+                 }
+}
