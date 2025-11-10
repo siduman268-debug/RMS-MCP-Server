@@ -9,6 +9,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ScheduleIntegrationService } from '../services/schedule-integration.service.js';
+import type { EarliestDeparture } from '../services/schedule-integration.service.js';
 
 /**
  * Add V4 API routes to Fastify server
@@ -42,7 +43,8 @@ export function addV4Routes(
         vendor_name,
         cargo_weight_mt,
         haulage_type,
-        include_earliest_departure = false
+        include_earliest_departure = false,
+        cargo_ready_date
       } = request.body as any;
 
       // Validate required fields
@@ -67,13 +69,29 @@ export function addV4Routes(
         });
       }
 
+      // Determine cargo readiness date (defaults to today)
+      let cargoReadyDate: Date;
+      if (cargo_ready_date) {
+        cargoReadyDate = new Date(cargo_ready_date);
+        if (Number.isNaN(cargoReadyDate.getTime())) {
+          return reply.code(400).send({
+            success: false,
+            error: 'cargo_ready_date must be a valid ISO date string (YYYY-MM-DD)'
+          });
+        }
+      } else {
+        cargoReadyDate = new Date();
+      }
+      const cargoReadyDateISO = cargoReadyDate.toISOString().split('T')[0];
+
       // Query rates using origin/destination
-      // After migration: will use origin_code/destination_code directly
       let query = buildOriginDestinationQuery(
         supabase.from('mv_freight_sell_prices').select('*'),
         origin,
         destination
-      );
+      )
+        .lte('valid_from', cargoReadyDateISO)
+        .gte('valid_to', cargoReadyDateISO);
 
       if (container_type) {
         query = query.eq('container_type', container_type);
@@ -93,9 +111,11 @@ export function addV4Routes(
         return {
           success: true,
           data: [],
+          message: `No rates found for cargo_ready_date ${cargoReadyDateISO}`,
           metadata: {
             api_version: 'v4',
-            generated_at: new Date().toISOString()
+            generated_at: new Date().toISOString(),
+            cargo_ready_date: cargoReadyDateISO
           }
         };
       }
@@ -185,12 +205,15 @@ export function addV4Routes(
           // Earliest departure (if requested)
           if (include_earliest_departure) {
             try {
-              const earliestDeparture = await scheduleService.getEarliestDeparture(
+              const departureResults = await scheduleService.getEarliestDeparture(
                 origin.toUpperCase(),
                 rate.carrier || rate.vendor,
-                destination.toUpperCase() // Pass destination to filter correct route
+                destination.toUpperCase(), // Pass destination to filter correct route
+                {
+                  cargoReadyDate: cargoReadyDateISO
+                }
               );
-              processedRate.earliest_departure = earliestDeparture;
+              processedRate.earliest_departure = departureResults.earliest;
             } catch (error) {
               console.error('Error getting earliest departure:', error);
               processedRate.earliest_departure = {
@@ -209,7 +232,8 @@ export function addV4Routes(
         data: processedRates,
         metadata: {
           api_version: 'v4',
-          generated_at: new Date().toISOString()
+          generated_at: new Date().toISOString(),
+          cargo_ready_date: cargoReadyDateISO
         }
       };
     } catch (error) {
@@ -234,7 +258,8 @@ export function addV4Routes(
         container_count = 1,
         cargo_weight_mt,
         haulage_type,
-        include_earliest_departure = true
+        include_earliest_departure = true,
+        cargo_ready_date
       } = request.body as any;
 
       // Validate required fields (like V2 - uses rate_id)
@@ -253,6 +278,21 @@ export function addV4Routes(
         });
       }
 
+      // Determine cargo readiness date (defaults to today)
+      let cargoReadyDate: Date;
+      if (cargo_ready_date) {
+        cargoReadyDate = new Date(cargo_ready_date);
+        if (Number.isNaN(cargoReadyDate.getTime())) {
+          return reply.code(400).send({
+            success: false,
+            error: 'cargo_ready_date must be a valid ISO date string (YYYY-MM-DD)'
+          });
+        }
+      } else {
+        cargoReadyDate = new Date();
+      }
+      const cargoReadyDateISO = cargoReadyDate.toISOString().split('T')[0];
+
       // Get rate by rate_id (like V2)
       const { data: rateData, error: rateError } = await supabase
         .from('mv_freight_sell_prices')
@@ -264,6 +304,17 @@ export function addV4Routes(
         return reply.code(404).send({
           success: false,
           error: 'Rate not found'
+        });
+      }
+
+      // Ensure cargo ready date falls within rate validity
+      if (
+        (rateData.valid_from && cargoReadyDateISO < rateData.valid_from) ||
+        (rateData.valid_to && cargoReadyDateISO > rateData.valid_to)
+      ) {
+        return reply.code(400).send({
+          success: false,
+          error: `Rate ${rate_id} is not valid for cargo_ready_date ${cargoReadyDateISO}`
         });
       }
 
@@ -453,18 +504,28 @@ export function addV4Routes(
       }
 
       // Earliest departure (if requested)
-      let earliestDeparture: any = null;
+      let earliestDeparture: EarliestDeparture | null = null;
+      let upcomingDepartures: EarliestDeparture[] = [];
       if (include_earliest_departure && rateData.carrier) {
         try {
-          earliestDeparture = await scheduleService.getEarliestDeparture(
+          const departureResults = await scheduleService.getEarliestDeparture(
             (rateData.origin_code || rateData.pol_code || origin).toUpperCase(),
             rateData.carrier,
-            (rateData.destination_code || rateData.pod_code || destination).toUpperCase()
+            (rateData.destination_code || rateData.pod_code || destination).toUpperCase(),
+            {
+              cargoReadyDate: cargoReadyDateISO,
+              includeUpcoming: true,
+              upcomingLimit: 4,
+              rateValidTo: rateData.valid_to,
+            }
           );
+          earliestDeparture = departureResults.earliest;
+          upcomingDepartures = departureResults.upcoming.slice(0, 4);
         } catch (error) {
           console.error('Error getting earliest departure:', error);
           earliestDeparture = {
             found: false,
+            carrier: rateData.carrier,
             message: error instanceof Error ? error.message : String(error)
           };
         }
@@ -476,6 +537,13 @@ export function addV4Routes(
         destTotals.total_usd +
         otherTotals.total_usd +
         inlandHaulageTotalUSD;
+
+      const scheduleSummary = include_earliest_departure
+        ? {
+            earliest_departure: earliestDeparture,
+            upcoming_departures: upcomingDepartures,
+          }
+        : {};
 
       return {
         success: true,
@@ -587,7 +655,7 @@ export function addV4Routes(
             }
           },
           inland_haulage: inlandHaulageDetails,
-          earliest_departure: earliestDeparture,
+          ...scheduleSummary,
           metadata: {
             generated_at: new Date().toISOString(),
             origin: (rateData.origin_code || rateData.pol_code || origin).toUpperCase(),
@@ -595,7 +663,8 @@ export function addV4Routes(
             container_type: rateData.container_type,
             container_count,
             rate_id,
-            api_version: 'v4'
+            api_version: 'v4',
+            cargo_ready_date: cargoReadyDateISO
           }
         }
       };

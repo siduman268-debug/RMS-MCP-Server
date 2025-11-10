@@ -1955,6 +1955,7 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
 - ✅ Automatic inland port detection (ICD)
 - ✅ Automatic inland haulage calculation (IHE/IHI)
 - ✅ Optional earliest departure from Maersk schedules
+- ✅ Cargo readiness filtering for rates and schedules
 - ✅ Database migration support for origin/destination columns
 - ✅ Backward compatible (V1/V2/V3 unchanged)
 
@@ -1974,6 +1975,7 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
   "destination": "NLRTM",               // Required: Destination port UN/LOCODE
   "container_type": "40HC",             // Optional: Filter by container type
   "vendor_name": "Maersk",              // Optional: Filter by carrier/vendor
+  "cargo_ready_date": "2025-11-18",     // Optional: Cargo ready date (defaults to today)
   "cargo_weight_mt": 10,                 // Required if origin/destination is inland
   "haulage_type": "carrier",            // Required if inland: "carrier" or "merchant"
   "include_earliest_departure": false   // Optional: Include schedule info (default: false)
@@ -1982,6 +1984,7 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
 
 **Field Notes:**
 - `origin`/`destination`: Use UN/LOCODE (e.g., "INNSA", "NLRTM")
+- `cargo_ready_date`: Defaults to current date if omitted. Filters rates (`valid_from` ≤ date ≤ `valid_to`) and schedules (departures on/after date).
 - `cargo_weight_mt`: Required when origin or destination is an inland port (ICD)
 - `haulage_type`: "carrier" for IHE/IHI charges, "merchant" for no charges
 - `include_earliest_departure`: If `true`, includes earliest departure for each carrier
@@ -2039,7 +2042,8 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
   ],
   "metadata": {
     "api_version": "v4",
-    "generated_at": "2025-11-07T06:37:09.433Z"
+    "generated_at": "2025-11-07T06:37:09.433Z",
+    "cargo_ready_date": "2025-11-18"
   }
 }
 ```
@@ -2076,6 +2080,8 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
 **Error Responses**:
 - `400 Bad Request`: Missing required fields or invalid parameters
 - `400 Bad Request`: Inland port detected but `cargo_weight_mt`/`haulage_type` missing
+- **Empty result**: `data: []` with `message: "No rates found for cargo_ready_date …"` when no valid rates exist.
+- **No schedules**: `earliest_departure.found = false` with a descriptive `message` when no sailings are available on or after the cargo readiness date.
 
 ---
 
@@ -2092,6 +2098,7 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
   "salesforce_org_id": "00DBE000002eBzh",  // Required: Salesforce Org ID
   "rate_id": 74,                           // Required: Rate ID from search-rates
   "container_count": 1,                    // Optional: Number of containers (default: 1, max: 10)
+  "cargo_ready_date": "2025-11-18",        // Optional: Defaults to today. Must fall within rate validity.
   "cargo_weight_mt": 10,                   // Required if origin/destination is inland
   "haulage_type": "carrier",                // Required if inland: "carrier" or "merchant"
   "include_earliest_departure": true        // Optional: Include schedule info (default: true)
@@ -2100,6 +2107,7 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
 
 **Field Notes:**
 - `rate_id`: Get from `POST /api/v4/search-rates` response
+- `cargo_ready_date`: Defaults to current date. The chosen rate must be valid for this date; the quote also filters sailings to departures on/after the date.
 - `cargo_weight_mt`: Required when origin or destination is an inland port (ICD)
 - `haulage_type`: "carrier" for IHE/IHI charges, "merchant" for no charges
 - `include_earliest_departure`: If `true`, includes earliest departure for the rate's carrier
@@ -2195,6 +2203,22 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
       "vessel_imo": "9667162",
       "transit_time_days": 34.4
     },
+    "upcoming_departures": [               // ✅ NEW: Next sailings (up to 4)
+      {
+        "carrier": "MAERSK",
+        "etd": "2025-11-13T17:00:00+05:30",
+        "carrier_voyage_number": "545W",
+        "vessel_name": "AL RIFFA",
+        "transit_time_days": 34.6
+      },
+      {
+        "carrier": "MAERSK",
+        "etd": "2025-11-20T22:00:00+05:30",
+        "carrier_voyage_number": "546W",
+        "vessel_name": "ATLANTA EXPRESS",
+        "transit_time_days": 34.5
+      }
+    ],
     "quote_summary": {
       "route_display": "Nhava Sheva (INNSA) → Rotterdam (NLRTM)",
       "container_info": "1x 40HC",
@@ -2212,7 +2236,8 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
       "generated_at": "2025-11-07T06:37:09.433Z",
       "origin": "INNSA",
       "destination": "NLRTM",
-      "container_type": "40HC"
+      "container_type": "40HC",
+      "cargo_ready_date": "2025-11-18"
     }
   }
 }
@@ -2222,6 +2247,7 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
 - `400 Bad Request`: Missing `salesforce_org_id` or `rate_id`
 - `400 Bad Request`: Invalid `container_count` (must be 1-10)
 - `400 Bad Request`: Inland port detected but `cargo_weight_mt`/`haulage_type` missing
+- `400 Bad Request`: Rate is not valid for the supplied `cargo_ready_date`
 - `404 Not Found`: Rate not found for provided `rate_id`
 
 ---
@@ -2235,6 +2261,7 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
 | **Inland Detection** | Manual (separate API call) | Automatic |
 | **Inland Haulage** | Separate endpoint (`/api/v3/get-inland-haulage`) | Included automatically |
 | **Earliest Departure** | Not available | Optional (Maersk schedules) |
+| **Cargo Readiness Date** | Not supported | Filters rates/schedules based on `cargo_ready_date` |
 | **Local Charges** | Same logic | Same logic (fixed to match V2) |
 
 ---
@@ -2248,6 +2275,8 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
 - **NEW**: Automatic inland port detection (ICD)
 - **NEW**: Automatic inland haulage calculation (IHE/IHI)
 - **NEW**: Maersk point-to-point API integration for earliest departure
+- **NEW**: `cargo_ready_date` filtering for rates and schedules
+- **NEW**: Prepare-quote returns next four sailings (when schedules available)
 - **NEW**: Database migration for `origin_code`/`destination_code` columns
 - **ENHANCED**: Transit time calculation from schedule dates (more accurate)
 - **FIXED**: Local charges calculation to match V2 behavior
