@@ -148,3 +148,6 @@ GET /api/customer/schedules/routes?pol_code=INMUN&pod_code=DEHAM&include_transsh
 - `min_connection_hours`: Minimum connection time required (default: 24)
 - `same_carrier_only`: Only show same-carrier connections (default: false)
 
+
+
+

@@ -232,3 +232,5 @@ CREATE INDEX IF NOT EXISTS idx_mv_freight_sell_prices_origin_dest
 -- FROM mv_freight_sell_prices
 -- LIMIT 5;
 
+
+

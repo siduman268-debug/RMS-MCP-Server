@@ -135,3 +135,6 @@ WHERE pct.created_at >= NOW() - INTERVAL '24 hours'
 GROUP BY c.name, s.carrier_service_code
 ORDER BY latest_time_insert DESC;
 
+
+
+

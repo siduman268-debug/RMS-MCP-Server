@@ -190,3 +190,5 @@ WHERE ofr.is_active = true;
 
 **Bottom Line**: Copy your EXISTING view definition completely, then ADD the 4 new columns. Don't remove anything!
 
+
+

@@ -58,3 +58,5 @@ SELECT
   COUNT(destination_code) as has_destination_code
 FROM v_preferred_ofr;
 
+
+

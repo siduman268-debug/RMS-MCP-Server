@@ -41,3 +41,5 @@ SELECT pg_get_viewdef('v_local_charges_details', true);
 
 The view likely joins `surcharge` table with `locations` table. Add the new columns similar to how we did for `mv_freight_sell_prices`.
 
+
+

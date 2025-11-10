@@ -84,3 +84,5 @@ WHERE s.is_active = true;
 -- FROM v_local_charges_details
 -- LIMIT 5;
 
+
+

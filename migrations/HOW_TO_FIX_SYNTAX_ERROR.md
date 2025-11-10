@@ -122,3 +122,5 @@ CREATE INDEX IF NOT EXISTS idx_mv_freight_sell_prices_destination_code
 
 Share your actual view definition (from `pg_get_viewdef`) and I can help you add the new columns correctly!
 
+
+

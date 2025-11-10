@@ -65,3 +65,5 @@ ORDER BY ofr.id, s.charge_code;
 -- FROM v_freight_surcharge_details
 -- LIMIT 5;
 
+
+

@@ -70,3 +70,5 @@ ORDER BY ofr.id, s.applies_scope, s.charge_code;
 -- FROM v_local_charges_details
 -- LIMIT 5;
 
+
+

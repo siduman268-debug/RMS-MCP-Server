@@ -85,3 +85,5 @@ CREATE INDEX IF NOT EXISTS idx_mv_freight_sell_prices_origin_dest
 --   ofr.id as rate_id
 -- FROM ocean_freight_rate
 
+
+
