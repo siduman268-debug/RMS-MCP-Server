@@ -13,7 +13,7 @@ SELECT
   ofr.tenant_id,
   ofr.id,
   ofr.contract_id,
-  rc.vendor_id,
+    rc.vendor_id,
   rc.is_spot,
   ofr.pol_id,
   ofr.pod_id,

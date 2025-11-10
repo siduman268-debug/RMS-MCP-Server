@@ -123,6 +123,8 @@ export function addV4Routes(
       // Process each rate
       const processedRates = await Promise.all(
         rates.map(async (rate: any) => {
+          const carrierVendorId =
+            rate.vendor_id ?? rate.vendorid ?? rate.vendorId ?? null;
           const processedRate: any = {
             vendor: rate.carrier,
             // Use origin_name/destination_name if available (after migration), otherwise pol_name/pod_name
@@ -163,7 +165,8 @@ export function addV4Routes(
                   p_container_type: container_type || rate.container_type,
                   p_container_count: 1,
                   p_cargo_weight_mt: cargo_weight_mt,
-                  p_haulage_type: haulage_type
+                  p_haulage_type: haulage_type,
+                  p_vendor_id: carrierVendorId
                 }
               );
 
@@ -343,7 +346,7 @@ export function addV4Routes(
       const contractId = rateData.contract_id;
       const polId = rateData.pol_id;
       const podId = rateData.pod_id;
-      const vendorId = rateData.vendor_id;
+      const vendorId = rateData.vendor_id ?? null;
 
       // Get Origin Charges (same logic as V2)
       const { data: originChargesRaw, error: originError } = await supabase
@@ -476,7 +479,8 @@ export function addV4Routes(
               p_container_type: rateData.container_type,
               p_container_count: container_count,
               p_cargo_weight_mt: cargo_weight_mt,
-              p_haulage_type: haulage_type
+              p_haulage_type: haulage_type,
+              p_vendor_id: vendorId
             }
           );
 

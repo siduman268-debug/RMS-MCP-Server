@@ -1,7 +1,4 @@
--- Simplified V3 function that ONLY handles IHE and IHI logic
--- V1 handles ocean freight + local charges
--- V3 handles only inland haulage (IHE + IHI)
--- n8n orchestrates the calls
+-- Migration: Update simplified_inland_function to accept vendor_id and prioritize carrier-matched haulage rates
 
 DROP FUNCTION IF EXISTS simplified_inland_function(TEXT, TEXT, TEXT, INTEGER, NUMERIC, TEXT, INTEGER);
 
@@ -40,61 +37,58 @@ BEGIN
         SELECT (1.0 / rate) as usd_to_inr_rate
         INTO v_exchange_rate
         FROM fx_rate
-        WHERE base_ccy = 'INR' 
+        WHERE base_ccy = 'INR'
         AND quote_ccy = 'USD'
         AND rate_date = CURRENT_DATE
         ORDER BY rate_date DESC
         LIMIT 1;
-        
-        -- If no rate for today, get the latest available
+
         IF v_exchange_rate IS NULL THEN
             SELECT (1.0 / rate) as usd_to_inr_rate
             INTO v_exchange_rate
             FROM fx_rate
-            WHERE base_ccy = 'INR' 
+            WHERE base_ccy = 'INR'
             AND quote_ccy = 'USD'
             ORDER BY rate_date DESC
             LIMIT 1;
         END IF;
-        
-        -- If still no rate, use fallback
+
         IF v_exchange_rate IS NULL THEN
             v_exchange_rate := 83.0;
         END IF;
-        
+
     EXCEPTION
         WHEN OTHERS THEN
-            v_exchange_rate := 83.0; -- Fallback rate
+            v_exchange_rate := 83.0;
     END;
-    
+
     -- Step 2: Get location IDs and check if inland
     SELECT id, is_container_inland INTO v_pol_id, v_pol_is_inland
-    FROM locations 
+    FROM locations
     WHERE unlocode = p_pol_code AND is_active = true;
-    
+
     IF v_pol_id IS NULL THEN
         RETURN jsonb_build_object(
             'success', false,
             'error_message', 'POL location not found: ' || p_pol_code
         );
     END IF;
-    
+
     SELECT id, is_container_inland INTO v_pod_id, v_pod_is_inland
-    FROM locations 
+    FROM locations
     WHERE unlocode = p_pod_code AND is_active = true;
-    
+
     IF v_pod_id IS NULL THEN
         RETURN jsonb_build_object(
             'success', false,
             'error_message', 'POD location not found: ' || p_pod_code
         );
     END IF;
-    
+
     -- Step 3: Check if IHE is needed (POL is inland AND haulage_type is 'carrier')
     IF v_pol_is_inland AND p_haulage_type = 'carrier' THEN
         BEGIN
-            -- Look for haulage route from inland POL to gateway
-            SELECT 
+            SELECT
                 hr.id as route_id,
                 hr.route_name,
                 hr.total_distance_km,
@@ -107,10 +101,9 @@ BEGIN
             WHERE hr.from_location_id = v_pol_id
             AND hr.is_active = true
             LIMIT 1;
-            
+
             IF v_haulage_route_record.route_id IS NOT NULL THEN
-                -- Look for haulage rate with weight range logic
-                SELECT 
+                SELECT
                     hrate.id,
                     hrate.rate_per_container,
                     hrate.flat_rate,
@@ -132,13 +125,13 @@ BEGIN
                 AND (p_vendor_id IS NULL OR hrate.vendor_id = p_vendor_id)
                 ORDER BY hrate.vendor_id = p_vendor_id DESC, hrate.rate_per_container ASC
                 LIMIT 1;
-                
+
                 IF v_haulage_record.id IS NOT NULL THEN
                     v_ihe_buy_inr := v_haulage_record.rate_per_container * p_container_count;
                     v_ihe_sell_inr := v_haulage_record.rate_per_container * p_container_count;
                     v_ihe_buy_usd := v_ihe_buy_inr / v_exchange_rate;
                     v_ihe_sell_usd := v_ihe_sell_inr / v_exchange_rate;
-                    
+
                     v_ihe_charges := jsonb_build_object(
                         'found', true,
                         'rate_id', v_haulage_record.id,
@@ -163,7 +156,7 @@ BEGIN
                     'message', 'No IHE haulage route found from ' || p_pol_code
                 );
             END IF;
-            
+
         EXCEPTION
             WHEN OTHERS THEN
                 v_ihe_charges := jsonb_build_object(
@@ -184,12 +177,11 @@ BEGIN
             );
         END IF;
     END IF;
-    
+
     -- Step 4: Check if IHI is needed (POD is inland AND haulage_type is 'carrier')
     IF v_pod_is_inland AND p_haulage_type = 'carrier' THEN
         BEGIN
-            -- Look for haulage route from gateway to inland POD
-            SELECT 
+            SELECT
                 hr.id as route_id,
                 hr.route_name,
                 hr.total_distance_km,
@@ -202,10 +194,9 @@ BEGIN
             WHERE hr.to_location_id = v_pod_id
             AND hr.is_active = true
             LIMIT 1;
-            
+
             IF v_haulage_route_record.route_id IS NOT NULL THEN
-                -- Look for haulage rate with weight range logic
-                SELECT 
+                SELECT
                     hrate.id,
                     hrate.rate_per_container,
                     hrate.flat_rate,
@@ -227,13 +218,13 @@ BEGIN
                 AND (p_vendor_id IS NULL OR hrate.vendor_id = p_vendor_id)
                 ORDER BY hrate.vendor_id = p_vendor_id DESC, hrate.rate_per_container ASC
                 LIMIT 1;
-                
+
                 IF v_haulage_record.id IS NOT NULL THEN
                     v_ihi_buy_inr := v_haulage_record.rate_per_container * p_container_count;
                     v_ihi_sell_inr := v_haulage_record.rate_per_container * p_container_count;
                     v_ihi_buy_usd := v_ihi_buy_inr / v_exchange_rate;
                     v_ihi_sell_usd := v_ihi_sell_inr / v_exchange_rate;
-                    
+
                     v_ihi_charges := jsonb_build_object(
                         'found', true,
                         'rate_id', v_haulage_record.id,
@@ -258,7 +249,7 @@ BEGIN
                     'message', 'No IHI haulage route found to ' || p_pod_code
                 );
             END IF;
-            
+
         EXCEPTION
             WHEN OTHERS THEN
                 v_ihi_charges := jsonb_build_object(
@@ -279,8 +270,7 @@ BEGIN
             );
         END IF;
     END IF;
-    
-    -- Step 5: Build final result - ONLY haulage charges
+
     v_result := jsonb_build_object(
         'success', true,
         'pol_code', p_pol_code,
@@ -295,9 +285,9 @@ BEGIN
         'exchange_rate', v_exchange_rate,
         'message', 'V3 function - IHE and IHI haulage logic completed'
     );
-    
+
     RETURN v_result;
-    
+
 EXCEPTION
     WHEN OTHERS THEN
         RETURN jsonb_build_object(
@@ -306,3 +296,4 @@ EXCEPTION
         );
 END;
 $$ LANGUAGE plpgsql;
+
