@@ -129,6 +129,29 @@ export class ScheduleIntegrationService {
         console.warn('[Schedule] DCSA client not available for Maersk API fallback');
       }
 
+      if (!earliest.found || transitTimeSeemsIncorrect) {
+        try {
+          const portcastResults = await this.getEarliestDepartureFromPortcastTable(
+            origin,
+            carrier,
+            destination,
+            {
+              cargoReadyDate,
+              rateValidTo,
+              limit,
+            }
+          );
+
+          if (portcastResults.earliest.found) {
+            earliest = portcastResults.earliest;
+            upcoming = includeUpcoming ? portcastResults.upcoming.slice(0, upcomingLimit) : [];
+            return { earliest, upcoming };
+          }
+        } catch (error) {
+          console.error('[Schedule] Error retrieving schedules from Portcast table:', error);
+        }
+      }
+
       if (earliest.found) {
         if (transitTimeSeemsIncorrect) {
           console.warn('[Schedule] Using database result despite suspicious transit time');
@@ -161,6 +184,124 @@ export class ScheduleIntegrationService {
         upcoming: [],
       };
     }
+  }
+
+  private parsePortcastTransitTime(
+    transit: string | null | undefined,
+    departureDate?: string | null,
+    arrivalDate?: string | null
+  ): number | undefined {
+    if (transit) {
+      const match = transit.match(/\d+/);
+      if (match) {
+        const parsed = parseInt(match[0], 10);
+        if (!Number.isNaN(parsed)) {
+          return parsed;
+        }
+      }
+    }
+
+    if (departureDate && arrivalDate) {
+      const departure = new Date(`${departureDate}T00:00:00Z`);
+      const arrival = new Date(`${arrivalDate}T00:00:00Z`);
+      const diffMs = arrival.getTime() - departure.getTime();
+      if (!Number.isNaN(diffMs)) {
+        return Math.round(diffMs / (1000 * 60 * 60 * 24));
+      }
+    }
+
+    return undefined;
+  }
+
+  private mapPortcastScheduleToDeparture(row: any): EarliestDeparture {
+    const departureIso = row.departure_date
+      ? new Date(`${row.departure_date}T00:00:00Z`).toISOString()
+      : undefined;
+    const arrivalIso = row.arrival_date
+      ? new Date(`${row.arrival_date}T00:00:00Z`).toISOString()
+      : undefined;
+
+    return {
+      found: true,
+      carrier: row.carrier_name ?? row.carrier_scac ?? undefined,
+      etd: departureIso,
+      planned_departure: departureIso,
+      estimated_departure: arrivalIso,
+      carrier_service_code: row.route_code ?? undefined,
+      carrier_voyage_number: row.voyage ?? undefined,
+      vessel_name: row.vessel_name ?? undefined,
+      vessel_imo: row.vessel_imo ?? undefined,
+      transit_time_days: this.parsePortcastTransitTime(
+        row.transit_time,
+        row.departure_date,
+        row.arrival_date
+      ),
+      message: row.is_direct === false ? 'Transshipment service' : undefined,
+    };
+  }
+
+  private async getEarliestDepartureFromPortcastTable(
+    origin: string,
+    carrier: string,
+    destination?: string,
+    options: { cargoReadyDate?: string; rateValidTo?: string; limit?: number } = {}
+  ): Promise<DepartureResults> {
+    const { cargoReadyDate, rateValidTo, limit = 4 } = options;
+
+    const originCode = origin.toUpperCase();
+    const destinationCode = destination?.toUpperCase();
+    const carrierUpper = carrier.toUpperCase();
+
+    const departureFilter = cargoReadyDate ?? new Date().toISOString().split('T')[0];
+
+    let query = this.supabase
+      .from('public_portcast_schedules')
+      .select('*')
+      .eq('origin_port_code', originCode)
+      .order('departure_date', { ascending: true })
+      .limit(Math.max(10, limit));
+
+    query = query.gte('departure_date', departureFilter);
+
+    if (destinationCode) {
+      query = query.eq('destination_port_code', destinationCode);
+    }
+
+    if (rateValidTo) {
+      query = query.lte('departure_date', rateValidTo);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    const schedules = (data ?? []).filter((row: any) => {
+      const name = (row.carrier_name ?? '').toUpperCase();
+      const scac = (row.carrier_scac ?? '').toUpperCase();
+      return name === carrierUpper || scac === carrierUpper || name.includes(carrierUpper);
+    });
+
+    if (schedules.length === 0) {
+      return {
+        earliest: {
+          found: false,
+          carrier,
+          message: `No Portcast schedule found for carrier ${carrier} from ${originCode}${
+            destinationCode ? ` to ${destinationCode}` : ''
+          }${departureFilter ? ` on or after ${departureFilter}` : ''}`,
+        },
+        upcoming: [],
+      };
+    }
+
+    const mapped = schedules.slice(0, limit).map((row: any) => this.mapPortcastScheduleToDeparture(row));
+
+    return {
+      earliest: mapped[0],
+      upcoming: mapped.slice(1),
+    };
   }
 
   /**
