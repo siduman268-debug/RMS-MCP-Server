@@ -1,0 +1,197 @@
+{
+  "info": {
+    "name": "RMS MCP V4 APIs",
+    "_postman_id": "5a9a80a4-8375-4c8c-b55e-8ad8e80bb1c9",
+    "description": "Postman collection to exercise RMS MCP V4 endpoints (auth, search-rates, prepare-quote).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth - Get Token",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tenant_id\": \"{{tenantId}}\",\n  \"user_id\": \"{{userId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/token",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "token"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json && json.token) {",
+              "  pm.environment.set('token', json.token);",
+              "  console.log('Token updated in environment');",
+              "} else {",
+              "  console.warn('Token not present in response');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "V4 Search Rates - Ocean",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "x-tenant-id",
+            "value": "{{tenantId}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"origin\": \"INNSA\",\n  \"destination\": \"NLRTM\",\n  \"container_type\": \"40HC\",\n  \"cargo_ready_date\": \"{{cargoReadyDate}}\",\n  \"include_earliest_departure\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v4/search-rates",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v4", "search-rates"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "V4 Search Rates - Inland Example",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "x-tenant-id",
+            "value": "{{tenantId}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"origin\": \"INTKD\",\n  \"destination\": \"NLRTM\",\n  \"container_type\": \"40HC\",\n  \"cargo_weight_mt\": 12,\n  \"haulage_type\": \"carrier\",\n  \"cargo_ready_date\": \"{{cargoReadyDate}}\",\n  \"include_earliest_departure\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v4/search-rates",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v4", "search-rates"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "V4 Prepare Quote",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "x-tenant-id",
+            "value": "{{tenantId}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"salesforce_org_id\": \"00DBE000002eBzh\",\n  \"rate_id\": {{rateId}},\n  \"container_count\": 1,\n  \"cargo_ready_date\": \"{{cargoReadyDate}}\",\n  \"cargo_weight_mt\": 12,\n  \"haulage_type\": \"carrier\",\n  \"include_earliest_departure\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v4/prepare-quote",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v4", "prepare-quote"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "V4 Prepare Quote - Inland",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "x-tenant-id",
+            "value": "{{tenantId}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"salesforce_org_id\": \"00DBE000002eBzh\",\n  \"rate_id\": 166,\n  \"container_count\": 1,\n  \"cargo_ready_date\": \"{{cargoReadyDate}}\",\n  \"cargo_weight_mt\": 12,\n  \"haulage_type\": \"carrier\",\n  \"include_earliest_departure\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v4/prepare-quote",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v4", "prepare-quote"]
+        }
+      },
+      "response": []
+    }
+  ],
+  "event": [],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "tenantId",
+      "value": "00000000-0000-0000-0000-000000000001"
+    },
+    {
+      "key": "userId",
+      "value": "postman-v4-test"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "cargoReadyDate",
+      "value": "2025-11-18"
+    },
+    {
+      "key": "rateId",
+      "value": "74"
+    }
+  ]
+}
+
