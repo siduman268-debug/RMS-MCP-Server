@@ -255,7 +255,7 @@ export class ScheduleIntegrationService {
     const departureFilter = cargoReadyDate ?? new Date().toISOString().split('T')[0];
 
     let query = this.supabase
-      .from('public_portcast_schedules')
+      .from('portcast_schedules')
       .select('*')
       .eq('origin_port_code', originCode)
       .order('departure_date', { ascending: true })
