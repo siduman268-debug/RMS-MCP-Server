@@ -1948,13 +1948,13 @@ curl -X POST http://13.204.127.113:3000/api/margin-rules \
 
 ### Overview
 
-V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/`pod_code`), automatic inland haulage detection, and Maersk schedule integration for earliest departure information.
+V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/`pod_code`), automatic inland haulage detection, and multi-source schedule integration (database views → carrier APIs → Portcast data) for earliest departure information.
 
 **Key Features:**
 - ✅ New field names: `origin`/`destination` (instead of `pol_code`/`pod_code`)
 - ✅ Automatic inland port detection (ICD)
 - ✅ Automatic inland haulage calculation (IHE/IHI)
-- ✅ Optional earliest departure from Maersk schedules
+- ✅ Earliest departure sourcing in order: database view → carrier API (Maersk DCSA) → Portcast table fallback
 - ✅ Cargo readiness filtering for rates and schedules
 - ✅ Database migration support for origin/destination columns
 - ✅ Backward compatible (V1/V2/V3 unchanged)
@@ -1987,7 +1987,7 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
 - `cargo_ready_date`: Defaults to current date if omitted. Filters rates (`valid_from` ≤ date ≤ `valid_to`) and schedules (departures on/after date).
 - `cargo_weight_mt`: Required when origin or destination is an inland port (ICD)
 - `haulage_type`: "carrier" for IHE/IHI charges, "merchant" for no charges
-- `include_earliest_departure`: If `true`, includes earliest departure for each carrier
+- `include_earliest_departure`: If `true`, includes earliest departure for each carrier. Data comes from the database view first, then Maersk DCSA for Maersk sailings, and finally the `portcast_schedules` table as a fallback for non-DCSA carriers.
 
 **Response**:
 ```json
@@ -2110,7 +2110,7 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
 - `cargo_ready_date`: Defaults to current date. The chosen rate must be valid for this date; the quote also filters sailings to departures on/after the date.
 - `cargo_weight_mt`: Required when origin or destination is an inland port (ICD)
 - `haulage_type`: "carrier" for IHE/IHI charges, "merchant" for no charges
-- `include_earliest_departure`: If `true`, includes earliest departure for the rate's carrier
+- `include_earliest_departure`: If `true`, includes earliest departure for the rate's carrier. Schedule sourcing order: (1) database view, (2) carrier API (Maersk DCSA), (3) Portcast fallback table (`portcast_schedules`).
 
 **Response**:
 ```json
@@ -2267,6 +2267,10 @@ V4 APIs introduce new field names (`origin`/`destination` instead of `pol_code`/
 ---
 
 ## Changelog
+
+### Version 4.0.1 (2025-11-11)
+- **ENHANCED**: Earliest departure now falls back to `portcast_schedules` table when database and carrier APIs lack data.
+- **DOCS**: Added tech stack and secrets migration guides.
 
 ### Version 4.0.0 (2025-01-07)
 - **NEW**: V4 API endpoints with `origin`/`destination` field names
