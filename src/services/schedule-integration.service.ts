@@ -27,11 +27,40 @@ export interface DepartureResults {
   upcoming: EarliestDeparture[];
 }
 
+export interface ScheduleEntry {
+  carrier: string;
+  etd: string;
+  eta?: string;
+  transit_time_days?: number;
+  service_code?: string;
+  service_name?: string;
+  voyage?: string;
+  vessel_name?: string;
+  vessel_imo?: string;
+  origin_port_code?: string;
+  origin_port_name?: string;
+  destination_port_code?: string;
+  destination_port_name?: string;
+  route_name?: string;
+  is_direct?: boolean;
+  source: 'database' | 'portcast' | 'maersk';
+}
+
 interface DepartureOptions {
   cargoReadyDate?: string;
   includeUpcoming?: boolean;
   upcomingLimit?: number;
   rateValidTo?: string;
+}
+
+export interface ScheduleSearchOptions {
+  destination?: string;
+  cargoReadyDate?: string;
+  carrier?: string;
+  serviceCode?: string;
+  vesselName?: string;
+  voyage?: string;
+  limit?: number;
 }
 
 export class ScheduleIntegrationService {
@@ -47,6 +76,143 @@ export class ScheduleIntegrationService {
     } catch (error) {
       console.warn('DCSA Client initialization failed, will use database views only:', error);
     }
+  }
+
+  /**
+   * Search schedules (rate-independent) combining database, Portcast, and carrier API sources
+   */
+  async searchSchedules(
+    origin: string,
+    options: ScheduleSearchOptions = {}
+  ): Promise<ScheduleEntry[]> {
+    const {
+      destination,
+      cargoReadyDate,
+      carrier,
+      serviceCode,
+      vesselName,
+      voyage,
+      limit = 20,
+    } = options;
+
+    const maxResults = Math.min(Math.max(limit, 1), 100);
+    const originCode = origin.toUpperCase();
+    const destinationCode = destination ? destination.toUpperCase() : undefined;
+    const carrierFilter = carrier?.trim();
+    const serviceFilter = serviceCode?.trim();
+    const vesselFilter = vesselName?.trim();
+    const voyageFilter = voyage?.trim();
+
+    const scheduleMap = new Map<
+      string,
+      ScheduleEntry & { priority: number }
+    >();
+
+    const addEntries = (entries: ScheduleEntry[], priority: number) => {
+      for (const entry of entries) {
+        if (!entry.etd) {
+          continue;
+        }
+        const key = [
+          entry.carrier || '',
+          entry.etd,
+          entry.voyage || '',
+          entry.vessel_name || '',
+          entry.source,
+        ]
+          .map((part) => part ?? '')
+          .join('|');
+
+        const existing = scheduleMap.get(key);
+        if (!existing || priority < existing.priority) {
+          scheduleMap.set(key, { ...entry, priority });
+        }
+      }
+    };
+
+    try {
+      const dbEntries = await this.searchSchedulesFromDatabase(originCode, {
+        destination: destinationCode,
+        cargoReadyDate,
+        carrier: carrierFilter,
+        serviceCode: serviceFilter,
+        vesselName: vesselFilter,
+        voyage: voyageFilter,
+        limit: maxResults * 2,
+      });
+      addEntries(dbEntries, 1);
+    } catch (error) {
+      console.error('[Schedule] Error querying database schedules:', error);
+    }
+
+    try {
+      const portcastEntries = await this.searchSchedulesFromPortcastTable(originCode, {
+        destination: destinationCode,
+        cargoReadyDate,
+        carrier: carrierFilter,
+        serviceCode: serviceFilter,
+        vesselName: vesselFilter,
+        voyage: voyageFilter,
+        limit: maxResults * 2,
+      });
+      addEntries(portcastEntries, 2);
+    } catch (error) {
+      console.error('[Schedule] Error querying Portcast schedules:', error);
+    }
+
+    const shouldQueryMaersk =
+      (!carrierFilter ||
+        carrierFilter.toUpperCase().includes('MAERSK') ||
+        carrierFilter.toUpperCase().includes('MAEU')) &&
+      !!this.dcsaClient;
+
+    if (shouldQueryMaersk) {
+      try {
+        const maerskResults = await this.getEarliestDepartureFromMaerskAPI(
+          originCode,
+          destinationCode,
+          {
+            cargoReadyDate,
+            limit: maxResults,
+          }
+        );
+
+        const maerskEntries = [maerskResults.earliest, ...maerskResults.upcoming]
+          .filter((dep) => dep.found && dep.etd)
+          .map((dep) => this.earliestDepartureToSchedule(dep, originCode, destinationCode, 'maersk'))
+          .filter((entry): entry is ScheduleEntry => entry !== null)
+          .filter((entry) => {
+            if (carrierFilter && entry.carrier && !entry.carrier.includes(carrierFilter.toUpperCase())) {
+              return false;
+            }
+            if (serviceFilter && entry.service_code && !entry.service_code.toUpperCase().includes(serviceFilter.toUpperCase())) {
+              return false;
+            }
+            if (vesselFilter && entry.vessel_name && !entry.vessel_name.toUpperCase().includes(vesselFilter.toUpperCase())) {
+              return false;
+            }
+            if (voyageFilter && entry.voyage && !entry.voyage.toUpperCase().includes(voyageFilter.toUpperCase())) {
+              return false;
+            }
+            return true;
+          });
+
+        addEntries(maerskEntries, 3);
+      } catch (error) {
+        console.error('[Schedule] Error querying Maersk API for schedule search:', error);
+      }
+    }
+
+    const schedules = Array.from(scheduleMap.values())
+      .map(({ priority, ...rest }) => rest)
+      .sort((a, b) => {
+        const aTime = new Date(a.etd).getTime();
+        const bTime = new Date(b.etd).getTime();
+        return aTime - bTime;
+      })
+      .slice(0, maxResults);
+
+    return schedules;
   }
 
   /**
@@ -302,6 +468,179 @@ export class ScheduleIntegrationService {
       earliest: mapped[0],
       upcoming: mapped.slice(1),
     };
+  }
+
+  /**
+   * Search schedules from database view
+   */
+  private async searchSchedulesFromDatabase(
+    origin: string,
+    options: ScheduleSearchOptions & { destination?: string; limit?: number }
+  ): Promise<ScheduleEntry[]> {
+    const {
+      destination,
+      cargoReadyDate,
+      carrier,
+      serviceCode,
+      vesselName,
+      voyage,
+      limit = 50,
+    } = options;
+
+    let query = this.supabase
+      .from('v_port_to_port_routes')
+      .select('*')
+      .eq('origin_unlocode', origin)
+      .order('origin_departure', { ascending: true })
+      .limit(Math.min(Math.max(limit, 10), 200));
+
+    const cargoDateIso = cargoReadyDate
+      ? new Date(cargoReadyDate).toISOString()
+      : new Date().toISOString();
+
+    query = query.gte('origin_departure', cargoDateIso);
+
+    if (destination) {
+      query = query.eq('destination_unlocode', destination);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    const carrierUpper = carrier?.toUpperCase();
+    const serviceUpper = serviceCode?.toUpperCase();
+    const vesselUpper = vesselName?.toUpperCase();
+    const voyageUpper = voyage?.toUpperCase();
+
+    const filtered = (data || []).filter((route: any) => {
+      const routeCarrier = (route.carrier || route.vendor || '').toUpperCase();
+      if (carrierUpper && !routeCarrier.includes(carrierUpper)) {
+        return false;
+      }
+
+      if (serviceUpper) {
+        const serviceMatch =
+          (route.service_code && route.service_code.toUpperCase().includes(serviceUpper)) ||
+          (route.service_name && route.service_name.toUpperCase().includes(serviceUpper)) ||
+          (route.carrier_service_code &&
+            route.carrier_service_code.toUpperCase().includes(serviceUpper));
+        if (!serviceMatch) {
+          return false;
+        }
+      }
+
+      if (vesselUpper) {
+        const vesselMatch =
+          (route.vessel_name && route.vessel_name.toUpperCase().includes(vesselUpper)) ||
+          (route.vessel_imo && route.vessel_imo.toUpperCase().includes(vesselUpper));
+        if (!vesselMatch) {
+          return false;
+        }
+      }
+
+      if (voyageUpper) {
+        const voyageMatch =
+          (route.voyage_number && route.voyage_number.toUpperCase().includes(voyageUpper)) ||
+          (route.carrier_voyage_number &&
+            route.carrier_voyage_number.toUpperCase().includes(voyageUpper));
+        if (!voyageMatch) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    return filtered
+      .map((route: any) => this.mapDatabaseRouteToSchedule(route))
+      .filter((entry): entry is ScheduleEntry => entry !== null);
+  }
+
+  /**
+   * Search schedules from Portcast table
+   */
+  private async searchSchedulesFromPortcastTable(
+    origin: string,
+    options: ScheduleSearchOptions & { destination?: string; limit?: number }
+  ): Promise<ScheduleEntry[]> {
+    const {
+      destination,
+      cargoReadyDate,
+      carrier,
+      serviceCode,
+      vesselName,
+      voyage,
+      limit = 50,
+    } = options;
+
+    const departureFilter = cargoReadyDate ?? new Date().toISOString().split('T')[0];
+
+    let query = this.supabase
+      .from('portcast_schedules')
+      .select('*')
+      .eq('origin_port_code', origin)
+      .order('departure_date', { ascending: true })
+      .limit(Math.min(Math.max(limit, 10), 200));
+
+    query = query.gte('departure_date', departureFilter);
+
+    if (destination) {
+      query = query.eq('destination_port_code', destination);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    const carrierUpper = carrier?.toUpperCase();
+    const serviceUpper = serviceCode?.toUpperCase();
+    const vesselUpper = vesselName?.toUpperCase();
+    const voyageUpper = voyage?.toUpperCase();
+
+    const filtered = (data || []).filter((row: any) => {
+      const rowCarrier =
+        (row.carrier_name || row.carrier_scac || '').toUpperCase();
+      if (carrierUpper && !rowCarrier.includes(carrierUpper)) {
+        return false;
+      }
+
+      if (serviceUpper) {
+        const serviceMatch =
+          (row.route_code && row.route_code.toUpperCase().includes(serviceUpper)) ||
+          (row.route_name && row.route_name.toUpperCase().includes(serviceUpper));
+        if (!serviceMatch) {
+          return false;
+        }
+      }
+
+      if (vesselUpper) {
+        const vesselMatch =
+          (row.vessel_name && row.vessel_name.toUpperCase().includes(vesselUpper)) ||
+          (row.vessel_imo && row.vessel_imo.toUpperCase().includes(vesselUpper));
+        if (!vesselMatch) {
+          return false;
+        }
+      }
+
+      if (voyageUpper) {
+        const voyageMatch =
+          row.voyage && row.voyage.toUpperCase().includes(voyageUpper);
+        if (!voyageMatch) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    return filtered
+      .map((row: any) => this.mapPortcastRowToSchedule(row))
+      .filter((entry): entry is ScheduleEntry => entry !== null);
   }
 
   /**
@@ -640,6 +979,114 @@ export class ScheduleIntegrationService {
       vessel_name: vessel?.name,
       vessel_imo: vessel?.vesselIMONumber,
       transit_time_days: transitTimeDays,
+    };
+  }
+
+  private mapDatabaseRouteToSchedule(route: any): ScheduleEntry | null {
+    const departure = route.origin_departure || route.departure || route.etd;
+    if (!departure) {
+      return null;
+    }
+
+    const arrival = route.destination_arrival || route.arrival || route.eta;
+    let transitTimeDays = route.transit_time_days;
+
+    if (arrival) {
+      try {
+        const departureDate = new Date(departure);
+        const arrivalDate = new Date(arrival);
+        if (!isNaN(departureDate.getTime()) && !isNaN(arrivalDate.getTime()) && arrivalDate > departureDate) {
+          const diffMs = arrivalDate.getTime() - departureDate.getTime();
+          transitTimeDays = Math.round((diffMs / (1000 * 60 * 60 * 24)) * 10) / 10;
+        }
+      } catch (error) {
+        console.error('[Schedule] Error calculating transit time from database schedule entry:', error);
+      }
+    }
+
+    return {
+      carrier: (route.carrier || route.vendor || '').toUpperCase(),
+      etd: departure,
+      eta: arrival,
+      transit_time_days: transitTimeDays,
+      service_code: route.service_code || route.carrier_service_code,
+      service_name: route.service_name,
+      voyage: route.voyage_number || route.carrier_voyage_number,
+      vessel_name: route.vessel_name,
+      vessel_imo: route.vessel_imo,
+      origin_port_code: route.origin_unlocode,
+      origin_port_name: route.origin_name || route.origin_port_name,
+      destination_port_code: route.destination_unlocode,
+      destination_port_name: route.destination_name || route.destination_port_name,
+      route_name: route.service_name,
+      is_direct: route.is_direct_service ?? undefined,
+      source: 'database',
+    };
+  }
+
+  private mapPortcastRowToSchedule(row: any): ScheduleEntry | null {
+    if (!row) {
+      return null;
+    }
+
+    const departureIso = row.departure_date
+      ? new Date(`${row.departure_date}T00:00:00Z`).toISOString()
+      : undefined;
+
+    if (!departureIso) {
+      return null;
+    }
+
+    const arrivalIso = row.arrival_date
+      ? new Date(`${row.arrival_date}T00:00:00Z`).toISOString()
+      : undefined;
+
+    return {
+      carrier: (row.carrier_name || row.carrier_scac || '').toUpperCase(),
+      etd: departureIso,
+      eta: arrivalIso,
+      transit_time_days: this.parsePortcastTransitTime(
+        row.transit_time,
+        row.departure_date,
+        row.arrival_date
+      ),
+      service_code: row.route_code,
+      service_name: row.route_name,
+      voyage: row.voyage,
+      vessel_name: row.vessel_name,
+      vessel_imo: row.vessel_imo,
+      origin_port_code: row.origin_port_code,
+      origin_port_name: row.origin_port_name,
+      destination_port_code: row.destination_port_code,
+      destination_port_name: row.destination_port_name,
+      route_name: row.route_name,
+      is_direct: row.is_direct ?? undefined,
+      source: 'portcast',
+    };
+  }
+
+  private earliestDepartureToSchedule(
+    departure: EarliestDeparture,
+    origin?: string,
+    destination?: string,
+    source: 'database' | 'portcast' | 'maersk' = 'database'
+  ): ScheduleEntry | null {
+    if (!departure.found || !departure.etd) {
+      return null;
+    }
+
+    return {
+      carrier: (departure.carrier || '').toUpperCase(),
+      etd: departure.etd,
+      eta: departure.estimated_departure,
+      transit_time_days: departure.transit_time_days,
+      service_code: departure.carrier_service_code,
+      voyage: departure.carrier_voyage_number,
+      vessel_name: departure.vessel_name,
+      vessel_imo: departure.vessel_imo,
+      origin_port_code: origin,
+      destination_port_code: destination,
+      source,
     };
   }
 

@@ -31,6 +31,91 @@ export function addV4Routes(
   };
 
   // ============================================
+  // V4 SCHEDULE SEARCH (Independent of rates)
+  // ============================================
+
+  fastify.post('/api/v4/schedules/search', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const {
+        origin,
+        destination,
+        cargo_ready_date,
+        carrier,
+        service_code,
+        vessel_name,
+        voyage,
+        limit,
+      } = request.body as any;
+
+      if (!origin) {
+        return reply.code(400).send({
+          success: false,
+          error: 'origin is required',
+        });
+      }
+
+      let cargoReadyDateISO: string | undefined;
+      if (cargo_ready_date) {
+        const cargoReadyDate = new Date(cargo_ready_date);
+        if (Number.isNaN(cargoReadyDate.getTime())) {
+          return reply.code(400).send({
+            success: false,
+            error: 'cargo_ready_date must be a valid ISO date string (YYYY-MM-DD)',
+          });
+        }
+        cargoReadyDateISO = cargoReadyDate.toISOString().split('T')[0];
+      } else {
+        cargoReadyDateISO = new Date().toISOString().split('T')[0];
+      }
+
+      let numericLimit: number | undefined;
+      if (limit !== undefined) {
+        numericLimit = Number(limit);
+        if (Number.isNaN(numericLimit) || numericLimit < 1) {
+          return reply.code(400).send({
+            success: false,
+            error: 'limit must be a positive number',
+          });
+        }
+      }
+
+      const schedules = await scheduleService.searchSchedules(origin, {
+        destination,
+        cargoReadyDate: cargoReadyDateISO,
+        carrier,
+        serviceCode: service_code,
+        vesselName: vessel_name,
+        voyage,
+        limit: numericLimit,
+      });
+
+      return {
+        success: true,
+        data: schedules,
+        message: schedules.length === 0 ? 'No schedules found' : undefined,
+        metadata: {
+          api_version: 'v4',
+          generated_at: new Date().toISOString(),
+          origin: origin.toUpperCase(),
+          destination: destination ? destination.toUpperCase() : undefined,
+          cargo_ready_date: cargoReadyDateISO,
+          carrier: carrier || undefined,
+          service_code: service_code || undefined,
+          vessel_name: vessel_name || undefined,
+          voyage: voyage || undefined,
+        },
+      };
+    } catch (error) {
+      console.error('V4 Schedule Search Error:', error);
+      reply.code(500);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : JSON.stringify(error),
+      };
+    }
+  });
+
+  // ============================================
   // V4 SEARCH RATES
   // ============================================
 
