@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   rms-mcp-server:
     build: .
@@ -7,8 +5,16 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - .env  # Load all environment variables from .env file
+      - .env  # Optional: Load environment variables from .env file if it exists
     environment:
+      # Supabase (required)
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      # Maersk API (optional - can be in .env or set here)
+      - MAERSK_API_KEY=${MAERSK_API_KEY}
+      - MAERSK_API_SECRET=${MAERSK_API_SECRET}
+      - MAERSK_API_BASE_URL=${MAERSK_API_BASE_URL:-https://api.maersk.com}
+      # Other
       - NODE_ENV=production
     restart: unless-stopped
     networks:

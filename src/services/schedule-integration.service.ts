@@ -754,14 +754,25 @@ export class ScheduleIntegrationService {
       options.cargoReadyDate ??
       new Date().toISOString().split('T')[0];
 
-    const routes: MaerskPointToPointResponse[] =
-      await maerskAdapter.fetchPointToPoint(
+    console.log(
+      `[Schedule] Calling Maersk fetchPointToPoint(${origin.toUpperCase()}, ${destination.toUpperCase()}, ${fromDate})`
+    );
+
+    let routes: MaerskPointToPointResponse[] = [];
+    try {
+      routes = await maerskAdapter.fetchPointToPoint(
         origin.toUpperCase(),
         destination.toUpperCase(),
         fromDate
       );
+      console.log(`[Schedule] Maersk API fetchPointToPoint returned ${routes?.length || 0} routes`);
+    } catch (error) {
+      console.error('[Schedule] Maersk API fetchPointToPoint error:', error);
+      return [];
+    }
 
     if (!routes || routes.length === 0) {
+      console.log(`[Schedule] No Maersk routes found for ${origin} → ${destination} from ${fromDate}`);
       return [];
     }
 
@@ -778,21 +789,30 @@ export class ScheduleIntegrationService {
       : undefined;
 
     const entries: ScheduleEntry[] = [];
+    let processedCount = 0;
+    let filteredOutCount = 0;
 
     for (const route of routes) {
+      processedCount++;
       const entry = this.mapMaerskRouteToSchedule(route, origin, destination);
       if (!entry) {
+        filteredOutCount++;
         continue;
       }
 
       const etdTime = entry.etd ? new Date(entry.etd).getTime() : NaN;
       if (Number.isNaN(etdTime)) {
+        filteredOutCount++;
         continue;
       }
       if (fromTime !== undefined && etdTime < fromTime) {
+        filteredOutCount++;
+        console.log(`[Schedule] Maersk route filtered: ETD ${entry.etd} is before fromTime ${new Date(fromTime).toISOString()}`);
         continue;
       }
       if (toTime !== undefined && etdTime > toTime) {
+        filteredOutCount++;
+        console.log(`[Schedule] Maersk route filtered: ETD ${entry.etd} is after toTime ${new Date(toTime).toISOString()}`);
         continue;
       }
 
@@ -838,6 +858,10 @@ export class ScheduleIntegrationService {
         break;
       }
     }
+
+    console.log(
+      `[Schedule] Maersk processing summary: ${processedCount} routes processed, ${filteredOutCount} filtered out, ${entries.length} entries returned`
+    );
 
     return entries;
   }
