@@ -39,14 +39,10 @@ export function addV4Routes(
       const {
         origin,
         destination,
-        cargo_ready_date,
-        departure_from,
-        departure_to,
-        carrier,
-        service_code,
-        vessel_name,
-        voyage,
-        limit,
+        departure_from, // Start date for departure range
+        departure_to, // End date for departure range
+        weeks, // Number of weeks from departure_from (2, 4, or 6) - LWC will calculate
+        limit, // Max number of results (default higher for client-side filtering)
       } = request.body as any;
 
       if (!origin) {
@@ -56,9 +52,7 @@ export function addV4Routes(
         });
       }
 
-      let departureFromISO: string | undefined;
-      let departureToISO: string | undefined;
-
+      // Simple date range handling - LWC will do all other filtering
       const parseDate = (value: string, fieldName: string): string | null => {
         const parsed = new Date(value);
         if (Number.isNaN(parsed.getTime())) {
@@ -71,6 +65,9 @@ export function addV4Routes(
         return parsed.toISOString().split('T')[0];
       };
 
+      let departureFromISO: string | undefined;
+      let departureToISO: string | undefined;
+
       if (departure_from) {
         const parsed = parseDate(departure_from, 'departure_from');
         if (!parsed) {
@@ -79,7 +76,15 @@ export function addV4Routes(
         departureFromISO = parsed;
       }
 
-      if (departure_to) {
+      // Calculate departure_to from weeks if provided (LWC convenience)
+      if (weeks !== undefined && departureFromISO) {
+        const weeksNum = Number(weeks);
+        if (!Number.isNaN(weeksNum) && weeksNum > 0) {
+          const fromDate = new Date(`${departureFromISO}T00:00:00Z`);
+          fromDate.setDate(fromDate.getDate() + (weeksNum * 7));
+          departureToISO = fromDate.toISOString().split('T')[0];
+        }
+      } else if (departure_to) {
         const parsed = parseDate(departure_to, 'departure_to');
         if (!parsed) {
           return;
@@ -87,23 +92,12 @@ export function addV4Routes(
         departureToISO = parsed;
       }
 
-      if (cargo_ready_date) {
-        const parsed = parseDate(cargo_ready_date, 'cargo_ready_date');
-        if (!parsed) {
-          return;
-        }
-        if (!departureFromISO) {
-          departureFromISO = parsed;
-        }
-        if (!departureToISO) {
-          departureToISO = parsed;
-        }
-      }
-
+      // Default to today if no date provided
       if (!departureFromISO) {
         departureFromISO = new Date().toISOString().split('T')[0];
       }
 
+      // Validate date range
       if (departureFromISO && departureToISO) {
         const fromTime = new Date(`${departureFromISO}T00:00:00Z`).getTime();
         const toTime = new Date(`${departureToISO}T23:59:59Z`).getTime();
@@ -115,9 +109,9 @@ export function addV4Routes(
         }
       }
 
-      let numericLimit: number | undefined;
+      // Higher default limit for client-side filtering (LWC will filter further)
+      let numericLimit: number | undefined = limit !== undefined ? Number(limit) : 100;
       if (limit !== undefined) {
-        numericLimit = Number(limit);
         if (Number.isNaN(numericLimit) || numericLimit < 1) {
           return reply.code(400).send({
             success: false,
@@ -126,15 +120,11 @@ export function addV4Routes(
         }
       }
 
+      // Simple API - just return schedules in date range, LWC does all filtering
       const schedules = await scheduleService.searchSchedules(origin, {
         destination,
-        cargoReadyDate: departureFromISO,
         departureFrom: departureFromISO,
         departureTo: departureToISO,
-        carrier,
-        serviceCode: service_code,
-        vesselName: vessel_name,
-        voyage,
         limit: numericLimit,
       });
 
@@ -149,10 +139,8 @@ export function addV4Routes(
           destination: destination ? destination.toUpperCase() : undefined,
           departure_from: departureFromISO,
           departure_to: departureToISO,
-          carrier: carrier || undefined,
-          service_code: service_code || undefined,
-          vessel_name: vessel_name || undefined,
-          voyage: voyage || undefined,
+          total_results: schedules.length,
+          note: 'All filtering (carrier, service, vessel, voyage, is_direct, arrival dates) should be done client-side in the LWC',
         },
       };
     } catch (error) {

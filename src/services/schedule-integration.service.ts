@@ -70,14 +70,9 @@ interface DepartureOptions {
 
 export interface ScheduleSearchOptions {
   destination?: string;
-  cargoReadyDate?: string;
-  departureFrom?: string;
-  departureTo?: string;
-  carrier?: string;
-  serviceCode?: string;
-  vesselName?: string;
-  voyage?: string;
-  limit?: number;
+  departureFrom?: string; // Start date for departure range
+  departureTo?: string; // End date for departure range
+  limit?: number; // Max results (default higher for client-side filtering)
 }
 
 export class ScheduleIntegrationService {
@@ -104,36 +99,19 @@ export class ScheduleIntegrationService {
   ): Promise<ScheduleEntry[]> {
     const {
       destination,
-      cargoReadyDate,
-      carrier,
-      serviceCode,
-      vesselName,
-      voyage,
-      limit = 20,
+      departureFrom,
+      departureTo,
+      limit = 100, // Higher default for client-side filtering
     } = options;
 
-    const maxResults = Math.min(Math.max(limit, 1), 100);
+    const maxResults = Math.min(Math.max(limit, 1), 500); // Higher max for client-side filtering
     const originCode = origin.toUpperCase();
     const destinationCode = destination ? destination.toUpperCase() : undefined;
-    const carrierFilter = carrier?.trim();
-    const serviceFilter = serviceCode?.trim();
-    const vesselFilter = vesselName?.trim();
-    const voyageFilter = voyage?.trim();
 
-    // If cargo_ready_date is provided without departure_to, expand window to 14 days
-    // to include upcoming departures (similar to how rates endpoint works)
+    // Simple date range handling
     const departureFromISO =
-      options.departureFrom ??
-      cargoReadyDate ??
-      new Date().toISOString().split('T')[0];
-    const departureToISO = options.departureTo ?? 
-      (cargoReadyDate 
-        ? (() => {
-            const date = new Date(cargoReadyDate);
-            date.setDate(date.getDate() + 14); // Add 14 days
-            return date.toISOString().split('T')[0];
-          })()
-        : undefined);
+      departureFrom ?? new Date().toISOString().split('T')[0];
+    const departureToISO = departureTo;
 
     const fromTime = departureFromISO
       ? new Date(`${departureFromISO}T00:00:00Z`).getTime()
@@ -152,17 +130,20 @@ export class ScheduleIntegrationService {
         if (!entry.etd) {
           continue;
         }
+        // Deduplication key: carrier + etd + voyage + vessel (source NOT included)
+        // This ensures the same schedule from different sources is deduplicated
         const key = [
           entry.carrier || '',
           entry.etd,
           entry.voyage || '',
           entry.vessel_name || '',
-          entry.source,
         ]
           .map((part) => part ?? '')
           .join('|');
 
         const existing = scheduleMap.get(key);
+        // Keep the entry with the highest priority (lowest number)
+        // Priority: Database (1) > Portcast (2) > Maersk (3)
         if (!existing || priority < existing.priority) {
           scheduleMap.set(key, { ...entry, priority });
         }
@@ -172,13 +153,8 @@ export class ScheduleIntegrationService {
     try {
       const dbEntries = await this.searchSchedulesFromDatabase(originCode, {
         destination: destinationCode,
-        cargoReadyDate,
         departureFrom: departureFromISO,
         departureTo: departureToISO,
-        carrier: carrierFilter,
-        serviceCode: serviceFilter,
-        vesselName: vesselFilter,
-        voyage: voyageFilter,
         limit: maxResults * 2,
       });
       addEntries(dbEntries, 1);
@@ -189,13 +165,8 @@ export class ScheduleIntegrationService {
     try {
       const portcastEntries = await this.searchSchedulesFromPortcastTable(originCode, {
         destination: destinationCode,
-        cargoReadyDate,
         departureFrom: departureFromISO,
         departureTo: departureToISO,
-        carrier: carrierFilter,
-        serviceCode: serviceFilter,
-        vesselName: vesselFilter,
-        voyage: voyageFilter,
         limit: maxResults * 2,
       });
       addEntries(portcastEntries, 2);
@@ -203,24 +174,15 @@ export class ScheduleIntegrationService {
       console.error('[Schedule] Error querying Portcast schedules:', error);
     }
 
-    const shouldQueryMaersk =
-      (!carrierFilter ||
-        carrierFilter.toUpperCase().includes('MAERSK') ||
-        carrierFilter.toUpperCase().includes('MAEU')) &&
-      !!this.dcsaClient;
-
-    if (shouldQueryMaersk && destinationCode) {
+    // Query Maersk API if DCSA client is available and destination is provided
+    if (this.dcsaClient && destinationCode) {
       try {
         console.log(
-          `[Schedule] Querying Maersk API for ${originCode} → ${destinationCode}, carrierFilter: ${carrierFilter || 'none'}`
+          `[Schedule] Querying Maersk API for ${originCode} → ${destinationCode}`
         );
         const maerskEntries = await this.searchSchedulesFromMaersk(originCode, destinationCode, {
           departureFrom: departureFromISO,
           departureTo: departureToISO,
-          carrier: carrierFilter,
-          serviceCode: serviceFilter,
-          vesselName: vesselFilter,
-          voyage: voyageFilter,
           limit: maxResults,
         });
         console.log(`[Schedule] Maersk API returned ${maerskEntries.length} entries`);
@@ -236,14 +198,6 @@ export class ScheduleIntegrationService {
       } catch (error) {
         console.error('[Schedule] Error querying Maersk API for schedule search:', error);
       }
-    } else {
-      if (!destinationCode) {
-        console.log(`[Schedule] Skipping Maersk API: destination not provided`);
-      } else if (!this.dcsaClient) {
-        console.log(`[Schedule] Skipping Maersk API: DCSA client not available`);
-      } else if (carrierFilter && !carrierFilter.toUpperCase().includes('MAERSK') && !carrierFilter.toUpperCase().includes('MAEU')) {
-        console.log(`[Schedule] Skipping Maersk API: carrier filter is ${carrierFilter}, not Maersk`);
-      }
     }
 
     const allEntries = Array.from(scheduleMap.values()).map(({ priority, ...rest }) => rest);
@@ -254,12 +208,14 @@ export class ScheduleIntegrationService {
       maersk: allEntries.filter((e) => e.source === 'maersk').length,
     });
 
+    // Simple filtering - only departure date range (LWC handles all other filtering)
     const schedules = allEntries
       .filter((entry) => {
         const etdTime = entry.etd ? new Date(entry.etd).getTime() : NaN;
         if (Number.isNaN(etdTime)) {
           return false;
         }
+        // Only filter by departure date range (to reduce data transfer)
         if (fromTime !== undefined && etdTime < fromTime) {
           return false;
         }
@@ -549,13 +505,8 @@ export class ScheduleIntegrationService {
   ): Promise<ScheduleEntry[]> {
     const {
       destination,
-      cargoReadyDate,
       departureFrom,
       departureTo,
-      carrier,
-      serviceCode,
-      vesselName,
-      voyage,
       limit = 50,
     } = options;
 
@@ -566,14 +517,11 @@ export class ScheduleIntegrationService {
       .order('origin_departure', { ascending: true })
       .limit(Math.min(Math.max(limit, 10), 200));
 
-    const fromIso = departureFrom ?? cargoReadyDate;
-    const toIso = departureTo ?? cargoReadyDate;
-
-    const fromIsoString = fromIso
-      ? new Date(`${fromIso}T00:00:00Z`).toISOString()
+    const fromIsoString = departureFrom
+      ? new Date(`${departureFrom}T00:00:00Z`).toISOString()
       : new Date().toISOString();
-    const toIsoString = toIso
-      ? new Date(`${toIso}T23:59:59Z`).toISOString()
+    const toIsoString = departureTo
+      ? new Date(`${departureTo}T23:59:59Z`).toISOString()
       : undefined;
 
     query = query.gte('origin_departure', fromIsoString);
@@ -592,51 +540,8 @@ export class ScheduleIntegrationService {
       throw error;
     }
 
-    const carrierUpper = carrier?.toUpperCase();
-    const serviceUpper = serviceCode?.toUpperCase();
-    const vesselUpper = vesselName?.toUpperCase();
-    const voyageUpper = voyage?.toUpperCase();
-
-    const filtered = (data || []).filter((route: any) => {
-      const routeCarrier = (route.carrier || route.vendor || '').toUpperCase();
-      if (carrierUpper && !routeCarrier.includes(carrierUpper)) {
-        return false;
-      }
-
-      if (serviceUpper) {
-        const serviceMatch =
-          (route.service_code && route.service_code.toUpperCase().includes(serviceUpper)) ||
-          (route.service_name && route.service_name.toUpperCase().includes(serviceUpper)) ||
-          (route.carrier_service_code &&
-            route.carrier_service_code.toUpperCase().includes(serviceUpper));
-        if (!serviceMatch) {
-          return false;
-        }
-      }
-
-      if (vesselUpper) {
-        const vesselMatch =
-          (route.vessel_name && route.vessel_name.toUpperCase().includes(vesselUpper)) ||
-          (route.vessel_imo && route.vessel_imo.toUpperCase().includes(vesselUpper));
-        if (!vesselMatch) {
-          return false;
-        }
-      }
-
-      if (voyageUpper) {
-        const voyageMatch =
-          (route.voyage_number && route.voyage_number.toUpperCase().includes(voyageUpper)) ||
-          (route.carrier_voyage_number &&
-            route.carrier_voyage_number.toUpperCase().includes(voyageUpper));
-        if (!voyageMatch) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-
-    return filtered
+    // No filtering - return all results (LWC will filter)
+    return (data || [])
       .map((route: any) => this.mapDatabaseRouteToSchedule(route))
       .filter((entry): entry is ScheduleEntry => entry !== null);
   }
@@ -650,18 +555,13 @@ export class ScheduleIntegrationService {
   ): Promise<ScheduleEntry[]> {
     const {
       destination,
-      cargoReadyDate,
       departureFrom,
       departureTo,
-      carrier,
-      serviceCode,
-      vesselName,
-      voyage,
       limit = 50,
     } = options;
 
-    const departureFilter = departureFrom ?? cargoReadyDate ?? new Date().toISOString().split('T')[0];
-    const departureToFilter = departureTo ?? cargoReadyDate ?? undefined;
+    const departureFilter = departureFrom ?? new Date().toISOString().split('T')[0];
+    const departureToFilter = departureTo;
 
     let query = this.supabase
       .from('portcast_schedules')
@@ -686,48 +586,8 @@ export class ScheduleIntegrationService {
       throw error;
     }
 
-    const carrierUpper = carrier?.toUpperCase();
-    const serviceUpper = serviceCode?.toUpperCase();
-    const vesselUpper = vesselName?.toUpperCase();
-    const voyageUpper = voyage?.toUpperCase();
-
-    const filtered = (data || []).filter((row: any) => {
-      const rowCarrier =
-        (row.carrier_name || row.carrier_scac || '').toUpperCase();
-      if (carrierUpper && !rowCarrier.includes(carrierUpper)) {
-        return false;
-      }
-
-      if (serviceUpper) {
-        const serviceMatch =
-          (row.route_code && row.route_code.toUpperCase().includes(serviceUpper)) ||
-          (row.route_name && row.route_name.toUpperCase().includes(serviceUpper));
-        if (!serviceMatch) {
-          return false;
-        }
-      }
-
-      if (vesselUpper) {
-        const vesselMatch =
-          (row.vessel_name && row.vessel_name.toUpperCase().includes(vesselUpper)) ||
-          (row.vessel_imo && row.vessel_imo.toUpperCase().includes(vesselUpper));
-        if (!vesselMatch) {
-          return false;
-        }
-      }
-
-      if (voyageUpper) {
-        const voyageMatch =
-          row.voyage && row.voyage.toUpperCase().includes(voyageUpper);
-        if (!voyageMatch) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-
-    return filtered
+    // No filtering - return all results (LWC will filter)
+    return (data || [])
       .map((row: any) => this.mapPortcastRowToSchedule(row))
       .filter((entry): entry is ScheduleEntry => entry !== null);
   }
@@ -751,7 +611,6 @@ export class ScheduleIntegrationService {
 
     const fromDate =
       options.departureFrom ??
-      options.cargoReadyDate ??
       new Date().toISOString().split('T')[0];
 
     console.log(
@@ -776,11 +635,7 @@ export class ScheduleIntegrationService {
       return [];
     }
 
-    const carrierUpper = options.carrier?.toUpperCase();
-    const serviceUpper = options.serviceCode?.toUpperCase();
-    const vesselUpper = options.vesselName?.toUpperCase();
-    const voyageUpper = options.voyage?.toUpperCase();
-
+    // Only filter by date range (LWC handles all other filtering)
     const fromTime = options.departureFrom
       ? new Date(`${options.departureFrom}T00:00:00Z`).getTime()
       : undefined;
@@ -789,66 +644,23 @@ export class ScheduleIntegrationService {
       : undefined;
 
     const entries: ScheduleEntry[] = [];
-    let processedCount = 0;
-    let filteredOutCount = 0;
 
     for (const route of routes) {
-      processedCount++;
       const entry = this.mapMaerskRouteToSchedule(route, origin, destination);
       if (!entry) {
-        filteredOutCount++;
         continue;
       }
 
       const etdTime = entry.etd ? new Date(entry.etd).getTime() : NaN;
       if (Number.isNaN(etdTime)) {
-        filteredOutCount++;
         continue;
       }
+      
+      // Only date range filtering
       if (fromTime !== undefined && etdTime < fromTime) {
-        filteredOutCount++;
-        console.log(`[Schedule] Maersk route filtered: ETD ${entry.etd} is before fromTime ${new Date(fromTime).toISOString()}`);
         continue;
       }
       if (toTime !== undefined && etdTime > toTime) {
-        filteredOutCount++;
-        console.log(`[Schedule] Maersk route filtered: ETD ${entry.etd} is after toTime ${new Date(toTime).toISOString()}`);
-        continue;
-      }
-
-      if (
-        carrierUpper &&
-        entry.carrier &&
-        !entry.carrier.toUpperCase().includes(carrierUpper)
-      ) {
-        continue;
-      }
-
-      if (
-        serviceUpper &&
-        !(
-          (entry.service_code &&
-            entry.service_code.toUpperCase().includes(serviceUpper)) ||
-          (entry.service_name &&
-            entry.service_name.toUpperCase().includes(serviceUpper))
-        )
-      ) {
-        continue;
-      }
-
-      if (
-        vesselUpper &&
-        entry.vessel_name &&
-        !entry.vessel_name.toUpperCase().includes(vesselUpper)
-      ) {
-        continue;
-      }
-
-      if (
-        voyageUpper &&
-        entry.voyage &&
-        !entry.voyage.toUpperCase().includes(voyageUpper)
-      ) {
         continue;
       }
 
@@ -860,7 +672,7 @@ export class ScheduleIntegrationService {
     }
 
     console.log(
-      `[Schedule] Maersk processing summary: ${processedCount} routes processed, ${filteredOutCount} filtered out, ${entries.length} entries returned`
+      `[Schedule] Maersk processing summary: ${routes.length} routes processed, ${entries.length} entries returned (date range filtered only)`
     );
 
     return entries;
