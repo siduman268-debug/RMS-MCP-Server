@@ -43,6 +43,21 @@ export interface ScheduleEntry {
   destination_port_name?: string;
   route_name?: string;
   is_direct?: boolean;
+  legs?: Array<{
+    sequence?: number;
+    from?: string;
+    from_name?: string;
+    to?: string;
+    to_name?: string;
+    departure?: string;
+    arrival?: string;
+    transport_mode?: string;
+    carrier_code?: string;
+    carrier_name?: string;
+    voyage?: string;
+    vessel_name?: string;
+    vessel_imo?: string;
+  }>;
   source: 'database' | 'portcast' | 'maersk';
 }
 
@@ -56,6 +71,8 @@ interface DepartureOptions {
 export interface ScheduleSearchOptions {
   destination?: string;
   cargoReadyDate?: string;
+  departureFrom?: string;
+  departureTo?: string;
   carrier?: string;
   serviceCode?: string;
   vesselName?: string;
@@ -103,6 +120,19 @@ export class ScheduleIntegrationService {
     const vesselFilter = vesselName?.trim();
     const voyageFilter = voyage?.trim();
 
+    const departureFromISO =
+      options.departureFrom ??
+      cargoReadyDate ??
+      new Date().toISOString().split('T')[0];
+    const departureToISO = options.departureTo ?? cargoReadyDate ?? undefined;
+
+    const fromTime = departureFromISO
+      ? new Date(`${departureFromISO}T00:00:00Z`).getTime()
+      : undefined;
+    const toTime = departureToISO
+      ? new Date(`${departureToISO}T23:59:59Z`).getTime()
+      : undefined;
+
     const scheduleMap = new Map<
       string,
       ScheduleEntry & { priority: number }
@@ -134,6 +164,8 @@ export class ScheduleIntegrationService {
       const dbEntries = await this.searchSchedulesFromDatabase(originCode, {
         destination: destinationCode,
         cargoReadyDate,
+        departureFrom: departureFromISO,
+        departureTo: departureToISO,
         carrier: carrierFilter,
         serviceCode: serviceFilter,
         vesselName: vesselFilter,
@@ -149,6 +181,8 @@ export class ScheduleIntegrationService {
       const portcastEntries = await this.searchSchedulesFromPortcastTable(originCode, {
         destination: destinationCode,
         cargoReadyDate,
+        departureFrom: departureFromISO,
+        departureTo: departureToISO,
         carrier: carrierFilter,
         serviceCode: serviceFilter,
         vesselName: vesselFilter,
@@ -166,37 +200,17 @@ export class ScheduleIntegrationService {
         carrierFilter.toUpperCase().includes('MAEU')) &&
       !!this.dcsaClient;
 
-    if (shouldQueryMaersk) {
+    if (shouldQueryMaersk && destinationCode) {
       try {
-        const maerskResults = await this.getEarliestDepartureFromMaerskAPI(
-          originCode,
-          destinationCode,
-          {
-            cargoReadyDate,
-            limit: maxResults,
-          }
-        );
-
-        const maerskEntries = [maerskResults.earliest, ...maerskResults.upcoming]
-          .filter((dep) => dep.found && dep.etd)
-          .map((dep) => this.earliestDepartureToSchedule(dep, originCode, destinationCode, 'maersk'))
-          .filter((entry): entry is ScheduleEntry => entry !== null)
-          .filter((entry) => {
-            if (carrierFilter && entry.carrier && !entry.carrier.includes(carrierFilter.toUpperCase())) {
-              return false;
-            }
-            if (serviceFilter && entry.service_code && !entry.service_code.toUpperCase().includes(serviceFilter.toUpperCase())) {
-              return false;
-            }
-            if (vesselFilter && entry.vessel_name && !entry.vessel_name.toUpperCase().includes(vesselFilter.toUpperCase())) {
-              return false;
-            }
-            if (voyageFilter && entry.voyage && !entry.voyage.toUpperCase().includes(voyageFilter.toUpperCase())) {
-              return false;
-            }
-            return true;
-          });
-
+        const maerskEntries = await this.searchSchedulesFromMaersk(originCode, destinationCode, {
+          departureFrom: departureFromISO,
+          departureTo: departureToISO,
+          carrier: carrierFilter,
+          serviceCode: serviceFilter,
+          vesselName: vesselFilter,
+          voyage: voyageFilter,
+          limit: maxResults,
+        });
         addEntries(maerskEntries, 3);
       } catch (error) {
         console.error('[Schedule] Error querying Maersk API for schedule search:', error);
@@ -205,6 +219,19 @@ export class ScheduleIntegrationService {
 
     const schedules = Array.from(scheduleMap.values())
       .map(({ priority, ...rest }) => rest)
+      .filter((entry) => {
+        const etdTime = entry.etd ? new Date(entry.etd).getTime() : NaN;
+        if (Number.isNaN(etdTime)) {
+          return false;
+        }
+        if (fromTime !== undefined && etdTime < fromTime) {
+          return false;
+        }
+        if (toTime !== undefined && etdTime > toTime) {
+          return false;
+        }
+        return true;
+      })
       .sort((a, b) => {
         const aTime = new Date(a.etd).getTime();
         const bTime = new Date(b.etd).getTime();
@@ -480,6 +507,8 @@ export class ScheduleIntegrationService {
     const {
       destination,
       cargoReadyDate,
+      departureFrom,
+      departureTo,
       carrier,
       serviceCode,
       vesselName,
@@ -494,11 +523,21 @@ export class ScheduleIntegrationService {
       .order('origin_departure', { ascending: true })
       .limit(Math.min(Math.max(limit, 10), 200));
 
-    const cargoDateIso = cargoReadyDate
-      ? new Date(cargoReadyDate).toISOString()
-      : new Date().toISOString();
+    const fromIso = departureFrom ?? cargoReadyDate;
+    const toIso = departureTo ?? cargoReadyDate;
 
-    query = query.gte('origin_departure', cargoDateIso);
+    const fromIsoString = fromIso
+      ? new Date(`${fromIso}T00:00:00Z`).toISOString()
+      : new Date().toISOString();
+    const toIsoString = toIso
+      ? new Date(`${toIso}T23:59:59Z`).toISOString()
+      : undefined;
+
+    query = query.gte('origin_departure', fromIsoString);
+
+    if (toIsoString) {
+      query = query.lte('origin_departure', toIsoString);
+    }
 
     if (destination) {
       query = query.eq('destination_unlocode', destination);
@@ -569,6 +608,8 @@ export class ScheduleIntegrationService {
     const {
       destination,
       cargoReadyDate,
+      departureFrom,
+      departureTo,
       carrier,
       serviceCode,
       vesselName,
@@ -576,7 +617,8 @@ export class ScheduleIntegrationService {
       limit = 50,
     } = options;
 
-    const departureFilter = cargoReadyDate ?? new Date().toISOString().split('T')[0];
+    const departureFilter = departureFrom ?? cargoReadyDate ?? new Date().toISOString().split('T')[0];
+    const departureToFilter = departureTo ?? cargoReadyDate ?? undefined;
 
     let query = this.supabase
       .from('portcast_schedules')
@@ -589,6 +631,10 @@ export class ScheduleIntegrationService {
 
     if (destination) {
       query = query.eq('destination_port_code', destination);
+    }
+
+    if (departureToFilter) {
+      query = query.lte('departure_date', departureToFilter);
     }
 
     const { data, error } = await query;
@@ -641,6 +687,116 @@ export class ScheduleIntegrationService {
     return filtered
       .map((row: any) => this.mapPortcastRowToSchedule(row))
       .filter((entry): entry is ScheduleEntry => entry !== null);
+  }
+
+  /**
+   * Search schedules from Maersk DCSA API
+   */
+  private async searchSchedulesFromMaersk(
+    origin: string,
+    destination: string,
+    options: ScheduleSearchOptions & { limit?: number }
+  ): Promise<ScheduleEntry[]> {
+    if (!this.dcsaClient) {
+      return [];
+    }
+
+    const maerskAdapter = (this.dcsaClient as any).adapters?.get('MAERSK');
+    if (!maerskAdapter) {
+      return [];
+    }
+
+    const fromDate =
+      options.departureFrom ??
+      options.cargoReadyDate ??
+      new Date().toISOString().split('T')[0];
+
+    const routes: MaerskPointToPointResponse[] =
+      await maerskAdapter.fetchPointToPoint(
+        origin.toUpperCase(),
+        destination.toUpperCase(),
+        fromDate
+      );
+
+    if (!routes || routes.length === 0) {
+      return [];
+    }
+
+    const carrierUpper = options.carrier?.toUpperCase();
+    const serviceUpper = options.serviceCode?.toUpperCase();
+    const vesselUpper = options.vesselName?.toUpperCase();
+    const voyageUpper = options.voyage?.toUpperCase();
+
+    const fromTime = options.departureFrom
+      ? new Date(`${options.departureFrom}T00:00:00Z`).getTime()
+      : undefined;
+    const toTime = options.departureTo
+      ? new Date(`${options.departureTo}T23:59:59Z`).getTime()
+      : undefined;
+
+    const entries: ScheduleEntry[] = [];
+
+    for (const route of routes) {
+      const entry = this.mapMaerskRouteToSchedule(route, origin, destination);
+      if (!entry) {
+        continue;
+      }
+
+      const etdTime = entry.etd ? new Date(entry.etd).getTime() : NaN;
+      if (Number.isNaN(etdTime)) {
+        continue;
+      }
+      if (fromTime !== undefined && etdTime < fromTime) {
+        continue;
+      }
+      if (toTime !== undefined && etdTime > toTime) {
+        continue;
+      }
+
+      if (
+        carrierUpper &&
+        entry.carrier &&
+        !entry.carrier.toUpperCase().includes(carrierUpper)
+      ) {
+        continue;
+      }
+
+      if (
+        serviceUpper &&
+        !(
+          (entry.service_code &&
+            entry.service_code.toUpperCase().includes(serviceUpper)) ||
+          (entry.service_name &&
+            entry.service_name.toUpperCase().includes(serviceUpper))
+        )
+      ) {
+        continue;
+      }
+
+      if (
+        vesselUpper &&
+        entry.vessel_name &&
+        !entry.vessel_name.toUpperCase().includes(vesselUpper)
+      ) {
+        continue;
+      }
+
+      if (
+        voyageUpper &&
+        entry.voyage &&
+        !entry.voyage.toUpperCase().includes(voyageUpper)
+      ) {
+        continue;
+      }
+
+      entries.push(entry);
+
+      if (entries.length >= (options.limit ?? 50)) {
+        break;
+      }
+    }
+
+    return entries;
   }
 
   /**
@@ -1062,6 +1218,95 @@ export class ScheduleIntegrationService {
       route_name: row.route_name,
       is_direct: row.is_direct ?? undefined,
       source: 'portcast',
+    };
+  }
+
+  private mapMaerskRouteToSchedule(
+    route: MaerskPointToPointResponse,
+    origin?: string,
+    destination?: string
+  ): ScheduleEntry | null {
+    const receipt = route.placeOfReceipt?.dateTime;
+    if (!receipt) {
+      return null;
+    }
+
+    const delivery = route.placeOfDelivery?.dateTime;
+
+    let transitTimeDays: number | undefined =
+      typeof route.transitTime === 'number'
+        ? Math.round(route.transitTime * 10) / 10
+        : undefined;
+
+    if (!transitTimeDays && delivery) {
+      try {
+        const departureDate = new Date(receipt);
+        const arrivalDate = new Date(delivery);
+        if (!isNaN(departureDate.getTime()) && !isNaN(arrivalDate.getTime()) && arrivalDate > departureDate) {
+          const diffMs = arrivalDate.getTime() - departureDate.getTime();
+          transitTimeDays = Math.round((diffMs / (1000 * 60 * 60 * 24)) * 10) / 10;
+        }
+      } catch (error) {
+        console.error('[Schedule] Error calculating transit time from Maersk schedule:', error);
+      }
+    }
+
+    const firstLeg = route.legs?.[0];
+    const servicePartner = firstLeg?.transport?.servicePartners?.[0];
+    const vessel =
+      route.legs?.find(
+        (leg: MaerskLeg) => leg.transport?.modeOfTransport === 'VESSEL'
+      )?.transport?.vessel ?? firstLeg?.transport?.vessel;
+
+    const legs =
+      route.legs?.map((leg: MaerskLeg) => ({
+        sequence: leg.sequenceNumber,
+        from: leg.departure?.location?.UNLocationCode,
+        from_name: leg.departure?.location?.locationName,
+        to: leg.arrival?.location?.UNLocationCode,
+        to_name: leg.arrival?.location?.locationName,
+        departure: leg.departure?.dateTime,
+        arrival: leg.arrival?.dateTime,
+        transport_mode: leg.transport?.modeOfTransport,
+        carrier_code: leg.transport?.servicePartners?.[0]?.carrierCode,
+        carrier_name: leg.transport?.servicePartners?.[0]?.carrierServiceName,
+        voyage:
+          leg.transport?.servicePartners?.[0]?.carrierExportVoyageNumber ||
+          leg.transport?.servicePartners?.[0]?.carrierImportVoyageNumber,
+        vessel_name: leg.transport?.vessel?.name,
+        vessel_imo: leg.transport?.vessel?.vesselIMONumber,
+      })) ?? [];
+
+    const originCode =
+      route.placeOfReceipt?.location?.UNLocationCode ?? origin;
+    const originName =
+      route.placeOfReceipt?.location?.locationName ?? undefined;
+    const destinationCode =
+      route.placeOfDelivery?.location?.UNLocationCode ?? destination;
+    const destinationName =
+      route.placeOfDelivery?.location?.locationName ?? undefined;
+
+    return {
+      carrier: 'MAERSK',
+      etd: receipt,
+      eta: delivery,
+      transit_time_days: transitTimeDays,
+      service_code: servicePartner?.carrierServiceCode,
+      service_name: servicePartner?.carrierServiceName,
+      voyage:
+        servicePartner?.carrierExportVoyageNumber ||
+        servicePartner?.carrierImportVoyageNumber ||
+        route.routingReference?.toString(),
+      vessel_name: vessel?.name,
+      vessel_imo: vessel?.vesselIMONumber,
+      origin_port_code: originCode,
+      origin_port_name: originName,
+      destination_port_code: destinationCode,
+      destination_port_name: destinationName,
+      route_name: servicePartner?.carrierServiceName,
+      is_direct: (route.legs?.length ?? 0) <= 1,
+      legs,
+      source: 'maersk',
     };
   }
 

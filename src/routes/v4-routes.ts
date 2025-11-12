@@ -40,6 +40,8 @@ export function addV4Routes(
         origin,
         destination,
         cargo_ready_date,
+        departure_from,
+        departure_to,
         carrier,
         service_code,
         vessel_name,
@@ -54,18 +56,63 @@ export function addV4Routes(
         });
       }
 
-      let cargoReadyDateISO: string | undefined;
+      let departureFromISO: string | undefined;
+      let departureToISO: string | undefined;
+
+      const parseDate = (value: string, fieldName: string): string | null => {
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+          reply.code(400).send({
+            success: false,
+            error: `${fieldName} must be a valid ISO date string (YYYY-MM-DD)`,
+          });
+          return null;
+        }
+        return parsed.toISOString().split('T')[0];
+      };
+
+      if (departure_from) {
+        const parsed = parseDate(departure_from, 'departure_from');
+        if (!parsed) {
+          return;
+        }
+        departureFromISO = parsed;
+      }
+
+      if (departure_to) {
+        const parsed = parseDate(departure_to, 'departure_to');
+        if (!parsed) {
+          return;
+        }
+        departureToISO = parsed;
+      }
+
       if (cargo_ready_date) {
-        const cargoReadyDate = new Date(cargo_ready_date);
-        if (Number.isNaN(cargoReadyDate.getTime())) {
+        const parsed = parseDate(cargo_ready_date, 'cargo_ready_date');
+        if (!parsed) {
+          return;
+        }
+        if (!departureFromISO) {
+          departureFromISO = parsed;
+        }
+        if (!departureToISO) {
+          departureToISO = parsed;
+        }
+      }
+
+      if (!departureFromISO) {
+        departureFromISO = new Date().toISOString().split('T')[0];
+      }
+
+      if (departureFromISO && departureToISO) {
+        const fromTime = new Date(`${departureFromISO}T00:00:00Z`).getTime();
+        const toTime = new Date(`${departureToISO}T23:59:59Z`).getTime();
+        if (toTime < fromTime) {
           return reply.code(400).send({
             success: false,
-            error: 'cargo_ready_date must be a valid ISO date string (YYYY-MM-DD)',
+            error: 'departure_to must be greater than or equal to departure_from',
           });
         }
-        cargoReadyDateISO = cargoReadyDate.toISOString().split('T')[0];
-      } else {
-        cargoReadyDateISO = new Date().toISOString().split('T')[0];
       }
 
       let numericLimit: number | undefined;
@@ -81,7 +128,9 @@ export function addV4Routes(
 
       const schedules = await scheduleService.searchSchedules(origin, {
         destination,
-        cargoReadyDate: cargoReadyDateISO,
+        cargoReadyDate: departureFromISO,
+        departureFrom: departureFromISO,
+        departureTo: departureToISO,
         carrier,
         serviceCode: service_code,
         vesselName: vessel_name,
@@ -98,7 +147,8 @@ export function addV4Routes(
           generated_at: new Date().toISOString(),
           origin: origin.toUpperCase(),
           destination: destination ? destination.toUpperCase() : undefined,
-          cargo_ready_date: cargoReadyDateISO,
+          departure_from: departureFromISO,
+          departure_to: departureToISO,
           carrier: carrier || undefined,
           service_code: service_code || undefined,
           vessel_name: vessel_name || undefined,
