@@ -6,9 +6,9 @@ services:
     container_name: rms-mcp-server
     ports:
       - "3000:3000"
+    env_file:
+      - .env  # Load all environment variables from .env file
     environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - NODE_ENV=production
     restart: unless-stopped
     networks:
