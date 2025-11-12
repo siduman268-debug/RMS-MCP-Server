@@ -1,0 +1,219 @@
+{
+  "name": "Salesforce RMS V4 Schedules Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "salesforce-rms-v4-schedules",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-salesforce",
+      "name": "Salesforce Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "salesforce-rms-v4-schedules"
+    },
+    {
+      "parameters": {
+        "url": "https://xsvwhctzwpfcwmmvbgmf.supabase.co/rest/v1/tenant_mapping",
+        "authentication": "none",
+        "requestMethod": "GET",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "salesforce_org_id",
+              "value": "eq.{{ $('Salesforce Webhook').item.json.salesforce_org_id }}"
+            },
+            {
+              "name": "select",
+              "value": "tenant_id"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-tenant-id",
+      "name": "Get Tenant ID from Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 100]
+    },
+    {
+      "parameters": {
+        "url": "http://13.204.127.113:3000/api/auth/token",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $json[0].tenant_id }}"
+            },
+            {
+              "name": "user_id",
+              "value": "sf_{{ $('Salesforce Webhook').item.json.salesforce_org_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-jwt-token",
+      "name": "Get JWT Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 200]
+    },
+    {
+      "parameters": {
+        "url": "http://13.204.127.113:3000/api/v4/schedules/search",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $('Get JWT Token').item.json.token }}"
+            },
+            {
+              "name": "x-tenant-id",
+              "value": "={{ $('Get Tenant ID from Supabase').item.json[0].tenant_id }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "origin",
+              "value": "={{ $json.origin }}"
+            },
+            {
+              "name": "destination",
+              "value": "={{ $json.destination || '' }}"
+            },
+            {
+              "name": "departure_from",
+              "value": "={{ $json.departure_from || '' }}"
+            },
+            {
+              "name": "departure_to",
+              "value": "={{ $json.departure_to || '' }}"
+            },
+            {
+              "name": "weeks",
+              "value": "={{ $json.weeks || null }}"
+            },
+            {
+              "name": "limit",
+              "value": "={{ $json.limit || 100 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "call-rms-schedules",
+      "name": "Call RMS Schedules API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond-schedules",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Salesforce Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Tenant ID from Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tenant ID from Supabase": {
+      "main": [
+        [
+          {
+            "node": "Get JWT Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get JWT Token": {
+      "main": [
+        [
+          {
+            "node": "Call RMS Schedules API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call RMS Schedules API": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-11-12T14:46:15.000Z",
+  "versionId": "1"
+}
+
