@@ -120,11 +120,20 @@ export class ScheduleIntegrationService {
     const vesselFilter = vesselName?.trim();
     const voyageFilter = voyage?.trim();
 
+    // If cargo_ready_date is provided without departure_to, expand window to 14 days
+    // to include upcoming departures (similar to how rates endpoint works)
     const departureFromISO =
       options.departureFrom ??
       cargoReadyDate ??
       new Date().toISOString().split('T')[0];
-    const departureToISO = options.departureTo ?? cargoReadyDate ?? undefined;
+    const departureToISO = options.departureTo ?? 
+      (cargoReadyDate 
+        ? (() => {
+            const date = new Date(cargoReadyDate);
+            date.setDate(date.getDate() + 14); // Add 14 days
+            return date.toISOString().split('T')[0];
+          })()
+        : undefined);
 
     const fromTime = departureFromISO
       ? new Date(`${departureFromISO}T00:00:00Z`).getTime()
