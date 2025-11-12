@@ -202,6 +202,9 @@ export class ScheduleIntegrationService {
 
     if (shouldQueryMaersk && destinationCode) {
       try {
+        console.log(
+          `[Schedule] Querying Maersk API for ${originCode} → ${destinationCode}, carrierFilter: ${carrierFilter || 'none'}`
+        );
         const maerskEntries = await this.searchSchedulesFromMaersk(originCode, destinationCode, {
           departureFrom: departureFromISO,
           departureTo: departureToISO,
@@ -211,14 +214,38 @@ export class ScheduleIntegrationService {
           voyage: voyageFilter,
           limit: maxResults,
         });
+        console.log(`[Schedule] Maersk API returned ${maerskEntries.length} entries`);
+        if (maerskEntries.length > 0) {
+          console.log(`[Schedule] Maersk entries:`, maerskEntries.map((e) => ({
+            carrier: e.carrier,
+            etd: e.etd,
+            voyage: e.voyage,
+            source: e.source,
+          })));
+        }
         addEntries(maerskEntries, 3);
       } catch (error) {
         console.error('[Schedule] Error querying Maersk API for schedule search:', error);
       }
+    } else {
+      if (!destinationCode) {
+        console.log(`[Schedule] Skipping Maersk API: destination not provided`);
+      } else if (!this.dcsaClient) {
+        console.log(`[Schedule] Skipping Maersk API: DCSA client not available`);
+      } else if (carrierFilter && !carrierFilter.toUpperCase().includes('MAERSK') && !carrierFilter.toUpperCase().includes('MAEU')) {
+        console.log(`[Schedule] Skipping Maersk API: carrier filter is ${carrierFilter}, not Maersk`);
+      }
     }
 
-    const schedules = Array.from(scheduleMap.values())
-      .map(({ priority, ...rest }) => rest)
+    const allEntries = Array.from(scheduleMap.values()).map(({ priority, ...rest }) => rest);
+    console.log(`[Schedule] Total entries before filtering: ${allEntries.length}`);
+    console.log(`[Schedule] Entries by source:`, {
+      database: allEntries.filter((e) => e.source === 'database').length,
+      portcast: allEntries.filter((e) => e.source === 'portcast').length,
+      maersk: allEntries.filter((e) => e.source === 'maersk').length,
+    });
+
+    const schedules = allEntries
       .filter((entry) => {
         const etdTime = entry.etd ? new Date(entry.etd).getTime() : NaN;
         if (Number.isNaN(etdTime)) {
@@ -238,6 +265,13 @@ export class ScheduleIntegrationService {
         return aTime - bTime;
       })
       .slice(0, maxResults);
+
+    console.log(`[Schedule] Final schedules after filtering/sorting: ${schedules.length}`);
+    console.log(`[Schedule] Final schedules by source:`, {
+      database: schedules.filter((e) => e.source === 'database').length,
+      portcast: schedules.filter((e) => e.source === 'portcast').length,
+      maersk: schedules.filter((e) => e.source === 'maersk').length,
+    });
 
     return schedules;
   }
