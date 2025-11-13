@@ -1,0 +1,515 @@
+<template>
+    <lightning-card title="Vessel Schedule Search" icon-name="standard:ship">
+        
+        <!-- Search Section -->
+        <div class="slds-p-around_medium">
+            <div class="slds-grid slds-wrap slds-gutters">
+                <div class="slds-col slds-size_1-of-4">
+                    <lightning-combobox
+                        label="Origin Port (UN/LOCODE)"
+                        value={origin}
+                        placeholder="Search ports..."
+                        options={originOptions}
+                        onchange={handleOriginChange}
+                        onsearch={handleOriginSearch}
+                        required>
+                    </lightning-combobox>
+                </div>
+                <div class="slds-col slds-size_1-of-4">
+                    <lightning-combobox
+                        label="Destination Port (UN/LOCODE)"
+                        value={destination}
+                        placeholder="Search ports..."
+                        options={destinationOptions}
+                        onchange={handleDestinationChange}
+                        onsearch={handleDestinationSearch}>
+                    </lightning-combobox>
+                </div>
+                <div class="slds-col slds-size_1-of-4">
+                    <lightning-input
+                        type="date"
+                        label="Departure From"
+                        value={departureFrom}
+                        onchange={handleDepartureFromChange}>
+                    </lightning-input>
+                </div>
+                <div class="slds-col slds-size_1-of-4">
+                    <lightning-input
+                        type="date"
+                        label="Departure To"
+                        value={departureTo}
+                        onchange={handleDepartureToChange}>
+                    </lightning-input>
+                </div>
+            </div>
+            
+            <div class="slds-grid slds-wrap slds-gutters slds-m-top_small">
+                <div class="slds-col slds-size_1-of-4">
+                    <lightning-input
+                        type="number"
+                        label="Weeks"
+                        value={weeks}
+                        onchange={handleWeeksChange}
+                        min="2"
+                        max="6"
+                        step="2">
+                    </lightning-input>
+                </div>
+                <div class="slds-col slds-size_1-of-4">
+                    <lightning-input
+                        type="number"
+                        label="Limit"
+                        value={limit}
+                        onchange={handleLimitChange}
+                        min="1"
+                        max="500">
+                    </lightning-input>
+                </div>
+                <div class="slds-col slds-size_1-of-2 slds-grid slds-grid_align-end">
+                    <lightning-button
+                        variant="brand"
+                        label="Search Schedules"
+                        onclick={handleSearch}
+                        class="slds-m-right_x-small">
+                    </lightning-button>
+                    <lightning-button
+                        variant="neutral"
+                        label="Clear"
+                        onclick={handleClearSearch}>
+                    </lightning-button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters Section (shown after search) -->
+        <template if:true={hasSearched}>
+            <div class="slds-p-around_medium slds-border_top">
+                <div class="slds-text-heading_small slds-m-bottom_small">Filters</div>
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <div class="slds-col slds-size_1-of-4">
+                        <lightning-combobox
+                            label="Carrier"
+                            value={filterCarrier}
+                            options={carrierOptions}
+                            onchange={handleFilterCarrierChange}
+                            placeholder="Select carrier">
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-4">
+                        <lightning-combobox
+                            label="Service"
+                            value={filterService}
+                            options={serviceOptions}
+                            onchange={handleFilterServiceChange}
+                            placeholder="Select service">
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-4">
+                        <lightning-combobox
+                            label="Vessel"
+                            value={filterVessel}
+                            options={vesselOptions}
+                            onchange={handleFilterVesselChange}
+                            placeholder="Select vessel">
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-4">
+                        <lightning-combobox
+                            label="Voyage"
+                            value={filterVoyage}
+                            options={voyageOptions}
+                            onchange={handleFilterVoyageChange}
+                            placeholder="Select voyage">
+                        </lightning-combobox>
+                    </div>
+                </div>
+                
+                <div class="slds-grid slds-wrap slds-gutters slds-m-top_small">
+                    <div class="slds-col slds-size_1-of-4">
+                        <lightning-input
+                            type="checkbox"
+                            label="Direct Only"
+                            checked={filterDirectOnly}
+                            onchange={handleFilterDirectOnlyChange}>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-4">
+                        <lightning-input
+                            type="date"
+                            label="ETA From"
+                            value={filterEtaFrom}
+                            onchange={handleFilterEtaFromChange}>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-4">
+                        <lightning-input
+                            type="date"
+                            label="ETA To"
+                            value={filterEtaTo}
+                            onchange={handleFilterEtaToChange}>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-4">
+                        <lightning-button
+                            variant="neutral"
+                            label="Clear Filters"
+                            onclick={handleClearFilters}
+                            class="slds-m-top_large">
+                        </lightning-button>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- Loading Spinner -->
+        <template if:true={isLoading}>
+            <div class="slds-is-relative slds-p-around_large">
+                <lightning-spinner alternative-text="Loading schedules..."></lightning-spinner>
+            </div>
+        </template>
+
+        <!-- Results Section -->
+        <template if:false={isLoading}>
+            <template if:true={hasSearched}>
+                <div class="slds-p-around_medium">
+                    <!-- Results Count and Sort Options -->
+                    <template if:true={hasResults}>
+                        <div class="slds-grid slds-gutters slds-m-bottom_medium">
+                            <div class="slds-col slds-size_1-of-2">
+                                <div class="slds-text-body_small">
+                                    {showingResults}
+                                    <template if:true={metadata}>
+                                        <span class="slds-m-left_small">
+                                            (Total: {metadata.total_results})
+                                        </span>
+                                    </template>
+                                </div>
+                            </div>
+                            <div class="slds-col slds-size_1-of-2 slds-text-align_right">
+                                <div class="slds-button-group">
+                                    <lightning-button
+                                        variant="neutral"
+                                        label="Sort by ETD"
+                                        data-field="etd"
+                                        onclick={handleSortChange}
+                                        class="slds-m-right_x-small">
+                                    </lightning-button>
+                                    <lightning-button
+                                        variant="neutral"
+                                        label="Sort by Transit"
+                                        data-field="transit_time_days"
+                                        onclick={handleSortChange}>
+                                    </lightning-button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <!-- Schedule Cards -->
+                    <template if:true={hasResults}>
+                        <div class="schedule-cards-container">
+                            <template for:each={formattedSchedules} for:item="schedule" for:index="idx">
+                                <div key={schedule.uniqueKey} class="schedule-card">
+                                    <div class="slds-grid slds-gutters schedule-card-content">
+                                        <!-- Carrier Section -->
+                                        <div class="slds-col slds-size_1-of-12 carrier-section">
+                                            <div class="carrier-container">
+                                                <template if:true={schedule.carrierLogoUrl}>
+                                                    <img src={schedule.carrierLogoUrl} alt={schedule.carrier} class="carrier-logo-card" />
+                                                </template>
+                                                <template if:false={schedule.carrierLogoUrl}>
+                                                    <div class="carrier-name-text">{schedule.carrier}</div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Departure Section -->
+                                        <div class="slds-col slds-size_1-of-4 departure-section">
+                                            <div class="section-header">
+                                                <lightning-icon icon-name="utility:date_time" size="x-small" class="section-icon departure-icon"></lightning-icon>
+                                                <span class="section-label">Departure</span>
+                                            </div>
+                                            <div class="section-date">{schedule.formattedEtd}</div>
+                                            <div class="section-port-name">{schedule.origin_port_name}</div>
+                                            <div class="section-port-code">{schedule.origin_port_code}</div>
+                                        </div>
+                                        
+                                        <!-- Arrival Section -->
+                                        <div class="slds-col slds-size_1-of-4 arrival-section">
+                                            <div class="section-header">
+                                                <lightning-icon icon-name="utility:date_time" size="x-small" class="section-icon arrival-icon"></lightning-icon>
+                                                <span class="section-label">Arrival</span>
+                                            </div>
+                                            <div class="section-date">{schedule.formattedEta}</div>
+                                            <div class="section-port-name">{schedule.destination_port_name}</div>
+                                            <div class="section-port-code">{schedule.destination_port_code}</div>
+                                        </div>
+                                        
+                                        <!-- Vessel/Voyage Section -->
+                                        <div class="slds-col slds-size_1-of-3 vessel-section">
+                                            <div class="section-header">
+                                                <lightning-icon icon-name="standard:ship" size="x-small" class="section-icon"></lightning-icon>
+                                                <span class="section-label">Vessel/Voyage</span>
+                                            </div>
+                                            <div class="vessel-name-link">{schedule.vessel_name}</div>
+                                            <div class="voyage-number">{schedule.voyage}</div>
+                                            <div class="transit-time-display">
+                                                <span class="transit-label">Transit Time:</span>
+                                                <span class="transit-value">{schedule.transit_time_days} days</span>
+                                                <template if:true={schedule.transit_hours}>
+                                                    <span class="transit-hours"> {schedule.transit_hours} hours</span>
+                                                </template>
+                                            </div>
+                                            <template if:true={schedule.service_name}>
+                                                <div class="service-name-display">{schedule.service_name}</div>
+                                            </template>
+                                        </div>
+                                        
+                                        <!-- Action Section -->
+                                        <div class="slds-col slds-size_1-of-6 action-section-new">
+                                            <div class="route-badge-new">
+                                                <template if:true={schedule.is_direct}>
+                                                    <lightning-badge label="Direct" variant="success"></lightning-badge>
+                                                </template>
+                                                <template if:false={schedule.is_direct}>
+                                                    <lightning-badge label="Transshipment" variant="warning"></lightning-badge>
+                                                </template>
+                                            </div>
+                                            <div class="action-buttons-new">
+                                                <template if:true={schedule.legs}>
+                                                    <lightning-button
+                                                        variant="neutral"
+                                                        label="See Details"
+                                                        title="View Route Details"
+                                                        data-index={idx}
+                                                        onclick={handleViewRouteDetails}
+                                                        class="details-btn-new">
+                                                    </lightning-button>
+                                                </template>
+                                                <lightning-button
+                                                    variant="brand"
+                                                    label="Create Enquiry"
+                                                    title="Create Enquiry"
+                                                    data-index={idx}
+                                                    onclick={handleCreateEnquiry}
+                                                    class="enquiry-btn-new">
+                                                </lightning-button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        
+                        <!-- Pagination -->
+                        <template if:true={totalPages}>
+                            <div class="slds-p-around_medium">
+                                <div class="slds-grid slds-grid_align-center">
+                                    <div class="slds-col slds-size_1-of-2">
+                                        <p class="slds-text-body_small">
+                                            {showingResults}
+                                        </p>
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-2">
+                                        <div class="slds-button-group slds-float_right">
+                                            <lightning-button
+                                                variant="neutral"
+                                                label="Previous"
+                                                disabled={disablePreviousPage}
+                                                onclick={handlePreviousPage}>
+                                            </lightning-button>
+                                            <lightning-button
+                                                variant="neutral"
+                                                label="Next"
+                                                disabled={disableNextPage}
+                                                onclick={handleNextPage}>
+                                            </lightning-button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </template>
+                    
+                    <!-- No Results -->
+                    <template if:false={hasResults}>
+                        <div class="slds-text-align_center slds-p-around_large">
+                            <lightning-icon icon-name="utility:info" size="large" variant="inverse"></lightning-icon>
+                            <p class="slds-text-heading_medium slds-m-top_medium">No schedules found</p>
+                            <p class="slds-text-body_regular slds-m-top_small">
+                                Try adjusting your search criteria or filters.
+                            </p>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            
+            <!-- Initial State -->
+            <template if:false={hasSearched}>
+                <div class="slds-text-align_center slds-p-around_large">
+                    <lightning-icon icon-name="standard:ship" size="large" variant="inverse"></lightning-icon>
+                    <p class="slds-text-heading_medium slds-m-top_medium">Search for Vessel Schedules</p>
+                    <p class="slds-text-body_regular slds-m-top_small">
+                        Enter an origin port and optional destination to search for vessel schedules.
+                    </p>
+                </div>
+            </template>
+        </template>
+        
+    </lightning-card>
+    
+    <!-- Route Details Modal -->
+    <template if:true={showRouteDetailsModal}>
+        <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open slds-modal_large" aria-labelledby="modal-heading-01" aria-modal="true" aria-describedby="modal-content-id-1">
+            <div class="slds-modal__container">
+                <header class="slds-modal__header">
+                    <button class="slds-button slds-button_icon slds-modal__close slds-button_icon-inverse" title="Close" onclick={handleCloseRouteDetails}>
+                        <lightning-icon icon-name="utility:close" alternative-text="close" size="small"></lightning-icon>
+                        <span class="slds-assistive-text">Close</span>
+                    </button>
+                    <h2 id="modal-heading-01" class="slds-modal__title slds-hyphenate">Route Details</h2>
+                </header>
+                <div class="slds-modal__content slds-p-around_medium" id="modal-content-id-1">
+                    <template if:true={hasRouteDetails}>
+                        <!-- Route Summary -->
+                        <div class="slds-m-bottom_large route-summary">
+                            <div class="slds-grid slds-gutters">
+                                <div class="slds-col slds-size_1-of-3">
+                                    <div class="slds-text-heading_small slds-m-bottom_x-small">Origin</div>
+                                    <div class="slds-text-body_regular">{selectedSchedule.origin_port_name}</div>
+                                    <div class="slds-text-body_small slds-text-color_weak">{selectedSchedule.origin_port_code}</div>
+                                    <div class="slds-text-body_small slds-m-top_x-small">ETD: {selectedSchedule.formattedEtd}</div>
+                                </div>
+                                <div class="slds-col slds-size_1-of-3">
+                                    <div class="slds-text-heading_small slds-m-bottom_x-small">Destination</div>
+                                    <div class="slds-text-body_regular">{selectedSchedule.destination_port_name}</div>
+                                    <div class="slds-text-body_small slds-text-color_weak">{selectedSchedule.destination_port_code}</div>
+                                    <div class="slds-text-body_small slds-m-top_x-small">ETA: {selectedSchedule.formattedEta}</div>
+                                </div>
+                                <div class="slds-col slds-size_1-of-3">
+                                    <div class="slds-text-heading_small slds-m-bottom_x-small">Carrier & Service</div>
+                                    <div class="carrier-logo-container slds-m-bottom_x-small">
+                                        <template if:true={selectedSchedule.carrierLogoUrl}>
+                                            <img src={selectedSchedule.carrierLogoUrl} alt={selectedSchedule.carrier} class="carrier-logo-small" />
+                                        </template>
+                                        <template if:false={selectedSchedule.carrierLogoUrl}>
+                                            <div class="slds-text-body_regular">{selectedSchedule.carrier}</div>
+                                        </template>
+                                    </div>
+                                    <div class="slds-text-body_small">{selectedSchedule.service_name}</div>
+                                    <div class="slds-text-body_small slds-m-top_x-small">Transit: {selectedSchedule.transit_time_days} days</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Route Legs Visualization - Vertical Timeline -->
+                        <div class="route-legs-container">
+                            <div class="slds-text-heading_small slds-m-bottom_medium">Route Breakdown</div>
+                            <div class="vertical-timeline">
+                                <template for:each={routeLegs} for:item="leg" for:index="legIndex">
+                                    <div key={leg.sequence} class="timeline-leg-wrapper">
+                                        <!-- Start Dot (Blue) - Only for first leg -->
+                                        <template if:true={leg.isFirst}>
+                                            <div class="timeline-marker-start">
+                                                <div class="timeline-dot timeline-dot-start"></div>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- Timeline Content -->
+                                        <div class="timeline-content-wrapper">
+                                            <!-- Departure Event -->
+                                            <div class="timeline-event">
+                                                <div class="event-location">
+                                                    <div class="event-location-name">{leg.from_name}</div>
+                                                    <div class="event-location-code">{leg.from}</div>
+                                                </div>
+                                                <div class="event-datetime">
+                                                    <div class="event-date">{leg.formattedDeparture}</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Ship Icon Along the Line (for VESSEL legs) - Positioned after departure -->
+                                            <template if:true={leg.vessel_name}>
+                                                <div class="timeline-ship-icon">
+                                                    <lightning-icon icon-name="standard:ship" size="small" alternative-text="Ship"></lightning-icon>
+                                                </div>
+                                            </template>
+                                            
+                                            <!-- Vessel/Transport Info (for VESSEL legs) -->
+                                            <template if:true={leg.vessel_name}>
+                                                <div class="vessel-link-container">
+                                                    <a href="#" class="vessel-link" onclick={handleVesselClick}>
+                                                        {leg.vessel_name} / {leg.voyage}
+                                                    </a>
+                                                </div>
+                                                <div class="vessel-details">
+                                                    <template if:true={leg.vessel_imo}>
+                                                        <div class="vessel-detail-item">
+                                                            <span class="detail-label">IMO Number:</span>
+                                                            <span class="detail-value">{leg.vessel_imo}</span>
+                                                        </div>
+                                                    </template>
+                                                    <template if:true={leg.carrier_name}>
+                                                        <div class="vessel-detail-item">
+                                                            <span class="detail-label">Service:</span>
+                                                            <span class="detail-value">{leg.carrier_name}</span>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                            
+                                            <!-- Transport Mode Label (for non-VESSEL) -->
+                                            <template if:false={leg.vessel_name}>
+                                                <div class="transport-mode-label">
+                                                    Transport via {leg.transport_mode}
+                                                </div>
+                                            </template>
+                                            
+                                            <!-- Arrival Event -->
+                                            <div class="timeline-event arrival-event">
+                                                <div class="event-location">
+                                                    <div class="event-location-name">{leg.to_name}</div>
+                                                    <div class="event-location-code">{leg.to}</div>
+                                                </div>
+                                                <div class="event-datetime">
+                                                    <div class="event-date">{leg.formattedArrival}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Transshipment Dot (Green) - At arrival point if next leg is transshipment -->
+                                        <template if:true={leg.isTransshipment}>
+                                            <div class="timeline-marker-transshipment">
+                                                <div class="timeline-dot timeline-dot-transshipment"></div>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- End Dot (Blue) - Only for last leg -->
+                                        <template if:true={leg.isLast}>
+                                            <div class="timeline-marker-end">
+                                                <div class="timeline-dot timeline-dot-end"></div>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- Continuous Line Between Dots -->
+                                        <div class="timeline-line-between"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                    <template if:false={hasRouteDetails}>
+                        <div class="slds-text-align_center slds-p-around_large">
+                            <p class="slds-text-body_regular">Route details are not available for this schedule.</p>
+                        </div>
+                    </template>
+                </div>
+                <footer class="slds-modal__footer">
+                    <lightning-button variant="neutral" label="Close" onclick={handleCloseRouteDetails}></lightning-button>
+                </footer>
+            </div>
+        </section>
+        <div class="slds-backdrop slds-backdrop_open"></div>
+    </template>
+</template>
+

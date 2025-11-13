@@ -334,6 +334,68 @@ curl http://localhost:3000/health
         }
       ],
       "source": "maersk"
+    },
+    {
+      "carrier": "MAERSK",
+      "etd": "2025-11-20T00:00:00.000Z",
+      "eta": "2025-12-20T00:00:00.000Z",
+      "transit_time_days": 30,
+      "service_code": "AE1",
+      "service_name": "AE1 Service",
+      "voyage": "123E",
+      "vessel_name": "MSC OSCAR",
+      "vessel_imo": "9703310",
+      "origin_port_code": "INTKD",
+      "origin_port_name": "Tughlakabad ICD",
+      "destination_port_code": "USNYC",
+      "destination_port_name": "New York",
+      "route_name": "AE1 Service",
+      "is_direct": false,
+      "legs": [
+        {
+          "sequence": 1,
+          "from": "INTKD",
+          "from_name": "Tughlakabad ICD",
+          "to": "INNSA",
+          "to_name": "Nhava Sheva",
+          "departure": "2025-11-20T08:00:00.000Z",
+          "arrival": "2025-11-20T14:00:00.000Z",
+          "transport_mode": "RAIL",
+          "carrier_code": "MAEU",
+          "carrier_name": "Maersk"
+        },
+        {
+          "sequence": 2,
+          "from": "INNSA",
+          "from_name": "Nhava Sheva",
+          "to": "SGSIN",
+          "to_name": "Singapore",
+          "departure": "2025-11-22T10:00:00.000Z",
+          "arrival": "2025-11-28T18:00:00.000Z",
+          "transport_mode": "VESSEL",
+          "carrier_code": "MAEU",
+          "carrier_name": "Maersk",
+          "voyage": "123E",
+          "vessel_name": "MSC OSCAR",
+          "vessel_imo": "9703310"
+        },
+        {
+          "sequence": 3,
+          "from": "SGSIN",
+          "from_name": "Singapore",
+          "to": "USNYC",
+          "to_name": "New York",
+          "departure": "2025-11-30T12:00:00.000Z",
+          "arrival": "2025-12-20T08:00:00.000Z",
+          "transport_mode": "VESSEL",
+          "carrier_code": "MAEU",
+          "carrier_name": "Maersk",
+          "voyage": "456W",
+          "vessel_name": "MAERSK DENVER",
+          "vessel_imo": "9781234"
+        }
+      ],
+      "source": "maersk"
     }
   ],
   "metadata": {
@@ -349,11 +411,39 @@ curl http://localhost:3000/health
 }
 ```
 
+**Route Details for Indirect Schedules**:
+
+For indirect routes (especially from inland ports), the `legs` array provides complete route breakdown:
+
+- **Leg 1**: Inland origin → Gateway port (transport_mode: `RAIL` or `TRUCK`)
+- **Leg 2+**: Gateway port → Transshipment port(s) → Destination (transport_mode: `VESSEL`)
+- **Last Leg**: Destination gateway → Inland destination (if applicable, transport_mode: `RAIL` or `TRUCK`)
+
+**Key Fields in Each Leg**:
+- `sequence`: Leg order (1, 2, 3, ...)
+- `from` / `from_name`: Origin port code and name
+- `to` / `to_name`: Destination port code and name
+- `departure` / `arrival`: ISO 8601 timestamps
+- `transport_mode`: `VESSEL` (ocean), `RAIL` (inland rail), `TRUCK` (inland truck), `BARGE` (inland barge)
+- `carrier_code` / `carrier_name`: Carrier information
+- `voyage`: Voyage number (for VESSEL legs)
+- `vessel_name` / `vessel_imo`: Vessel details (for VESSEL legs)
+
+**Identifying Route Types**:
+- `is_direct: true` + `legs.length === 1` → Direct ocean route
+- `is_direct: false` + `legs.length > 1` → Indirect route with transshipment
+- Legs with `transport_mode: "RAIL"` or `"TRUCK"` → Inland haulage segments
+- Multiple VESSEL legs → Transshipment at intermediate ports
+
 **Key Features**:
 - ✅ Multi-source schedules (Database → Carrier API → Portcast)
 - ✅ Automatic deduplication
-- ✅ Complete routing information (legs) for DCSA sources
+- ✅ **Complete routing information (legs) for indirect routes** - Shows all legs including:
+  - Inland haulage (RAIL/TRUCK) from inland origins to gateway ports
+  - Ocean transport (VESSEL) with transshipment ports
+  - Final inland delivery (RAIL/TRUCK) to inland destinations
 - ✅ Client-side filtering (carrier, service, vessel, voyage, is_direct, arrival dates)
+- ✅ **Detailed route breakdown** - Each leg includes ports, dates, transport mode, vessel, and voyage information
 
 **Client-Side Filtering**:
 The API returns all schedules in the date range. Your LWC should filter by:
@@ -498,4 +588,5 @@ For issues or questions:
 
 *Last Updated: 2025-11-12*  
 *API Version: 4.0*
+
 
