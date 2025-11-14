@@ -456,6 +456,82 @@ The API returns all schedules in the date range. Your LWC should filter by:
 
 ---
 
+## 4. Schedule Metrics & Reporting
+
+### 4.1 Get Schedule Source Statistics for a Search
+
+**Endpoint**: `POST /api/v4/schedules/metrics`  
+**Authentication**: Required (API Key)
+
+**Description**: Provides statistics on where schedule data comes from for a specific search query. Returns counts and percentages for Database, Portcast, and Line API (Maersk) sources.
+
+**Request**:
+```json
+{
+  "origin": "INNSA",
+  "destination": "NLRTM",
+  "departure_from": "2025-11-18",
+  "departure_to": "2025-12-18",
+  "weeks": 4,
+  "limit": 100
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "counts": {
+      "database": 45,
+      "portcast": 30,
+      "maersk": 25,
+      "unknown": 0,
+      "total": 100
+    },
+    "percentages": {
+      "database": "45.00",
+      "portcast": "30.00",
+      "maersk": "25.00",
+      "unknown": "0.00"
+    },
+    "breakdown": {
+      "from_database": 45,
+      "from_line_api": 25,
+      "from_portcast": 30,
+      "unknown_source": 0,
+      "total_schedules": 100
+    }
+  }
+}
+```
+
+### 4.2 Get Historical Schedule Source Statistics
+
+**Endpoint**: `GET /api/v4/schedules/audit-stats`  
+**Authentication**: Required (API Key)
+
+**Description**: Provides historical statistics based on the `schedule_source_audit` table. Tracks schedule ingestion, not search results.
+
+**Query Parameters**:
+- `carrier` (optional): Filter by carrier name
+- `start_date` (optional): Filter from this date (YYYY-MM-DD)
+- `end_date` (optional): Filter until this date (YYYY-MM-DD)
+- `limit` (optional): Max records (default: 1000, max: 10000)
+
+### 4.3 Get Carrier-Wise Schedule Source Breakdown
+
+**Endpoint**: `GET /api/v4/schedules/carrier-breakdown`  
+**Authentication**: Required (API Key)
+
+**Description**: Provides a breakdown of schedule sources grouped by carrier.
+
+**Query Parameters**:
+- `start_date` (optional): Filter from this date (YYYY-MM-DD)
+- `end_date` (optional): Filter until this date (YYYY-MM-DD)
+
+---
+
 ## 📋 Quick Reference
 
 ### Container Types

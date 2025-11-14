@@ -55,25 +55,79 @@ export default class ScheduleSearch extends LightningElement {
     @track metadata = null;
     @track hasSearched = false;
     
-    // Port lookup options
-    @track originOptions = [];
-    @track destinationOptions = [];
+    // Port lookup - display values and search results
+    @track originDisplay = '';
+    @track destinationDisplay = '';
+    @track originSearchResults = [];
+    @track destinationSearchResults = [];
+    @track showOriginDropdown = false;
+    @track showDestinationDropdown = false;
+    @track originSearchLoading = false;
+    @track destinationSearchLoading = false;
+    @track originNoResults = false;
+    @track destinationNoResults = false;
+    
+    // Store selected port codes
+    originCode = '';
+    destinationCode = '';
     
     // Route details modal
     @track showRouteDetailsModal = false;
     @track selectedSchedule = null;
     
     // Carrier logo mapping - matches static resource names in Salesforce
-    // Static resources use naming convention: carrier_<carrier_name>
+    // Static resources use naming convention: carrier_<carrier_name> or Carrier_<CARRIER_NAME>
     carrierLogoMap = {
         'MAERSK': '/resource/carrier_maersk',
         'MSC': '/resource/carrier_msc',
+        'MSC LINE': '/resource/carrier_msc',
         'CMA CGM': '/resource/carrier_cma_cgm',
         'CMA': '/resource/carrier_cma_cgm',
         'COSCO': '/resource/carrier_cosco',
         'COSCO SHIPPING': '/resource/carrier_cosco',
+        'COSCO LINE': '/resource/carrier_cosco',
         'HAPAG LLOYD': '/resource/carrier_hapag_lloyd',
-        'HAPAG': '/resource/carrier_hapag_lloyd'
+        'HAPAG': '/resource/carrier_hapag_lloyd',
+        'ONE': '/resource/carrier_one',
+        'ONE LINE': '/resource/carrier_one',
+        'APL': '/resource/Carrier_APL',
+        'WAN HAI': '/resource/Carrier_WAN_HAI',
+        'WANHAI': '/resource/Carrier_WAN_HAI',
+        'CU LINES': '/resource/Carrier_CU_LINES',
+        'RCL': '/resource/Carrier_RCL',
+        'GOLDSTAR': '/resource/Carrier_GOLDSTAR',
+        'HYUNDAI': '/resource/Carrier_HYUNDAI',
+        'KAMBARA': '/resource/Carrier_KAMBARA',
+        'X PRESS': '/resource/Carrier_X_PRESS',
+        'X-PRESS': '/resource/Carrier_X_PRESS',
+        'EMIRATES': '/resource/Carrier_EMIRATES',
+        'EVERGREEN': '/resource/Carrier_EVERGREEN',
+        'SAMUDERA': '/resource/Carrier_SAMUDERA',
+        'FEEDERTECH': '/resource/Carrier_FEEDERTECH',
+        'UAFL': '/resource/Carrier_UAFL',
+        'PIL': '/resource/Carrier_PIL',
+        'KMTC': '/resource/Carrier_KMTC',
+        'YANG MING': '/resource/Carrier_YANG_MING',
+        'ZIM': '/resource/Carrier_ZIM',
+        'MESSINA': '/resource/Carrier_MESSINA',
+        'LAUREL': '/resource/Carrier_LAUREL',
+        'SINOKOR': '/resource/Carrier_SINOKOR',
+        'OOCL': '/resource/Carrier_OOCL'
+    };
+    
+    // Transport mode icon mapping - matches static resource names
+    transportIconMap = {
+        'VESSEL': '/resource/SHIP_ICON',
+        'RAIL': '/resource/TRAIN_ICON',
+        'TRUCK': '/resource/mode_land_icon',
+        'BARGE': '/resource/mode_land_icon',
+        'AIR': '/resource/mode_air_icon'
+    };
+    
+    // Location icon mapping
+    locationIconMap = {
+        'PORT': '/resource/PORT_TERMINAL_ICON',
+        'PIN': '/resource/PIN_ICON'
     };
     
     getCarrierLogo(carrierName) {
@@ -102,97 +156,152 @@ export default class ScheduleSearch extends LightningElement {
     }
     
     loadCommonPorts() {
-        getCommonPorts()
-            .then(result => {
-                this.originOptions = (result || []).map(port => ({
-                    label: port.label,
-                    value: port.value
-                }));
-                this.destinationOptions = (result || []).map(port => ({
-                    label: port.label,
-                    value: port.value
-                }));
-            })
-            .catch(error => {
-                console.error('Error loading common ports:', error);
-            });
+        // No longer needed - we'll search dynamically
     }
     
-    handleOriginChange(event) {
-        const selectedValue = event.detail.value;
-        this.origin = selectedValue || '';
-    }
-    
-    handleDestinationChange(event) {
-        const selectedValue = event.detail.value;
-        this.destination = selectedValue || '';
-    }
-    
-    handleOriginSearch(event) {
-        const searchTerm = event.detail.searchTerm || '';
-        if (searchTerm && searchTerm.length >= 2) {
+    handleOriginInputChange(event) {
+        const searchTerm = event.target.value || '';
+        this.originDisplay = searchTerm;
+        
+        if (searchTerm.length >= 2) {
             this.searchOriginPorts(searchTerm);
-        } else if (searchTerm.length === 0) {
-            // Reset to common ports when search is cleared
-            this.loadCommonPorts();
+        } else {
+            this.showOriginDropdown = false;
+            this.originSearchResults = [];
         }
     }
     
-    handleDestinationSearch(event) {
-        const searchTerm = event.detail.searchTerm || '';
-        if (searchTerm && searchTerm.length >= 2) {
+    handleDestinationInputChange(event) {
+        const searchTerm = event.target.value || '';
+        this.destinationDisplay = searchTerm;
+        
+        if (searchTerm.length >= 2) {
             this.searchDestinationPorts(searchTerm);
-        } else if (searchTerm.length === 0) {
-            // Reset to common ports when search is cleared
-            this.loadCommonPorts();
+        } else {
+            this.showDestinationDropdown = false;
+            this.destinationSearchResults = [];
         }
+    }
+    
+    handleOriginFocus() {
+        if (this.originSearchResults.length > 0) {
+            this.showOriginDropdown = true;
+        }
+    }
+    
+    handleDestinationFocus() {
+        if (this.destinationSearchResults.length > 0) {
+            this.showDestinationDropdown = true;
+        }
+    }
+    
+    handleOriginBlur() {
+        // Delay to allow click event to fire
+        setTimeout(() => {
+            this.showOriginDropdown = false;
+        }, 200);
+    }
+    
+    handleDestinationBlur() {
+        // Delay to allow click event to fire
+        setTimeout(() => {
+            this.showDestinationDropdown = false;
+        }, 200);
+    }
+    
+    handleOriginSelect(event) {
+        const value = event.currentTarget.dataset.value;
+        const label = event.currentTarget.dataset.label;
+        
+        // Extract UN/LOCODE from value (format: "Port Name (CODE)")
+        const codeMatch = value.match(/\(([A-Z]{5})\)/);
+        const code = codeMatch ? codeMatch[1] : value;
+        
+        this.origin = code;
+        this.originCode = code;
+        this.originDisplay = label || value;
+        this.showOriginDropdown = false;
+        this.originSearchResults = [];
+    }
+    
+    handleDestinationSelect(event) {
+        const value = event.currentTarget.dataset.value;
+        const label = event.currentTarget.dataset.label;
+        
+        // Extract UN/LOCODE from value (format: "Port Name (CODE)")
+        const codeMatch = value.match(/\(([A-Z]{5})\)/);
+        const code = codeMatch ? codeMatch[1] : value;
+        
+        this.destination = code;
+        this.destinationCode = code;
+        this.destinationDisplay = label || value;
+        this.showDestinationDropdown = false;
+        this.destinationSearchResults = [];
     }
     
     searchOriginPorts(searchTerm) {
-        if (!searchTerm || searchTerm.length < 2) {
-            this.loadCommonPorts();
-            return;
-        }
+        this.originSearchLoading = true;
+        this.originNoResults = false;
+        this.showOriginDropdown = true;
+        
         searchPorts({ searchTerm: searchTerm, resultLimit: 50 })
             .then(result => {
-                if (result && result.length > 0) {
-                    this.originOptions = result.map(port => ({
-                        label: port.label,
-                        value: port.value
-                    }));
-                } else {
-                    // If no results, keep common ports
-                    this.loadCommonPorts();
-                }
+                const ports = result || [];
+                this.originSearchResults = ports.map(port => {
+                    // Parse the port data
+                    const label = port.label || port.value || '';
+                    const codeMatch = label.match(/\(([A-Z]{5})\)/);
+                    const code = codeMatch ? codeMatch[1] : (port.value || '');
+                    
+                    return {
+                        label: label.replace(/\s*\([A-Z]{5}\)\s*$/, ''), // Remove code from label
+                        code: code,
+                        value: port.value || label,
+                        country: (port.country && port.country.trim()) || null,
+                        state: (port.state && port.state.trim()) || null
+                    };
+                });
+                this.originSearchLoading = false;
+                this.originNoResults = this.originSearchResults.length === 0;
             })
             .catch(error => {
                 console.error('Error searching origin ports:', error);
-                // On error, fallback to common ports
-                this.loadCommonPorts();
+                this.originSearchLoading = false;
+                this.originNoResults = true;
+                this.originSearchResults = [];
             });
     }
     
     searchDestinationPorts(searchTerm) {
-        if (!searchTerm || searchTerm.length < 2) {
-            this.loadCommonPorts();
-            return;
-        }
+        this.destinationSearchLoading = true;
+        this.destinationNoResults = false;
+        this.showDestinationDropdown = true;
+        
         searchPorts({ searchTerm: searchTerm, resultLimit: 50 })
             .then(result => {
-                if (result && result.length > 0) {
-                    this.destinationOptions = result.map(port => ({
-                        label: port.label,
-                        value: port.value
-                    }));
-                } else {
-                    // If no results, keep common ports
-                    this.loadCommonPorts();
-                }
+                const ports = result || [];
+                this.destinationSearchResults = ports.map(port => {
+                    // Parse the port data
+                    const label = port.label || port.value || '';
+                    const codeMatch = label.match(/\(([A-Z]{5})\)/);
+                    const code = codeMatch ? codeMatch[1] : (port.value || '');
+                    
+                    return {
+                        label: label.replace(/\s*\([A-Z]{5}\)\s*$/, ''), // Remove code from label
+                        code: code,
+                        value: port.value || label,
+                        country: (port.country && port.country.trim()) || null,
+                        state: (port.state && port.state.trim()) || null
+                    };
+                });
+                this.destinationSearchLoading = false;
+                this.destinationNoResults = this.destinationSearchResults.length === 0;
             })
             .catch(error => {
                 console.error('Error searching destination ports:', error);
-                // On error, fallback to common ports
-                this.loadCommonPorts();
+                this.destinationSearchLoading = false;
+                this.destinationNoResults = true;
+                this.destinationSearchResults = [];
             });
     }
     
@@ -424,7 +533,10 @@ export default class ScheduleSearch extends LightningElement {
             if (schedule.carrier) carriers.add(schedule.carrier);
             if (schedule.service_name) services.add(schedule.service_name);
             if (schedule.vessel_name) vessels.add(schedule.vessel_name);
-            if (schedule.voyage) voyages.add(schedule.voyage);
+            if (schedule.voyage) {
+                const cleanVoyage = this.extractVoyageNumber(schedule.voyage);
+                if (cleanVoyage) voyages.add(cleanVoyage);
+            }
         });
         
         this.uniqueCarriers = Array.from(carriers).sort();
@@ -480,9 +592,11 @@ export default class ScheduleSearch extends LightningElement {
         
         // Filter by voyage (exact match for picklist)
         if (this.filterVoyage) {
-            filtered = filtered.filter(s => 
-                s.voyage && s.voyage === this.filterVoyage
-            );
+            filtered = filtered.filter(s => {
+                if (!s.voyage) return false;
+                const cleanVoyage = this.extractVoyageNumber(s.voyage);
+                return cleanVoyage === this.filterVoyage;
+            });
         }
         
         // Filter by direct only
@@ -559,6 +673,10 @@ export default class ScheduleSearch extends LightningElement {
     handleClearSearch() {
         this.origin = '';
         this.destination = '';
+        this.originDisplay = '';
+        this.destinationDisplay = '';
+        this.originCode = '';
+        this.destinationCode = '';
         this.departureFrom = new Date().toISOString().split('T')[0];
         this.departureTo = '';
         this.weeks = 4;
@@ -568,6 +686,10 @@ export default class ScheduleSearch extends LightningElement {
         this.totalRecords = 0;
         this.hasSearched = false;
         this.metadata = null;
+        this.showOriginDropdown = false;
+        this.showDestinationDropdown = false;
+        this.originSearchResults = [];
+        this.destinationSearchResults = [];
         this.handleClearFilters();
     }
     
@@ -682,17 +804,57 @@ export default class ScheduleSearch extends LightningElement {
         return !this.hasNextPage;
     }
     
+    // Extract clean voyage number from encoded string
+    extractVoyageNumber(voyageString) {
+        if (!voyageString) return '';
+        
+        // If it's already a clean voyage number (like "546W", "123E"), return as is
+        if (/^[A-Z0-9]{2,6}$/.test(voyageString)) {
+            return voyageString;
+        }
+        
+        // If it's an encoded string (like "v3~MSK~...546W..."), extract the voyage number
+        // Pattern: Look for voyage numbers like "546W", "123E", etc. in the string
+        // Common patterns: ":546W:", ":546W:546W", "546W~", etc.
+        const voyageMatch = voyageString.match(/:([A-Z0-9]{2,6}):/g);
+        if (voyageMatch && voyageMatch.length > 0) {
+            // Get the first match and extract the voyage number
+            const match = voyageMatch[0].match(/:([A-Z0-9]{2,6}):/);
+            if (match && match[1]) {
+                return match[1];
+            }
+        }
+        
+        // Alternative pattern: Look for voyage at the end of sail segments
+        // Pattern: "sail:MVS:...:546W" or "546W~" or "546W:"
+        const altMatch = voyageString.match(/([A-Z0-9]{2,6})(?:~|:|$)/g);
+        if (altMatch && altMatch.length > 0) {
+            // Try to find a pattern that looks like a voyage number (ends with letter, has numbers)
+            for (const m of altMatch) {
+                const clean = m.replace(/[~:]/g, '');
+                if (/^[0-9]{2,4}[A-Z]{1,2}$/.test(clean)) {
+                    return clean;
+                }
+            }
+        }
+        
+        // Fallback: return original if we can't extract
+        return voyageString;
+    }
+    
     // Format schedule dates for display
     get formattedSchedules() {
         if (!this.paginatedSchedules || this.paginatedSchedules.length === 0) {
             return [];
         }
         return this.paginatedSchedules.map((schedule, index) => {
+            const cleanVoyage = this.extractVoyageNumber(schedule.voyage);
             return Object.assign({}, schedule, {
                 formattedEtd: this.formatDateShort(schedule.etd),
                 formattedEta: this.formatDateShort(schedule.eta),
-                uniqueKey: (schedule.etd || '') + '-' + (schedule.voyage || '') + '-' + index,
-                carrierLogoUrl: this.getCarrierLogo(schedule.carrier)
+                uniqueKey: (schedule.etd || '') + '-' + (cleanVoyage || schedule.voyage || '') + '-' + index,
+                carrierLogoUrl: this.getCarrierLogo(schedule.carrier),
+                displayVoyage: cleanVoyage || schedule.voyage || ''
             });
         });
     }
@@ -733,12 +895,18 @@ export default class ScheduleSearch extends LightningElement {
             // The green dot should appear at the arrival of this leg if next leg is transshipment
             const isTransshipmentArrival = nextLeg && leg.to === nextLeg.from && leg.transport_mode === 'VESSEL' && nextLeg.transport_mode === 'VESSEL';
             
+            // Get transport icon and determine if it's a static resource
+            const transportIcon = this.getTransportIcon(leg.transport_mode);
+            const isStaticResource = this.isStaticResource(transportIcon);
+            
             return {
                 ...leg,
                 index: index + 1,
                 formattedDeparture: this.formatDateTime(leg.departure),
                 formattedArrival: this.formatDateTime(leg.arrival),
-                transportIcon: this.getTransportIcon(leg.transport_mode),
+                transportIcon: transportIcon,
+                transportIconUrl: transportIcon,
+                isStaticResourceIcon: isStaticResource,
                 isFirst: index === 0,
                 isLast: index === this.selectedSchedule.legs.length - 1,
                 isTransshipment: isTransshipmentArrival
@@ -752,7 +920,23 @@ export default class ScheduleSearch extends LightningElement {
     }
     
     getTransportIcon(transportMode) {
-        switch (transportMode) {
+        if (!transportMode) return null;
+        const modeUpper = transportMode.toUpperCase();
+        
+        // Try exact match first in transport icon map
+        if (this.transportIconMap[modeUpper]) {
+            return this.transportIconMap[modeUpper];
+        }
+        
+        // Try partial match
+        for (const [key, iconPath] of Object.entries(this.transportIconMap)) {
+            if (modeUpper.includes(key) || key.includes(modeUpper)) {
+                return iconPath;
+            }
+        }
+        
+        // Fallback to SLDS icons if static resource not found
+        switch (modeUpper) {
             case 'VESSEL':
                 return 'standard:ship';
             case 'RAIL':
@@ -764,6 +948,11 @@ export default class ScheduleSearch extends LightningElement {
             default:
                 return 'standard:location';
         }
+    }
+    
+    // Check if icon is a static resource (starts with /resource/) or SLDS icon name
+    isStaticResource(iconPath) {
+        return iconPath && iconPath.startsWith('/resource/');
     }
     
     handleCreateEnquiry(event) {

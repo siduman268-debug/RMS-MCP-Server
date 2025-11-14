@@ -19,6 +19,7 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import { addScheduleRoutes } from './routes/schedule-routes.js';
 import { addV4Routes } from './routes/v4-routes.js';
+import { addScheduleMetricsRoutes } from './routes/schedule-metrics-routes.js';
 
 // Load environment variables
 dotenv.config();
@@ -3388,6 +3389,9 @@ async function createHttpServer() {
 
   // Add V4 API routes (search-rates and prepare-quote with origin/destination)
   addV4Routes(fastify, supabase);
+
+  // Add schedule metrics/reporting routes
+  addScheduleMetricsRoutes(fastify, supabase);
 
   return fastify;
 }

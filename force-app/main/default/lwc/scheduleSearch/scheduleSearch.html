@@ -5,25 +5,139 @@
         <div class="slds-p-around_medium">
             <div class="slds-grid slds-wrap slds-gutters">
                 <div class="slds-col slds-size_1-of-4">
-                    <lightning-combobox
-                        label="Origin Port (UN/LOCODE)"
-                        value={origin}
-                        placeholder="Search ports..."
-                        options={originOptions}
-                        onchange={handleOriginChange}
-                        onsearch={handleOriginSearch}
-                        required>
-                    </lightning-combobox>
+                    <div class="slds-form-element">
+                        <label class="slds-form-element__label">
+                            <abbr class="slds-required" title="required">*</abbr>
+                            Origin Port (UN/LOCODE)
+                        </label>
+                        <div class="slds-form-element__control port-lookup-container">
+                            <lightning-input
+                                type="text"
+                                value={originDisplay}
+                                placeholder="Search ports..."
+                                onchange={handleOriginInputChange}
+                                onfocus={handleOriginFocus}
+                                onblur={handleOriginBlur}
+                                class="port-lookup-input">
+                            </lightning-input>
+                            <template if:true={showOriginDropdown}>
+                                <div class="slds-dropdown slds-dropdown_left port-lookup-dropdown">
+                                    <ul class="slds-dropdown__list" role="listbox">
+                                        <template for:each={originSearchResults} for:item="port">
+                                            <li key={port.value} 
+                                                class="slds-dropdown__item port-dropdown-item" 
+                                                role="option"
+                                                data-value={port.value}
+                                                data-label={port.label}
+                                                data-country={port.country}
+                                                data-state={port.state}
+                                                onclick={handleOriginSelect}>
+                                                <div class="port-dropdown-content">
+                                                    <div class="slds-truncate" title={port.label}>
+                                                        <strong>{port.label}</strong>
+                                                    </div>
+                                                    <template if:true={port.country}>
+                                                        <div class="slds-text-body_small slds-text-color_weak port-location-info">
+                                                            <template if:true={port.state}>
+                                                                {port.state}, {port.country}
+                                                            </template>
+                                                            <template if:false={port.state}>
+                                                                {port.country}
+                                                            </template>
+                                                        </div>
+                                                    </template>
+                                                    <template if:false={port.country}>
+                                                        <template if:true={port.state}>
+                                                            <div class="slds-text-body_small slds-text-color_weak port-location-info">
+                                                                {port.state}
+                                                            </div>
+                                                        </template>
+                                                    </template>
+                                                </div>
+                                            </li>
+                                        </template>
+                                        <template if:true={originSearchLoading}>
+                                            <li class="slds-dropdown__item">
+                                                <div class="slds-truncate">Searching...</div>
+                                            </li>
+                                        </template>
+                                        <template if:true={originNoResults}>
+                                            <li class="slds-dropdown__item">
+                                                <div class="slds-truncate">No ports found</div>
+                                            </li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
                 </div>
                 <div class="slds-col slds-size_1-of-4">
-                    <lightning-combobox
-                        label="Destination Port (UN/LOCODE)"
-                        value={destination}
-                        placeholder="Search ports..."
-                        options={destinationOptions}
-                        onchange={handleDestinationChange}
-                        onsearch={handleDestinationSearch}>
-                    </lightning-combobox>
+                    <div class="slds-form-element">
+                        <label class="slds-form-element__label">
+                            Destination Port (UN/LOCODE)
+                        </label>
+                        <div class="slds-form-element__control port-lookup-container">
+                            <lightning-input
+                                type="text"
+                                value={destinationDisplay}
+                                placeholder="Search ports..."
+                                onchange={handleDestinationInputChange}
+                                onfocus={handleDestinationFocus}
+                                onblur={handleDestinationBlur}
+                                class="port-lookup-input">
+                            </lightning-input>
+                            <template if:true={showDestinationDropdown}>
+                                <div class="slds-dropdown slds-dropdown_left port-lookup-dropdown">
+                                    <ul class="slds-dropdown__list" role="listbox">
+                                        <template for:each={destinationSearchResults} for:item="port">
+                                            <li key={port.value} 
+                                                class="slds-dropdown__item port-dropdown-item" 
+                                                role="option"
+                                                data-value={port.value}
+                                                data-label={port.label}
+                                                data-country={port.country}
+                                                data-state={port.state}
+                                                onclick={handleDestinationSelect}>
+                                                <div class="port-dropdown-content">
+                                                    <div class="slds-truncate" title={port.label}>
+                                                        <strong>{port.label}</strong>
+                                                    </div>
+                                                    <template if:true={port.country}>
+                                                        <div class="slds-text-body_small slds-text-color_weak port-location-info">
+                                                            <template if:true={port.state}>
+                                                                {port.state}, {port.country}
+                                                            </template>
+                                                            <template if:false={port.state}>
+                                                                {port.country}
+                                                            </template>
+                                                        </div>
+                                                    </template>
+                                                    <template if:false={port.country}>
+                                                        <template if:true={port.state}>
+                                                            <div class="slds-text-body_small slds-text-color_weak port-location-info">
+                                                                {port.state}
+                                                            </div>
+                                                        </template>
+                                                    </template>
+                                                </div>
+                                            </li>
+                                        </template>
+                                        <template if:true={destinationSearchLoading}>
+                                            <li class="slds-dropdown__item">
+                                                <div class="slds-truncate">Searching...</div>
+                                            </li>
+                                        </template>
+                                        <template if:true={destinationNoResults}>
+                                            <li class="slds-dropdown__item">
+                                                <div class="slds-truncate">No ports found</div>
+                                            </li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
                 </div>
                 <div class="slds-col slds-size_1-of-4">
                     <lightning-input
@@ -252,7 +366,7 @@
                                                 <span class="section-label">Vessel/Voyage</span>
                                             </div>
                                             <div class="vessel-name-link">{schedule.vessel_name}</div>
-                                            <div class="voyage-number">{schedule.voyage}</div>
+                                            <div class="voyage-number">{schedule.displayVoyage}</div>
                                             <div class="transit-time-display">
                                                 <span class="transit-label">Transit Time:</span>
                                                 <span class="transit-value">{schedule.transit_time_days} days</span>
@@ -420,6 +534,9 @@
                                             <!-- Departure Event -->
                                             <div class="timeline-event">
                                                 <div class="event-location">
+                                                    <div class="location-icon-container">
+                                                        <img src="/resource/PIN_ICON" alt="Location" class="location-pin-icon" />
+                                                    </div>
                                                     <div class="event-location-name">{leg.from_name}</div>
                                                     <div class="event-location-code">{leg.from}</div>
                                                 </div>
@@ -428,10 +545,15 @@
                                                 </div>
                                             </div>
                                             
-                                            <!-- Ship Icon Along the Line (for VESSEL legs) - Positioned after departure -->
-                                            <template if:true={leg.vessel_name}>
+                                            <!-- Transport Mode Icon Along the Line - Positioned after departure -->
+                                            <template if:true={leg.transport_mode}>
                                                 <div class="timeline-ship-icon">
-                                                    <lightning-icon icon-name="standard:ship" size="small" alternative-text="Ship"></lightning-icon>
+                                                    <template if:true={leg.isStaticResourceIcon}>
+                                                        <img src={leg.transportIconUrl} alt={leg.transport_mode} class="transport-mode-icon" />
+                                                    </template>
+                                                    <template if:false={leg.isStaticResourceIcon}>
+                                                        <lightning-icon icon-name={leg.transportIconUrl} size="small" alternative-text={leg.transport_mode}></lightning-icon>
+                                                    </template>
                                                 </div>
                                             </template>
                                             
@@ -468,6 +590,9 @@
                                             <!-- Arrival Event -->
                                             <div class="timeline-event arrival-event">
                                                 <div class="event-location">
+                                                    <div class="location-icon-container">
+                                                        <img src="/resource/PIN_ICON" alt="Location" class="location-pin-icon" />
+                                                    </div>
                                                     <div class="event-location-name">{leg.to_name}</div>
                                                     <div class="event-location-code">{leg.to}</div>
                                                 </div>
