@@ -561,6 +561,158 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["pol_code", "pod_code", "container_type", "cargo_weight_mt", "haulage_type"],
         },
       },
+
+      // ==========================================
+      // 6. VESSEL SCHEDULES
+      // ==========================================
+      {
+        name: "search_schedules",
+        description: "Search for vessel schedules between origin and destination ports. Returns schedules from multiple sources (database, Portcast, carrier APIs) with route details including legs for indirect routes.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            origin: {
+              type: "string",
+              description: "Origin port UN/LOCODE (e.g., 'INNSA', 'CNSHA')",
+            },
+            destination: {
+              type: "string",
+              description: "Destination port UN/LOCODE (optional, e.g., 'NLRTM', 'USNYC')",
+            },
+            departure_from: {
+              type: "string",
+              format: "date",
+              description: "Start date for departure range (YYYY-MM-DD, defaults to today)",
+            },
+            departure_to: {
+              type: "string",
+              format: "date",
+              description: "End date for departure range (YYYY-MM-DD, optional)",
+            },
+            weeks: {
+              type: "number",
+              description: "Number of weeks from departure_from (2, 4, or 6) - calculates departure_to automatically",
+            },
+            limit: {
+              type: "number",
+              description: "Maximum number of results (default: 100, max: 500)",
+              default: 100,
+            },
+          },
+          required: ["origin"],
+        },
+      },
+      {
+        name: "get_schedule_metrics",
+        description: "Get statistics on schedule data sources for a specific search. Returns counts and percentages for Database, Portcast, and Line API (Maersk) sources.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            origin: {
+              type: "string",
+              description: "Origin port UN/LOCODE",
+            },
+            destination: {
+              type: "string",
+              description: "Destination port UN/LOCODE (optional)",
+            },
+            departure_from: {
+              type: "string",
+              format: "date",
+              description: "Start date for departure range (YYYY-MM-DD)",
+            },
+            departure_to: {
+              type: "string",
+              format: "date",
+              description: "End date for departure range (YYYY-MM-DD, optional)",
+            },
+            weeks: {
+              type: "number",
+              description: "Number of weeks from departure_from (2, 4, or 6)",
+            },
+            limit: {
+              type: "number",
+              description: "Maximum number of results to analyze (default: 100)",
+              default: 100,
+            },
+          },
+          required: ["origin"],
+        },
+      },
+      {
+        name: "get_schedule_audit_stats",
+        description: "Get historical statistics on schedule data sources from the audit table. Shows where schedules were ingested from (database, Portcast, line API).",
+        inputSchema: {
+          type: "object",
+          properties: {
+            carrier: {
+              type: "string",
+              description: "Filter by carrier name (optional)",
+            },
+            start_date: {
+              type: "string",
+              format: "date",
+              description: "Filter from this date (YYYY-MM-DD, optional)",
+            },
+            end_date: {
+              type: "string",
+              format: "date",
+              description: "Filter until this date (YYYY-MM-DD, optional)",
+            },
+            limit: {
+              type: "number",
+              description: "Maximum records to analyze (default: 1000, max: 10000)",
+              default: 1000,
+            },
+          },
+        },
+      },
+      {
+        name: "get_carrier_schedule_breakdown",
+        description: "Get a breakdown of schedule sources grouped by carrier. Shows which carriers have data from which sources (database, Portcast, line API).",
+        inputSchema: {
+          type: "object",
+          properties: {
+            start_date: {
+              type: "string",
+              format: "date",
+              description: "Filter from this date (YYYY-MM-DD, optional)",
+            },
+            end_date: {
+              type: "string",
+              format: "date",
+              description: "Filter until this date (YYYY-MM-DD, optional)",
+            },
+          },
+        },
+      },
+      {
+        name: "list_carriers",
+        description: "List all carriers/vendors available in the system. Useful for schedule searches and filtering.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            is_active: {
+              type: "boolean",
+              description: "Filter by active status (optional)",
+              default: true,
+            },
+          },
+        },
+      },
+      {
+        name: "list_services",
+        description: "List carrier services (routes) available in the system. Shows service codes and names for each carrier.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            carrier: {
+              type: "string",
+              description: "Filter by carrier name (optional)",
+            },
+          },
+        },
+      },
     ],
   };
 });
@@ -1349,6 +1501,452 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         content: [{
           type: "text",
           text: JSON.stringify(data, null, 2),
+        }],
+      };
+    }
+
+    // ==========================================
+    // 6. VESSEL SCHEDULES
+    // ==========================================
+
+    if (name === "search_schedules") {
+      const { origin, destination, departure_from, departure_to, weeks, limit = 100 } = args as any;
+
+      if (!origin) {
+        throw new Error('origin is required');
+      }
+
+      // Import schedule service
+      const { ScheduleIntegrationService } = await import('./services/schedule-integration.service.js');
+      const scheduleService = new ScheduleIntegrationService(supabase);
+
+      // Parse dates
+      let departureFromISO: string | undefined = departure_from;
+      let departureToISO: string | undefined = departure_to;
+
+      if (weeks !== undefined && departureFromISO) {
+        const weeksNum = Number(weeks);
+        if (!Number.isNaN(weeksNum) && weeksNum > 0) {
+          const fromDate = new Date(`${departureFromISO}T00:00:00Z`);
+          fromDate.setDate(fromDate.getDate() + (weeksNum * 7));
+          departureToISO = fromDate.toISOString().split('T')[0];
+        }
+      }
+
+      if (!departureFromISO) {
+        departureFromISO = new Date().toISOString().split('T')[0];
+      }
+
+      const numericLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+
+      // Search schedules
+      const schedules = await scheduleService.searchSchedules(origin, {
+        destination,
+        departureFrom: departureFromISO,
+        departureTo: departureToISO,
+        limit: numericLimit,
+      });
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            total_results: schedules.length,
+            schedules: schedules,
+            metadata: {
+              origin: origin.toUpperCase(),
+              destination: destination ? destination.toUpperCase() : undefined,
+              departure_from: departureFromISO,
+              departure_to: departureToISO,
+              limit: numericLimit
+            }
+          }, null, 2),
+        }],
+      };
+    }
+
+    if (name === "get_schedule_metrics") {
+      const { origin, destination, departure_from, departure_to, weeks, limit = 100 } = args as any;
+
+      if (!origin) {
+        throw new Error('origin is required');
+      }
+
+      // Import schedule service
+      const { ScheduleIntegrationService } = await import('./services/schedule-integration.service.js');
+      const scheduleService = new ScheduleIntegrationService(supabase);
+
+      // Parse dates
+      let departureFromISO: string | undefined = departure_from;
+      let departureToISO: string | undefined = departure_to;
+
+      if (weeks !== undefined && departureFromISO) {
+        const weeksNum = Number(weeks);
+        if (!Number.isNaN(weeksNum) && weeksNum > 0) {
+          const fromDate = new Date(`${departureFromISO}T00:00:00Z`);
+          fromDate.setDate(fromDate.getDate() + (weeksNum * 7));
+          departureToISO = fromDate.toISOString().split('T')[0];
+        }
+      }
+
+      if (!departureFromISO) {
+        departureFromISO = new Date().toISOString().split('T')[0];
+      }
+
+      const numericLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+
+      // Get schedules
+      const schedules = await scheduleService.searchSchedules(origin, {
+        destination,
+        departureFrom: departureFromISO,
+        departureTo: departureToISO,
+        limit: numericLimit,
+      });
+
+      // Count by source
+      const sourceStats = {
+        database: 0,
+        portcast: 0,
+        maersk: 0,
+        unknown: 0,
+        total: schedules.length
+      };
+
+      for (const schedule of schedules) {
+        switch (schedule.source?.toLowerCase()) {
+          case 'database':
+            sourceStats.database++;
+            break;
+          case 'portcast':
+            sourceStats.portcast++;
+            break;
+          case 'maersk':
+            sourceStats.maersk++;
+            break;
+          default:
+            sourceStats.unknown++;
+        }
+      }
+
+      // Calculate percentages
+      const percentages = {
+        database: sourceStats.total > 0 ? (sourceStats.database / sourceStats.total * 100).toFixed(2) : '0.00',
+        portcast: sourceStats.total > 0 ? (sourceStats.portcast / sourceStats.total * 100).toFixed(2) : '0.00',
+        maersk: sourceStats.total > 0 ? (sourceStats.maersk / sourceStats.total * 100).toFixed(2) : '0.00',
+        unknown: sourceStats.total > 0 ? (sourceStats.unknown / sourceStats.total * 100).toFixed(2) : '0.00'
+      };
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            counts: sourceStats,
+            percentages,
+            breakdown: {
+              from_database: sourceStats.database,
+              from_line_api: sourceStats.maersk,
+              from_portcast: sourceStats.portcast,
+              unknown_source: sourceStats.unknown,
+              total_schedules: sourceStats.total
+            },
+            metadata: {
+              origin: origin.toUpperCase(),
+              destination: destination ? destination.toUpperCase() : undefined,
+              departure_from: departureFromISO,
+              departure_to: departureToISO,
+              limit: numericLimit
+            }
+          }, null, 2),
+        }],
+      };
+    }
+
+    if (name === "get_schedule_audit_stats") {
+      const { carrier, start_date, end_date, limit = 1000 } = args as any;
+
+      let query = supabase
+        .from('schedule_source_audit')
+        .select('source_system, carrier_id, created_at')
+        .order('created_at', { ascending: false })
+        .limit(Math.min(Number(limit) || 1000, 10000));
+
+      if (start_date) {
+        query = query.gte('created_at', start_date);
+      }
+      if (end_date) {
+        query = query.lte('created_at', end_date);
+      }
+
+      const { data: auditRecords, error } = await query;
+
+      if (error) throw error;
+
+      // Get carrier names if carrier filter provided
+      let carrierIds: string[] | null = null;
+      if (carrier) {
+        const { data: carriers } = await supabase
+          .from('carrier')
+          .select('id')
+          .ilike('name', `%${carrier}%`);
+        
+        carrierIds = carriers?.map(c => c.id) || [];
+        if (carrierIds.length === 0) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                success: true,
+                counts: { database: 0, portcast: 0, maersk: 0, unknown: 0, total: 0 },
+                percentages: { database: '0.00', portcast: '0.00', maersk: '0.00', unknown: '0.00' },
+                breakdown: {
+                  from_database: 0,
+                  from_line_api: 0,
+                  from_portcast: 0,
+                  unknown_source: 0,
+                  total_schedules: 0
+                },
+                message: `No records found for carrier: ${carrier}`
+              }, null, 2),
+            }],
+          };
+        }
+      }
+
+      // Filter by carrier if specified
+      const filteredRecords = carrierIds 
+        ? (auditRecords || []).filter((record: any) => carrierIds!.includes(record.carrier_id))
+        : (auditRecords || []);
+
+      // Count by source
+      const sourceStats = {
+        database: 0,
+        portcast: 0,
+        maersk: 0,
+        unknown: 0,
+        total: filteredRecords.length
+      };
+
+      for (const record of filteredRecords) {
+        const source = (record.source_system || '').toLowerCase();
+        switch (source) {
+          case 'database':
+          case 'db':
+            sourceStats.database++;
+            break;
+          case 'portcast':
+            sourceStats.portcast++;
+            break;
+          case 'maersk':
+          case 'dcsa':
+            sourceStats.maersk++;
+            break;
+          default:
+            sourceStats.unknown++;
+        }
+      }
+
+      // Calculate percentages
+      const percentages = {
+        database: sourceStats.total > 0 ? (sourceStats.database / sourceStats.total * 100).toFixed(2) : '0.00',
+        portcast: sourceStats.total > 0 ? (sourceStats.portcast / sourceStats.total * 100).toFixed(2) : '0.00',
+        maersk: sourceStats.total > 0 ? (sourceStats.maersk / sourceStats.total * 100).toFixed(2) : '0.00',
+        unknown: sourceStats.total > 0 ? (sourceStats.unknown / sourceStats.total * 100).toFixed(2) : '0.00'
+      };
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            counts: sourceStats,
+            percentages,
+            breakdown: {
+              from_database: sourceStats.database,
+              from_line_api: sourceStats.maersk,
+              from_portcast: sourceStats.portcast,
+              unknown_source: sourceStats.unknown,
+              total_schedules: sourceStats.total
+            },
+            metadata: {
+              filters: {
+                carrier: carrier || 'all',
+                start_date: start_date || 'all',
+                end_date: end_date || 'all',
+                record_limit: Number(limit)
+              },
+              note: 'Statistics based on schedule_source_audit table. This tracks schedule ingestion, not search results.'
+            }
+          }, null, 2),
+        }],
+      };
+    }
+
+    if (name === "get_carrier_schedule_breakdown") {
+      const { start_date, end_date } = args as any;
+
+      let query = supabase
+        .from('schedule_source_audit')
+        .select('source_system, carrier_id')
+        .order('created_at', { ascending: false })
+        .limit(10000);
+
+      if (start_date) {
+        query = query.gte('created_at', start_date);
+      }
+      if (end_date) {
+        query = query.lte('created_at', end_date);
+      }
+
+      const { data: auditRecords, error } = await query;
+
+      if (error) throw error;
+
+      // Get all unique carrier IDs
+      const carrierIds = [...new Set((auditRecords || []).map((r: any) => r.carrier_id))];
+
+      // Get carrier names
+      const { data: carriers } = await supabase
+        .from('carrier')
+        .select('id, name')
+        .in('id', carrierIds);
+
+      const carrierMap = new Map(
+        (carriers || []).map((c: any) => [c.id, c.name])
+      );
+
+      // Group by carrier and source
+      const breakdown: Record<string, {
+        carrier_name: string;
+        database: number;
+        portcast: number;
+        maersk: number;
+        unknown: number;
+        total: number;
+      }> = {};
+
+      for (const record of (auditRecords || [])) {
+        const carrierName = carrierMap.get(record.carrier_id) || 'Unknown Carrier';
+        
+        if (!breakdown[record.carrier_id]) {
+          breakdown[record.carrier_id] = {
+            carrier_name: carrierName,
+            database: 0,
+            portcast: 0,
+            maersk: 0,
+            unknown: 0,
+            total: 0
+          };
+        }
+
+        const source = (record.source_system || '').toLowerCase();
+        switch (source) {
+          case 'database':
+          case 'db':
+            breakdown[record.carrier_id].database++;
+            break;
+          case 'portcast':
+            breakdown[record.carrier_id].portcast++;
+            break;
+          case 'maersk':
+          case 'dcsa':
+            breakdown[record.carrier_id].maersk++;
+            break;
+          default:
+            breakdown[record.carrier_id].unknown++;
+        }
+        breakdown[record.carrier_id].total++;
+      }
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            data: Object.values(breakdown).sort((a, b) => b.total - a.total),
+            metadata: {
+              filters: {
+                start_date: start_date || 'all',
+                end_date: end_date || 'all'
+              }
+            }
+          }, null, 2),
+        }],
+      };
+    }
+
+    if (name === "list_carriers") {
+      const { is_active } = args as any;
+
+      let query = supabase.from('carrier').select('id, name, type');
+
+      if (is_active !== undefined) {
+        query = query.eq('is_active', is_active);
+      }
+
+      const { data, error } = await query.order('name', { ascending: true });
+
+      if (error) throw error;
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            carriers: data || [],
+            count: data?.length || 0
+          }, null, 2),
+        }],
+      };
+    }
+
+    if (name === "list_services") {
+      const { carrier } = args as any;
+
+      let query = supabase
+        .from('service')
+        .select('id, carrier_id, carrier_service_code, carrier_service_name, carrier:carrier_id(name)')
+        .order('carrier_service_code', { ascending: true });
+
+      if (carrier) {
+        // First get carrier ID
+        const { data: carrierData } = await supabase
+          .from('carrier')
+          .select('id')
+          .ilike('name', `%${carrier}%`)
+          .limit(1)
+          .single();
+
+        if (carrierData?.id) {
+          query = query.eq('carrier_id', carrierData.id);
+        } else {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                success: true,
+                services: [],
+                count: 0,
+                message: `Carrier '${carrier}' not found`
+              }, null, 2),
+            }],
+          };
+        }
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            services: data || [],
+            count: data?.length || 0
+          }, null, 2),
         }],
       };
     }

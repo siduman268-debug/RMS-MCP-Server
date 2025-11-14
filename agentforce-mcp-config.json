@@ -9,6 +9,6 @@
         "JWT_SECRET": "your-super-secret-key-change-in-production"
       }
     }
-  },
-  "_comment": "Updated 2025-11-14: Added 6 new schedule tools - search_schedules, get_schedule_metrics, get_schedule_audit_stats, get_carrier_schedule_breakdown, list_carriers, list_services. Total tools: 26"
+  }
 }
+
