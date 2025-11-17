@@ -1,0 +1,407 @@
+<template>
+    <div class="slds-card">
+        <div class="slds-card__header slds-grid">
+            <header class="slds-media slds-media_center slds-has-flexi-truncate">
+                <div class="slds-media__body">
+                    <h2 class="slds-card__header-title">
+                        <span>Ocean Freight Rates ({records.length})</span>
+                    </h2>
+                </div>
+            </header>
+            <div class="slds-no-flex">
+                <div class="slds-button-group" role="group">
+                    <lightning-button 
+                        label="Create" 
+                        variant="brand"
+                        icon-name="utility:add"
+                        onclick={handleCreate}>
+                    </lightning-button>
+                    <lightning-button 
+                        label="Upload CSV" 
+                        variant="neutral"
+                        icon-name="utility:upload"
+                        onclick={handleUpload}>
+                    </lightning-button>
+                    <lightning-button 
+                        label="Export" 
+                        variant="neutral"
+                        icon-name="utility:download"
+                        onclick={handleExport}>
+                    </lightning-button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slds-card__body slds-card__body_inner">
+            <!-- Filter Rates Section - 3 Column Layout -->
+            <div class="slds-p-around_medium slds-border_bottom">
+                <h3 class="slds-text-heading_small slds-m-bottom_medium">Filter Rates</h3>
+                <div class="slds-grid slds-gutters slds-wrap">
+                    <!-- Column 1: Origin, Destination, Carrier -->
+                    <div class="slds-col slds-size_1-of-3">
+                        <div class="slds-form-element port-lookup-container slds-m-bottom_small">
+                            <label class="slds-form-element__label">
+                                <abbr class="slds-required" title="required"></abbr>Origin (Port of Loading)
+                            </label>
+                            <div class="slds-form-element__control">
+                                <lightning-input
+                                    type="text"
+                                    value={polDisplay}
+                                    placeholder="Search port... (e.g., Nhava Sheva)"
+                                    onchange={handlePolInputChange}
+                                    onfocus={handlePolFocus}
+                                    onblur={handlePolBlur}>
+                                </lightning-input>
+                                <template if:true={showPolDropdown}>
+                                    <div class="slds-dropdown slds-dropdown_left port-lookup-dropdown">
+                                        <template if:true={polSearchLoading}>
+                                            <div class="slds-p-around_small">
+                                                <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+                                            </div>
+                                        </template>
+                                        <template if:true={polNoResults}>
+                                            <div class="slds-p-around_small">No ports found</div>
+                                        </template>
+                                        <ul class="slds-dropdown__list" role="listbox">
+                                            <template for:each={polSearchResults} for:item="port">
+                                                <li key={port.code} 
+                                                    class="slds-dropdown__item port-dropdown-item" 
+                                                    role="presentation"
+                                                    data-value={port.value}
+                                                    data-label={port.label}
+                                                    data-code={port.code}
+                                                    onclick={handlePolSelect}>
+                                                    <div class="port-dropdown-content">
+                                                        <div class="slds-truncate" title={port.label}>{port.label}</div>
+                                                        <template if:true={port.country}>
+                                                            <div class="slds-text-body_small slds-text-color_weak port-location-info">
+                                                                {port.locationDisplay}
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        
+                        <div class="slds-form-element port-lookup-container slds-m-bottom_small">
+                            <label class="slds-form-element__label">
+                                <abbr class="slds-required" title="required"></abbr>Destination (Port of Discharge)
+                            </label>
+                            <div class="slds-form-element__control">
+                                <lightning-input
+                                    type="text"
+                                    value={podDisplay}
+                                    placeholder="Search port... (e.g., Rotterdam)"
+                                    onchange={handlePodInputChange}
+                                    onfocus={handlePodFocus}
+                                    onblur={handlePodBlur}>
+                                </lightning-input>
+                                <template if:true={showPodDropdown}>
+                                    <div class="slds-dropdown slds-dropdown_left port-lookup-dropdown">
+                                        <template if:true={podSearchLoading}>
+                                            <div class="slds-p-around_small">
+                                                <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+                                            </div>
+                                        </template>
+                                        <template if:true={podNoResults}>
+                                            <div class="slds-p-around_small">No ports found</div>
+                                        </template>
+                                        <ul class="slds-dropdown__list" role="listbox">
+                                            <template for:each={podSearchResults} for:item="port">
+                                                <li key={port.code} 
+                                                    class="slds-dropdown__item port-dropdown-item" 
+                                                    role="presentation"
+                                                    data-value={port.value}
+                                                    data-label={port.label}
+                                                    data-code={port.code}
+                                                    onclick={handlePodSelect}>
+                                                    <div class="port-dropdown-content">
+                                                        <div class="slds-truncate" title={port.label}>{port.label}</div>
+                                                        <template if:true={port.country}>
+                                                            <div class="slds-text-body_small slds-text-color_weak port-location-info">
+                                                                {port.locationDisplay}
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        
+                        <div class="slds-form-element slds-m-bottom_small">
+                            <lightning-input 
+                                type="text" 
+                                label="Carrier" 
+                                value={filterVendorName}
+                                placeholder="Search carrier... (e.g., Maersk)"
+                                onchange={handleFilterChange}
+                                data-filter="vendor_name">
+                            </lightning-input>
+                        </div>
+                    </div>
+                    
+                    <!-- Column 2: Origin Trade Zone, Destination Trade Zone, Container Type -->
+                    <div class="slds-col slds-size_1-of-3">
+                        <div class="slds-form-element port-lookup-container slds-m-bottom_small">
+                            <label class="slds-form-element__label">
+                                Origin Trade Zone
+                            </label>
+                            <div class="slds-form-element__control">
+                                <lightning-input
+                                    type="text"
+                                    value={originTradeZoneDisplay}
+                                    placeholder="Search trade zone... (e.g., Asia)"
+                                    onchange={handleOriginTradeZoneInputChange}
+                                    onfocus={handleOriginTradeZoneFocus}
+                                    onblur={handleOriginTradeZoneBlur}>
+                                </lightning-input>
+                                <template if:true={showOriginTradeZoneDropdown}>
+                                    <div class="slds-dropdown slds-dropdown_left port-lookup-dropdown">
+                                        <template if:true={originTradeZoneLoading}>
+                                            <div class="slds-p-around_small">
+                                                <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+                                            </div>
+                                        </template>
+                                        <template if:true={originTradeZoneNoResults}>
+                                            <div class="slds-p-around_small">No trade zones found</div>
+                                        </template>
+                                        <ul class="slds-dropdown__list" role="listbox">
+                                            <template for:each={originTradeZoneResults} for:item="tz">
+                                                <li key={tz.value} 
+                                                    class="slds-dropdown__item port-dropdown-item" 
+                                                    role="presentation"
+                                                    data-value={tz.value}
+                                                    data-label={tz.label}
+                                                    onclick={handleOriginTradeZoneSelect}>
+                                                    <div class="port-dropdown-content">
+                                                        <div class="slds-truncate" title={tz.label}>{tz.label}</div>
+                                                    </div>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        
+                        <div class="slds-form-element port-lookup-container slds-m-bottom_small">
+                            <label class="slds-form-element__label">
+                                Destination Trade Zone
+                            </label>
+                            <div class="slds-form-element__control">
+                                <lightning-input
+                                    type="text"
+                                    value={destinationTradeZoneDisplay}
+                                    placeholder="Search trade zone... (e.g., Europe)"
+                                    onchange={handleDestinationTradeZoneInputChange}
+                                    onfocus={handleDestinationTradeZoneFocus}
+                                    onblur={handleDestinationTradeZoneBlur}>
+                                </lightning-input>
+                                <template if:true={showDestinationTradeZoneDropdown}>
+                                    <div class="slds-dropdown slds-dropdown_left port-lookup-dropdown">
+                                        <template if:true={destinationTradeZoneLoading}>
+                                            <div class="slds-p-around_small">
+                                                <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+                                            </div>
+                                        </template>
+                                        <template if:true={destinationTradeZoneNoResults}>
+                                            <div class="slds-p-around_small">No trade zones found</div>
+                                        </template>
+                                        <ul class="slds-dropdown__list" role="listbox">
+                                            <template for:each={destinationTradeZoneResults} for:item="tz">
+                                                <li key={tz.value} 
+                                                    class="slds-dropdown__item port-dropdown-item" 
+                                                    role="presentation"
+                                                    data-value={tz.value}
+                                                    data-label={tz.label}
+                                                    onclick={handleDestinationTradeZoneSelect}>
+                                                    <div class="port-dropdown-content">
+                                                        <div class="slds-truncate" title={tz.label}>{tz.label}</div>
+                                                    </div>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        
+                        <div class="slds-form-element slds-m-bottom_small">
+                            <lightning-combobox 
+                                label="Container Type"
+                                value={filterContainerType}
+                                options={containerTypeOptions}
+                                onchange={handleFilterChange}
+                                data-filter="container_type">
+                            </lightning-combobox>
+                        </div>
+                    </div>
+                    
+                    <!-- Column 3: Preferred -->
+                    <div class="slds-col slds-size_1-of-3">
+                        <div class="slds-form-element slds-m-bottom_small">
+                            <lightning-combobox 
+                                label="Preferred"
+                                value={filterPreferred}
+                                options={preferredOptions}
+                                onchange={handleFilterChange}
+                                data-filter="is_preferred">
+                            </lightning-combobox>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Status and Action Buttons -->
+                <div class="slds-grid slds-grid_align-spread slds-m-top_medium">
+                    <div class="slds-col">
+                        <template if:true={hasRecords}>
+                            <p class="slds-text-body_small">
+                                Showing <strong>{records.length}</strong> of <strong>{records.length}</strong> rates
+                            </p>
+                            <p class="slds-text-body_small slds-text-color_success">
+                                Successfully loaded {records.length} rates
+                            </p>
+                        </template>
+                    </div>
+                    <div class="slds-col slds-no-flex">
+                        <lightning-button 
+                            label="Fetch Rates" 
+                            variant="brand"
+                            onclick={handleFetchRates}
+                            class="slds-m-right_small">
+                        </lightning-button>
+                        <lightning-button 
+                            label="Clear Filters" 
+                            variant="neutral"
+                            onclick={handleClearFilters}>
+                        </lightning-button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Freight Rates Section -->
+            <div class="slds-p-around_medium slds-m-top_medium">
+                <h3 class="slds-text-heading_small slds-m-bottom_x-small">Freight Rates</h3>
+                <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_medium">Each row = Port-to-Port + Container Size</p>
+                
+                <template if:true={hasRecords}>
+                <div class="slds-scrollable_x">
+                    <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_striped">
+                        <thead>
+                            <tr class="slds-line-height_reset">
+                                <th scope="col" style="width: 3rem;">
+                                    <lightning-input 
+                                        type="checkbox" 
+                                        checked={allSelected}
+                                        onchange={handleSelectAll}>
+                                    </lightning-input>
+                                </th>
+                                <th scope="col" class="slds-is-sortable slds-text-title_caps" data-field="origin" onclick={handleSort}>ORIGIN</th>
+                                <th scope="col" class="slds-is-sortable slds-text-title_caps" data-field="destination" onclick={handleSort}>DESTINATION</th>
+                                <th scope="col" class="slds-is-sortable slds-text-title_caps" data-field="container_type" onclick={handleSort}>CONTAINER</th>
+                                <th scope="col" class="slds-is-sortable slds-text-title_caps" data-field="carrier" onclick={handleSort}>CARRIER</th>
+                                <th scope="col" class="slds-text-title_caps">VALID FROM</th>
+                                <th scope="col" class="slds-text-title_caps">VALID TO</th>
+                                <th scope="col" class="slds-is-sortable slds-text-title_caps" data-field="all_in_freight_buy" onclick={handleSort}>ALL-IN BUY</th>
+                                <th scope="col" class="slds-is-sortable slds-text-title_caps" data-field="all_in_freight_sell" onclick={handleSort}>ALL-IN SELL</th>
+                                <th scope="col" class="slds-is-sortable slds-text-title_caps" data-field="margin_amount" onclick={handleSort}>MARGIN</th>
+                                <th scope="col" class="slds-is-sortable slds-text-title_caps" data-field="margin_percentage" onclick={handleSort}>MARGIN %</th>
+                                <th scope="col" class="slds-text-title_caps">PREFERRED</th>
+                                <th scope="col" class="slds-text-title_caps">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template for:each={formattedRecords} for:item="record">
+                                <tr key={record.id}>
+                                    <td data-label="Select">
+                                        <lightning-input 
+                                            type="checkbox" 
+                                            value={record.id}
+                                            checked={record.isSelected}
+                                            onchange={handleSelectRecord}>
+                                        </lightning-input>
+                                    </td>
+                                    <td data-label="ORIGIN" class="slds-truncate" title={record.displayOrigin}>{record.displayOrigin}</td>
+                                    <td data-label="DESTINATION" class="slds-truncate" title={record.displayDestination}>{record.displayDestination}</td>
+                                    <td data-label="CONTAINER">{record.displayContainerType}</td>
+                                    <td data-label="CARRIER" class="carrier-cell">
+                                        <div class="carrier-cell-container">
+                                            <template if:true={record.carrierLogoUrl}>
+                                                <div class="carrier-logo-wrapper">
+                                                    <img src={record.carrierLogoUrl} alt={record.displayCarrier} class="carrier-logo-table" />
+                                                </div>
+                                            </template>
+                                            <span class="carrier-name-text">{record.displayCarrier}</span>
+                                        </div>
+                                    </td>
+                                    <td data-label="VALID FROM">{record.formattedValidFrom}</td>
+                                    <td data-label="VALID TO">{record.formattedValidTo}</td>
+                                    <td data-label="ALL-IN BUY" class="rate-amount-bold">
+                                        <template if:true={record.allInBuy}>
+                                            {record.formattedAllInBuy}
+                                        </template>
+                                        <template if:false={record.allInBuy}>
+                                            —
+                                        </template>
+                                    </td>
+                                    <td data-label="ALL-IN SELL" class="rate-amount-sell">
+                                        <template if:true={record.allInSell}>
+                                            {record.formattedAllInSell}
+                                        </template>
+                                        <template if:false={record.allInSell}>
+                                            —
+                                        </template>
+                                    </td>
+                                    <td data-label="MARGIN" class="rate-amount-margin">
+                                        <template if:true={record.marginAmount}>
+                                            {record.formattedMargin}
+                                        </template>
+                                        <template if:false={record.marginAmount}>
+                                            —
+                                        </template>
+                                    </td>
+                                    <td data-label="MARGIN %">{record.formattedMarginPercentage}</td>
+                                    <td data-label="PREFERRED">
+                                        <template if:true={record.is_preferred}>
+                                            <lightning-icon icon-name="utility:check" size="small" variant="success"></lightning-icon>
+                                        </template>
+                                        <template if:false={record.is_preferred}>
+                                            <lightning-button-icon 
+                                                icon-name="utility:favorite" 
+                                                variant="bare" 
+                                                alternative-text="Mark as Preferred"
+                                                data-id={record.id}
+                                                onclick={handleMarkPreferred}>
+                                            </lightning-button-icon>
+                                        </template>
+                                    </td>
+                                    <td data-label="Actions">
+                                        <div class="slds-button-group" role="group">
+                                            <lightning-button-icon icon-name="utility:preview" variant="border-filled" alternative-text="View" data-id={record.id} onclick={handleView}></lightning-button-icon>
+                                            <lightning-button-icon icon-name="utility:edit" variant="border-filled" alternative-text="Edit" data-id={record.id} onclick={handleEdit}></lightning-button-icon>
+                                            <lightning-button-icon icon-name="utility:delete" variant="border-filled" alternative-text="Delete" data-id={record.id} onclick={handleDelete}></lightning-button-icon>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+                </template>
+                <template if:false={hasRecords}>
+                    <div class="slds-text-align_center slds-p-around_large">
+                        <p>No rates found. Click "Create" to add a new rate.</p>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+</template>
+

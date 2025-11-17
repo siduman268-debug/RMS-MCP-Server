@@ -1,0 +1,11 @@
+/* RMS Management Component Styles */
+
+.slds-modal__container {
+    max-width: 90vw;
+}
+
+.slds-card__footer {
+    border-top: 1px solid var(--slds-g-color-border-base-4, #e5e5e5);
+    padding: var(--slds-spacing-small, 0.75rem);
+}
+

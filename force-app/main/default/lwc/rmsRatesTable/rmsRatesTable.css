@@ -1,0 +1,195 @@
+/* Port Lookup Dropdown Styles (from scheduleSearch) */
+.port-lookup-container {
+    position: relative;
+}
+
+.port-lookup-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 7000;
+    width: 100%;
+    max-height: 300px;
+    overflow-y: auto;
+    background: var(--slds-g-color-neutral-base-100, #ffffff);
+    border: 1px solid var(--slds-g-color-border-base-4, #dddbda);
+    border-radius: var(--slds-g-radius-border-2, 0.25rem);
+    box-shadow: var(--slds-g-shadow-dropdown, 0 2px 3px 0 rgba(0, 0, 0, 0.16));
+}
+
+.port-dropdown-item {
+    cursor: pointer;
+    padding: 0.5rem;
+}
+
+.port-dropdown-item:hover,
+.port-dropdown-item:focus {
+    background-color: var(--slds-g-color-brand-base-95, #e8f4fb);
+}
+
+.port-dropdown-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.port-location-info {
+    font-size: 0.75rem;
+    color: var(--slds-g-color-neutral-base-50, #706e6b);
+    margin-top: 0.25rem;
+}
+
+/* Table Styles */
+.slds-scrollable_x {
+    overflow-x: auto;
+}
+
+.slds-table th {
+    background-color: #f3f3f3;
+    font-weight: bold;
+    white-space: nowrap;
+    vertical-align: middle;
+    padding: 0.75rem;
+}
+
+.slds-table td {
+    vertical-align: middle;
+    padding: 0.75rem;
+}
+
+/* Carrier cell specific styling */
+.carrier-cell {
+    min-width: 12rem;
+    max-width: 15rem;
+}
+
+/* Rate Amount Styles */
+.rate-amount-bold {
+    font-weight: var(--slds-g-font-weight-bold, 700);
+    color: var(--slds-g-color-neutral-base-10, #080707);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.rate-amount-sell {
+    font-weight: var(--slds-g-font-weight-bold, 700);
+    color: var(--slds-g-color-success-base-50, #2e844a);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.rate-amount-margin {
+    font-weight: var(--slds-g-font-weight-bold, 700);
+    color: var(--slds-g-color-success-base-50, #2e844a);
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Table cell alignment improvements */
+.slds-table td[data-label="ORIGIN"],
+.slds-table td[data-label="DESTINATION"] {
+    min-width: 10rem;
+    max-width: 15rem;
+}
+
+.slds-table td[data-label="CONTAINER"] {
+    text-align: center;
+    min-width: 5rem;
+}
+
+.slds-table td[data-label="TRANSIT"] {
+    text-align: center;
+    min-width: 4rem;
+}
+
+.slds-table td[data-label="VALID FROM"],
+.slds-table td[data-label="VALID TO"] {
+    text-align: center;
+    min-width: 6rem;
+    white-space: nowrap;
+}
+
+.slds-table td[data-label="MARGIN %"] {
+    text-align: right;
+    min-width: 5rem;
+}
+
+.slds-table td[data-label="PREFERRED"] {
+    text-align: center;
+    min-width: 4rem;
+}
+
+.slds-table td[data-label="Actions"] {
+    text-align: center;
+    min-width: 6rem;
+}
+
+/* Header alignment */
+.slds-table th[scope="col"] {
+    text-align: center;
+}
+
+.slds-table th[data-field="origin"],
+.slds-table th[data-field="destination"],
+.slds-table th[data-field="carrier"] {
+    text-align: left;
+}
+
+.slds-table th[data-field="all_in_freight_buy"],
+.slds-table th[data-field="all_in_freight_sell"],
+.slds-table th[data-field="margin_amount"],
+.slds-table th[data-field="margin_percentage"] {
+    text-align: right;
+}
+
+/* Carrier Logo Styles - Standardized */
+.carrier-logo-table {
+    width: 2.5rem;
+    height: 2.5rem;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    max-width: 2.5rem;
+    max-height: 2.5rem;
+    object-fit: contain;
+    border-radius: var(--slds-g-radius-border-2, 0.25rem);
+    background-color: var(--slds-g-color-neutral-base-100, #ffffff);
+    padding: 0.25rem;
+    box-sizing: border-box;
+}
+
+.carrier-cell-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.5rem;
+}
+
+.carrier-logo-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    background-color: var(--slds-g-color-neutral-base-100, #ffffff);
+    border: 1px solid var(--slds-g-color-border-base-4, #dddbda);
+    border-radius: var(--slds-g-radius-border-2, 0.25rem);
+    padding: 0.25rem;
+}
+
+.carrier-name-text {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: var(--slds-g-color-neutral-base-10, #080707);
+}
+
+/* Button Group Spacing */
+.slds-button-group .slds-button {
+    margin-right: 0.25rem;
+}
+
+.slds-button-group .slds-button:last-child {
+    margin-right: 0;
+}
+

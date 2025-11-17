@@ -3215,6 +3215,10 @@ async function createHttpServer() {
       const { 
         pol_code, 
         pod_code, 
+        origin,
+        destination,
+        origin_trade_zone,
+        destination_trade_zone,
         vendor_name, 
         container_type, 
         is_preferred, 
@@ -3236,12 +3240,30 @@ async function createHttpServer() {
         query = query.eq('is_preferred', is_preferred === 'true');
       }
 
-      if (pol_code) {
+      // Prefer origin/destination (v4 API fields), fallback to pol_code/pod_code
+      if (origin) {
+        query = query.eq('origin', origin);
+      } else if (pol_code) {
         query = query.eq('pol_code', pol_code);
       }
 
-      if (pod_code) {
+      if (destination) {
+        query = query.eq('destination', destination);
+      } else if (pod_code) {
         query = query.eq('pod_code', pod_code);
+      }
+
+      // Trade zone filters - need to join with location_master or filter by origin/destination trade zones
+      if (origin_trade_zone) {
+        // Filter by origin trade zone - this requires joining with location_master
+        // For now, we'll filter by origin codes that match the trade zone
+        // This is a simplified approach - a proper implementation would join with location_master
+        query = query.ilike('origin_trade_zone', `%${origin_trade_zone}%`);
+      }
+
+      if (destination_trade_zone) {
+        // Filter by destination trade zone
+        query = query.ilike('destination_trade_zone', `%${destination_trade_zone}%`);
       }
 
       if (vendor_name) {
