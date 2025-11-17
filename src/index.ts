@@ -3241,14 +3241,15 @@ async function createHttpServer() {
       }
 
       // Prefer origin/destination (v4 API fields), fallback to pol_code/pod_code
+      // Note: Materialized view has origin_code/destination_code, not origin/destination
       if (origin) {
-        query = query.eq('origin', origin);
+        query = query.eq('origin_code', origin);
       } else if (pol_code) {
         query = query.eq('pol_code', pol_code);
       }
 
       if (destination) {
-        query = query.eq('destination', destination);
+        query = query.eq('destination_code', destination);
       } else if (pod_code) {
         query = query.eq('pod_code', pod_code);
       }
