@@ -3253,17 +3253,77 @@ async function createHttpServer() {
         query = query.eq('pod_code', pod_code);
       }
 
-      // Trade zone filters - need to join with location_master or filter by origin/destination trade zones
+      // Trade zone filters - query locations table to get matching UN/LOCODEs
       if (origin_trade_zone) {
-        // Filter by origin trade zone - this requires joining with location_master
-        // For now, we'll filter by origin codes that match the trade zone
-        // This is a simplified approach - a proper implementation would join with location_master
-        query = query.ilike('origin_trade_zone', `%${origin_trade_zone}%`);
+        // Get all UN/LOCODEs that match the origin trade zone
+        const { data: originLocations, error: originLocError } = await supabase
+          .from('locations')
+          .select('unlocode')
+          .ilike('trade_zone', `%${origin_trade_zone}%`);
+        
+        if (originLocError) {
+          throw new Error(`Error querying origin trade zone: ${originLocError.message}`);
+        }
+        
+        if (originLocations && originLocations.length > 0) {
+          const originUnlocodes = originLocations.map(loc => loc.unlocode).filter(Boolean);
+          // Filter by origin_code (v4) or pol_code (legacy) matching the trade zone
+          if (originUnlocodes.length > 0) {
+            // Use PostgREST OR syntax: column1.in.(values),column2.in.(values)
+            const unlocodeList = originUnlocodes.join(',');
+            query = query.or(`origin_code.in.(${unlocodeList}),pol_code.in.(${unlocodeList})`);
+          } else {
+            // If no matching locations, return empty result
+            return reply.send({
+              success: true,
+              data: [],
+              pagination: { page: 1, limit: 50, count: 0 }
+            });
+          }
+        } else {
+          // If no matching locations, return empty result
+          return reply.send({
+            success: true,
+            data: [],
+            pagination: { page: 1, limit: 50, count: 0 }
+          });
+        }
       }
 
       if (destination_trade_zone) {
-        // Filter by destination trade zone
-        query = query.ilike('destination_trade_zone', `%${destination_trade_zone}%`);
+        // Get all UN/LOCODEs that match the destination trade zone
+        const { data: destLocations, error: destLocError } = await supabase
+          .from('locations')
+          .select('unlocode')
+          .ilike('trade_zone', `%${destination_trade_zone}%`);
+        
+        if (destLocError) {
+          throw new Error(`Error querying destination trade zone: ${destLocError.message}`);
+        }
+        
+        if (destLocations && destLocations.length > 0) {
+          const destUnlocodes = destLocations.map(loc => loc.unlocode).filter(Boolean);
+          // Filter by destination_code (v4) or pod_code (legacy) matching the trade zone
+          if (destUnlocodes.length > 0) {
+            // Use PostgREST OR syntax: column1.in.(values),column2.in.(values)
+            const unlocodeList = destUnlocodes.join(',');
+            query = query.or(`destination_code.in.(${unlocodeList}),pod_code.in.(${unlocodeList})`);
+          } else {
+            // If no matching locations, return empty result
+            return reply.send({
+              success: true,
+              data: [],
+              pagination: { page: 1, limit: 50, count: 0 }
+            });
+          }
+        } else {
+          // If no matching locations, return empty result
+          return reply.send({
+            success: true,
+            data: [],
+            pagination: { page: 1, limit: 50, count: 0 }
+          });
+        }
       }
 
       if (vendor_name) {
