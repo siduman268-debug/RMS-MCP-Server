@@ -3271,7 +3271,9 @@ async function createHttpServer() {
             const originUnlocodes = originLocations.map(loc => loc.unlocode).filter(Boolean);
             // Filter by origin_code (v4) or pol_code (legacy) matching the trade zone
             if (originUnlocodes.length > 0) {
+              // Filter by origin_code (v4) or pol_code (legacy) matching the trade zone
               // Use PostgREST OR syntax: column1.in.(val1,val2),column2.in.(val1,val2)
+              // Note: Supabase .in() expects an array, but .or() uses PostgREST string syntax
               const unlocodeList = originUnlocodes.join(',');
               query = query.or(`origin_code.in.(${unlocodeList}),pol_code.in.(${unlocodeList})`);
             } else {
@@ -3314,7 +3316,9 @@ async function createHttpServer() {
             const destUnlocodes = destLocations.map(loc => loc.unlocode).filter(Boolean);
             // Filter by destination_code (v4) or pod_code (legacy) matching the trade zone
             if (destUnlocodes.length > 0) {
+              // Filter by destination_code (v4) or pod_code (legacy) matching the trade zone
               // Use PostgREST OR syntax: column1.in.(val1,val2),column2.in.(val1,val2)
+              // Note: Supabase .in() expects an array, but .or() uses PostgREST string syntax
               const unlocodeList = destUnlocodes.join(',');
               query = query.or(`destination_code.in.(${unlocodeList}),pod_code.in.(${unlocodeList})`);
             } else {
