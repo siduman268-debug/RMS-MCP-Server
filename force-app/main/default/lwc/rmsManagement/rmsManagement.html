@@ -105,7 +105,7 @@
                         <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
                     </template>
                     <template if:false={loading}>
-                        <c-rms-margin-rules-table 
+                        <c-rms-margin-rules-cards 
                             records={marginRules}
                             selected-records={selectedRecords}
                             oncreate={handleCreate}
@@ -116,7 +116,7 @@
                             onexport={handleExport}
                             onselectall={handleSelectAll}
                             onselectrecord={handleSelectRecord}>
-                        </c-rms-margin-rules-table>
+                        </c-rms-margin-rules-cards>
                     </template>
                 </lightning-tab>
             </lightning-tabset>

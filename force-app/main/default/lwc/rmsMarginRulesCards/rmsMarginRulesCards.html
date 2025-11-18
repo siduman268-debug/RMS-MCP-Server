@@ -1,0 +1,173 @@
+<template>
+    <div class="slds-card">
+        <div class="slds-card__header slds-grid">
+            <header class="slds-media slds-media_center slds-has-flexi-truncate">
+                <div class="slds-media__body">
+                    <h2 class="slds-card__header-title">
+                        <lightning-icon icon-name="standard:calibration" size="small" class="slds-m-right_x-small"></lightning-icon>
+                        <span>Margin Rules ({rules.length})</span>
+                    </h2>
+                    <p class="slds-text-body_small slds-text-color_weak">Configure global, trade zone, and port pair margin rules</p>
+                </div>
+            </header>
+            <div class="slds-no-flex">
+                <div class="slds-button-group" role="group">
+                    <lightning-button 
+                        label="Add New Rule" 
+                        variant="brand"
+                        icon-name="utility:add"
+                        onclick={handleCreate}>
+                    </lightning-button>
+                    <lightning-button 
+                        label="Upload CSV" 
+                        variant="neutral"
+                        icon-name="utility:upload"
+                        onclick={handleUpload}>
+                    </lightning-button>
+                    <lightning-button 
+                        label="Export" 
+                        variant="neutral"
+                        icon-name="utility:download"
+                        onclick={handleExport}>
+                    </lightning-button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slds-card__body slds-card__body_inner">
+            <!-- Filter Section -->
+            <div class="slds-p-around_medium slds-border_bottom">
+                <div class="slds-grid slds-gutters">
+                    <div class="slds-col slds-size_1-of-3">
+                        <lightning-combobox
+                            label="Scope"
+                            value={filterScope}
+                            options={scopeOptions}
+                            placeholder="Select scope..."
+                            onchange={handleFilterScopeChange}>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-align-bottom">
+                        <lightning-button 
+                            label="Fetch Rules" 
+                            variant="brand"
+                            onclick={handleFetchRules}
+                            disabled={loading}
+                            class="slds-m-right_small">
+                        </lightning-button>
+                        <lightning-button 
+                            label="Clear Filters" 
+                            variant="neutral"
+                            onclick={handleClearFilters}>
+                        </lightning-button>
+                    </div>
+                </div>
+                <template if:true={hasRecords}>
+                    <div class="slds-m-top_small">
+                        <p class="slds-text-body_small slds-text-color_success">
+                            Showing {filteredRecords.length} of {rules.length} rule(s)
+                        </p>
+                    </div>
+                </template>
+            </div>
+            
+            <!-- Cards Section -->
+            <template if:true={loading}>
+                <div class="slds-text-align_center slds-p-around_large">
+                    <lightning-spinner alternative-text="Loading rules..." size="medium"></lightning-spinner>
+                </div>
+            </template>
+            
+            <template if:false={loading}>
+                <template if:true={hasRecords}>
+                    <div class="margin-rules-container">
+                        <template for:each={formattedRecords} for:item="rule">
+                            <div key={rule.id} class={rule.cardClass}>
+                                <!-- Checkbox -->
+                                <div class="card-checkbox">
+                                    <lightning-input 
+                                        type="checkbox" 
+                                        value={rule.id}
+                                        checked={rule.isSelected}
+                                        data-record-id={rule.id}
+                                        onchange={handleSelectRecord}>
+                                    </lightning-input>
+                                </div>
+                                
+                                <!-- Rule Header -->
+                                <div class="rule-header">
+                                    <div class="rule-scope">
+                                        <lightning-icon icon-name="utility:world" size="xx-small"></lightning-icon>
+                                        <span>{rule.displayScope}</span>
+                                    </div>
+                                    <span class={rule.statusClass}>{rule.displayStatus}</span>
+                                </div>
+                                
+                                <!-- Rule Details -->
+                                <div class="rule-details">
+                                    <div class="rule-type">
+                                        <span class={rule.typeClass}>{rule.displayType}</span>
+                                    </div>
+                                    <div class="rule-value">
+                                        {rule.displayValue}
+                                    </div>
+                                    <div class="rule-reference">
+                                        <lightning-icon icon-name="utility:location" size="xx-small"></lightning-icon>
+                                        <span>{rule.displayReference}</span>
+                                    </div>
+                                    <template if:true={rule.priority}>
+                                        <div class="rule-priority">
+                                            <lightning-icon icon-name="utility:priority" size="xx-small"></lightning-icon>
+                                            <span>Priority: {rule.displayPriority}</span>
+                                        </div>
+                                    </template>
+                                </div>
+                                
+                                <!-- Selected Indicator -->
+                                <template if:true={rule.isSelected}>
+                                    <div class="selected-indicator">
+                                        <lightning-icon icon-name="utility:check" size="xx-small" alternative-text="Selected" variant="inverse"></lightning-icon>
+                                    </div>
+                                </template>
+                                
+                                <!-- Actions -->
+                                <div class="card-actions">
+                                    <div class="slds-button-group" role="group">
+                                        <lightning-button-icon 
+                                            icon-name="utility:preview" 
+                                            variant="border-filled" 
+                                            alternative-text="View"
+                                            data-id={rule.id}
+                                            onclick={handleView}>
+                                        </lightning-button-icon>
+                                        <lightning-button-icon 
+                                            icon-name="utility:edit" 
+                                            variant="border-filled" 
+                                            alternative-text="Edit"
+                                            data-id={rule.id}
+                                            onclick={handleEdit}>
+                                        </lightning-button-icon>
+                                        <lightning-button-icon 
+                                            icon-name="utility:delete" 
+                                            variant="border-filled" 
+                                            alternative-text="Delete"
+                                            data-id={rule.id}
+                                            onclick={handleDelete}>
+                                        </lightning-button-icon>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                <template if:false={hasRecords}>
+                    <div class="empty-state">
+                        <lightning-icon icon-name="utility:warning" size="small" class="empty-state-icon"></lightning-icon>
+                        <p>No margin rules found. Click "Add New Rule" to create one.</p>
+                    </div>
+                </template>
+            </template>
+        </div>
+    </div>
+</template>
+

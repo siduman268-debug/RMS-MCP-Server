@@ -1,0 +1,177 @@
+/* Margin Rules Cards Container */
+.margin-rules-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1rem;
+    padding: 1rem 0;
+}
+
+/* Margin Rule Card */
+.margin-rule-card {
+    background-color: var(--slds-g-color-neutral-base-100, #ffffff);
+    border: 1px solid var(--slds-g-color-border-base-4, #dddbda);
+    border-radius: var(--slds-g-radius-border-3, 0.5rem);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
+    box-shadow: var(--slds-g-shadow-1, 0 1px 2px rgba(0, 0, 0, 0.05));
+}
+
+.margin-rule-card:hover {
+    box-shadow: var(--slds-g-shadow-3, 0 4px 8px rgba(0, 0, 0, 0.12));
+    border-color: var(--slds-g-color-brand-base-30, #1b96ff);
+    transform: translateY(-2px);
+}
+
+.margin-rule-card.selected {
+    border-color: var(--slds-g-color-brand-base-50, #0176d3);
+    box-shadow: var(--slds-g-shadow-3, 0 4px 8px rgba(0, 0, 0, 0.12));
+    background-color: var(--slds-g-color-brand-base-95, #eef4ff);
+}
+
+/* Rule Header */
+.rule-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--slds-g-color-border-base-4, #dddbda);
+}
+
+.rule-scope {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: var(--slds-g-font-weight-semibold, 600);
+    color: var(--slds-g-color-neutral-base-10, #080707);
+}
+
+.rule-scope lightning-icon {
+    --sds-c-icon-color-foreground-default: var(--slds-g-color-brand-base-50, #0176d3);
+}
+
+/* Status Badge */
+.status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--slds-g-radius-border-2, 0.25rem);
+    font-size: 0.75rem;
+    font-weight: var(--slds-g-font-weight-semibold, 600);
+    text-transform: uppercase;
+}
+
+.status-badge.active {
+    background-color: var(--slds-g-color-success-base-90, #d8eddc);
+    color: var(--slds-g-color-success-base-40, #2e844a);
+}
+
+.status-badge.inactive {
+    background-color: var(--slds-g-color-neutral-base-90, #dddbda);
+    color: var(--slds-g-color-neutral-base-40, #706e6b);
+}
+
+/* Rule Details */
+.rule-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.rule-type {
+    display: flex;
+    align-items: center;
+}
+
+.type-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--slds-g-radius-border-2, 0.25rem);
+    font-size: 0.75rem;
+    font-weight: var(--slds-g-font-weight-semibold, 600);
+    text-transform: uppercase;
+}
+
+.type-badge.percentage {
+    background-color: var(--slds-g-color-brand-base-90, #d8e6fe);
+    color: var(--slds-g-color-brand-base-40, #0176d3);
+}
+
+.type-badge.fixed {
+    background-color: var(--slds-g-color-warning-base-90, #fef3c7);
+    color: var(--slds-g-color-warning-base-40, #dd7a01);
+}
+
+.type-badge.multiplier {
+    background-color: var(--slds-g-color-success-base-90, #d8eddc);
+    color: var(--slds-g-color-success-base-40, #2e844a);
+}
+
+.rule-value {
+    font-size: 1.5rem;
+    font-weight: var(--slds-g-font-weight-bold, 700);
+    color: var(--slds-g-color-neutral-base-10, #080707);
+    margin: 0.5rem 0;
+}
+
+.rule-reference,
+.rule-priority {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--slds-g-color-neutral-base-50, #706e6b);
+}
+
+.rule-reference lightning-icon,
+.rule-priority lightning-icon {
+    --sds-c-icon-color-foreground-default: var(--slds-g-color-neutral-base-60, #706e6b);
+}
+
+/* Selected Indicator */
+.selected-indicator {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background-color: var(--slds-g-color-brand-base-50, #0176d3);
+    border-radius: var(--slds-g-radius-border-circle, 50%);
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.selected-indicator lightning-icon {
+    --sds-c-icon-color-foreground-inverse: var(--slds-g-color-neutral-base-100, #ffffff);
+}
+
+/* Checkbox */
+.card-checkbox {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 1;
+}
+
+/* Actions */
+.card-actions {
+    position: absolute;
+    bottom: 0.5rem;
+    right: 0.5rem;
+    z-index: 1;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: var(--slds-g-color-neutral-base-50, #706e6b);
+}
+
+.empty-state-icon {
+    margin-bottom: 0.5rem;
+    --sds-c-icon-color-foreground-default: var(--slds-g-color-neutral-base-50, #706e6b);
+}
+

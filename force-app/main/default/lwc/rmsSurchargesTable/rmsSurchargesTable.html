@@ -4,7 +4,8 @@
             <header class="slds-media slds-media_center slds-has-flexi-truncate">
                 <div class="slds-media__body">
                     <h2 class="slds-card__header-title">
-                        <span>Surcharges ({records.length})</span>
+                        <lightning-icon icon-name="standard:product_item" size="small" class="slds-m-right_x-small"></lightning-icon>
+                        <span>Surcharges ({surcharges.length})</span>
                     </h2>
                 </div>
             </header>
@@ -33,74 +34,235 @@
         </div>
         
         <div class="slds-card__body slds-card__body_inner">
-            <template if:true={hasRecords}>
-                <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_striped">
-                    <thead>
-                        <tr class="slds-line-height_reset">
-                            <th scope="col" style="width: 3rem;">
-                                <lightning-input 
-                                    type="checkbox" 
-                                    checked={allSelected}
-                                    onchange={handleSelectAll}>
+            <!-- Filter Section -->
+            <div class="slds-p-around_medium slds-border_bottom">
+                <h3 class="slds-text-heading_small slds-m-bottom_medium">Filter Surcharges</h3>
+                <div class="slds-grid slds-gutters slds-wrap">
+                    <!-- Column 1 -->
+                    <div class="slds-col slds-size_1-of-3">
+                        <lightning-combobox
+                            label="Vendor"
+                            value={filterVendorId}
+                            options={vendorOptions}
+                            placeholder="Select vendor..."
+                            onchange={handleVendorChange}
+                            class="slds-m-bottom_small">
+                        </lightning-combobox>
+                        
+                        <lightning-combobox
+                            label="Contract"
+                            value={filterContractId}
+                            options={contractOptions}
+                            placeholder="Select contract..."
+                            onchange={handleContractChange}
+                            disabled={contracts.length === 0}
+                            class="slds-m-bottom_small">
+                        </lightning-combobox>
+                    </div>
+                    
+                    <!-- Column 2 -->
+                    <div class="slds-col slds-size_1-of-3">
+                        <div class="slds-form-element slds-m-bottom_small port-lookup-container">
+                            <label class="slds-form-element__label">Origin (POL)</label>
+                            <div class="slds-form-element__control">
+                                <lightning-input
+                                    type="text"
+                                    value={polDisplay}
+                                    placeholder="Search origin port..."
+                                    onchange={handlePolInputChange}
+                                    onfocus={handlePolFocus}
+                                    onblur={handlePolBlur}>
                                 </lightning-input>
-                            </th>
-                            <th scope="col" class="slds-is-sortable" data-field="charge_code" onclick={handleSort}>Charge Code</th>
-                            <th scope="col" class="slds-is-sortable" data-field="amount" onclick={handleSort}>Amount</th>
-                            <th scope="col">Currency</th>
-                            <th scope="col">Applies Scope</th>
-                            <th scope="col">UOM</th>
-                            <th scope="col">Calc Method</th>
-                            <th scope="col">Valid From</th>
-                            <th scope="col">Valid To</th>
-                            <th scope="col">Active</th>
-                            <th scope="col">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template for:each={formattedRecords} for:item="record">
-                            <tr key={record.id}>
-                                <td data-label="Select">
-                                    <lightning-input 
-                                        type="checkbox" 
-                                        value={record.id}
-                                        checked={record.isSelected}
-                                        onchange={handleSelectRecord}>
-                                    </lightning-input>
-                                </td>
-                                <td data-label="Charge Code">{record.displayChargeCode}</td>
-                                <td data-label="Amount">{record.formattedAmount}</td>
-                                <td data-label="Currency">{record.displayCurrency}</td>
-                                <td data-label="Applies Scope">{record.displayAppliesScope}</td>
-                                <td data-label="UOM">{record.displayUom}</td>
-                                <td data-label="Calc Method">{record.displayCalcMethod}</td>
-                                <td data-label="Valid From">{record.formattedValidFrom}</td>
-                                <td data-label="Valid To">{record.formattedValidTo}</td>
-                                <td data-label="Active">
-                                    <template if:true={record.is_active}>
-                                        <lightning-icon icon-name="utility:check" size="small" variant="success"></lightning-icon>
-                                    </template>
-                                    <template if:false={record.is_active}>
-                                        <lightning-icon icon-name="utility:close" size="small" variant="error"></lightning-icon>
-                                    </template>
-                                </td>
-                                <td data-label="Actions">
-                                    <div class="slds-button-group" role="group">
-                                        <lightning-button-icon icon-name="utility:preview" variant="border-filled" alternative-text="View" data-id={record.id} onclick={handleView}></lightning-button-icon>
-                                        <lightning-button-icon icon-name="utility:edit" variant="border-filled" alternative-text="Edit" data-id={record.id} onclick={handleEdit}></lightning-button-icon>
-                                        <lightning-button-icon icon-name="utility:delete" variant="border-filled" alternative-text="Delete" data-id={record.id} onclick={handleDelete}></lightning-button-icon>
+                                <template if:true={showPolDropdown}>
+                                    <div class="slds-dropdown slds-dropdown_left port-lookup-dropdown">
+                                        <template if:true={polLoading}>
+                                            <div class="slds-p-around_small">
+                                                <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+                                            </div>
+                                        </template>
+                                        <template if:true={polNoResults}>
+                                            <div class="slds-p-around_small">No ports found</div>
+                                        </template>
+                                        <ul class="slds-dropdown__list" role="listbox">
+                                            <template for:each={polSearchResults} for:item="port">
+                                                <li key={port.code} 
+                                                    class="slds-dropdown__item port-dropdown-item" 
+                                                    role="presentation"
+                                                    data-code={port.code}
+                                                    data-label={port.label}
+                                                    onclick={handlePolSelect}>
+                                                    <div class="slds-truncate" title={port.label}>{port.label}</div>
+                                                </li>
+                                            </template>
+                                        </ul>
                                     </div>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-            </template>
-            <template if:false={hasRecords}>
-                <div class="slds-text-align_center slds-p-around_large">
-                    <p>No surcharges found. Click "Create" to add a new surcharge.</p>
+                                </template>
+                            </div>
+                        </div>
+                        
+                        <div class="slds-form-element slds-m-bottom_small port-lookup-container">
+                            <label class="slds-form-element__label">Destination (POD)</label>
+                            <div class="slds-form-element__control">
+                                <lightning-input
+                                    type="text"
+                                    value={podDisplay}
+                                    placeholder="Search destination port..."
+                                    onchange={handlePodInputChange}
+                                    onfocus={handlePodFocus}
+                                    onblur={handlePodBlur}>
+                                </lightning-input>
+                                <template if:true={showPodDropdown}>
+                                    <div class="slds-dropdown slds-dropdown_left port-lookup-dropdown">
+                                        <template if:true={podLoading}>
+                                            <div class="slds-p-around_small">
+                                                <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+                                            </div>
+                                        </template>
+                                        <template if:true={podNoResults}>
+                                            <div class="slds-p-around_small">No ports found</div>
+                                        </template>
+                                        <ul class="slds-dropdown__list" role="listbox">
+                                            <template for:each={podSearchResults} for:item="port">
+                                                <li key={port.code} 
+                                                    class="slds-dropdown__item port-dropdown-item" 
+                                                    role="presentation"
+                                                    data-code={port.code}
+                                                    data-label={port.label}
+                                                    onclick={handlePodSelect}>
+                                                    <div class="slds-truncate" title={port.label}>{port.label}</div>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Column 3 -->
+                    <div class="slds-col slds-size_1-of-3">
+                        <lightning-combobox
+                            label="Container Type"
+                            value={filterContainerType}
+                            options={containerTypeOptions}
+                            placeholder="Select container type..."
+                            onchange={handleContainerTypeChange}
+                            class="slds-m-bottom_small">
+                        </lightning-combobox>
+                        
+                        <lightning-combobox
+                            label="Applies Scope"
+                            value={filterAppliesScope}
+                            options={appliesScopeOptions}
+                            placeholder="Select scope..."
+                            onchange={handleAppliesScopeChange}
+                            class="slds-m-bottom_small">
+                        </lightning-combobox>
+                    </div>
                 </div>
-            </template>
+                
+                <div class="slds-grid slds-grid_align-spread slds-m-top_medium">
+                    <div class="slds-col">
+                        <template if:true={hasRecords}>
+                            <p class="slds-text-body_small slds-text-color_success">
+                                Showing {surcharges.length} surcharge(s)
+                            </p>
+                        </template>
+                    </div>
+                    <div class="slds-col slds-no-flex">
+                        <lightning-button 
+                            label="Fetch Surcharges" 
+                            variant="brand"
+                            onclick={handleFetchSurcharges}
+                            disabled={loading}
+                            class="slds-m-right_small">
+                        </lightning-button>
+                        <lightning-button 
+                            label="Clear Filters" 
+                            variant="neutral"
+                            onclick={handleClearFilters}>
+                        </lightning-button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Results Table -->
+            <div class="slds-m-top_medium">
+                <template if:true={loading}>
+                    <div class="slds-text-align_center slds-p-around_large">
+                        <lightning-spinner alternative-text="Loading surcharges..." size="medium"></lightning-spinner>
+                    </div>
+                </template>
+                
+                <template if:false={loading}>
+                    <template if:false={hasRecords}>
+                        <div class="slds-text-align_center slds-p-around_large">
+                            <p class="slds-text-body_regular">No surcharges found. Use filters above to search, or create a new surcharge.</p>
+                        </div>
+                    </template>
+                    
+                    <template if:true={hasRecords}>
+                        <table class="slds-table slds-table_bordered slds-table_cell-buffer slds-table_striped">
+                            <thead>
+                                <tr class="slds-line-height_reset">
+                                    <th scope="col" class="slds-text-title_caps">CHARGE CODE</th>
+                                    <th scope="col" class="slds-text-title_caps">AMOUNT</th>
+                                    <th scope="col" class="slds-text-title_caps">CURRENCY</th>
+                                    <th scope="col" class="slds-text-title_caps">UOM</th>
+                                    <th scope="col" class="slds-text-title_caps">POL</th>
+                                    <th scope="col" class="slds-text-title_caps">POD</th>
+                                    <th scope="col" class="slds-text-title_caps">CONTAINER</th>
+                                    <th scope="col" class="slds-text-title_caps">APPLIES SCOPE</th>
+                                    <th scope="col" class="slds-text-title_caps">VENDOR</th>
+                                    <th scope="col" class="slds-text-title_caps">CONTRACT</th>
+                                    <th scope="col" class="slds-text-title_caps">ACTIONS</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template for:each={formattedRecords} for:item="record">
+                                    <tr key={record.id}>
+                                        <td data-label="Charge Code">{record.displayChargeCode}</td>
+                                        <td data-label="Amount">{record.displayAmount}</td>
+                                        <td data-label="Currency">{record.displayCurrency}</td>
+                                        <td data-label="UOM">{record.displayUom}</td>
+                                        <td data-label="POL">{record.displayPol}</td>
+                                        <td data-label="POD">{record.displayPod}</td>
+                                        <td data-label="Container">{record.displayContainerType}</td>
+                                        <td data-label="Applies Scope">{record.displayAppliesScope}</td>
+                                        <td data-label="Vendor">{record.displayVendor}</td>
+                                        <td data-label="Contract">{record.displayContract}</td>
+                                        <td data-label="Actions">
+                                            <div class="slds-button-group" role="group">
+                                                <lightning-button-icon 
+                                                    icon-name="utility:preview" 
+                                                    variant="border-filled" 
+                                                    alternative-text="View" 
+                                                    data-id={record.id} 
+                                                    onclick={handleView}>
+                                                </lightning-button-icon>
+                                                <lightning-button-icon 
+                                                    icon-name="utility:edit" 
+                                                    variant="border-filled" 
+                                                    alternative-text="Edit" 
+                                                    data-id={record.id} 
+                                                    onclick={handleEdit}>
+                                                </lightning-button-icon>
+                                                <lightning-button-icon 
+                                                    icon-name="utility:delete" 
+                                                    variant="border-filled" 
+                                                    alternative-text="Delete" 
+                                                    data-id={record.id} 
+                                                    onclick={handleDelete}>
+                                                </lightning-button-icon>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </template>
+                </template>
+            </div>
         </div>
     </div>
 </template>
-
