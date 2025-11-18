@@ -111,8 +111,8 @@ export default class RmsMarginRulesCards extends LightningElement {
             return `${origin} → ${destination}`;
         }
         if (level === 'port_pair' || level === 'pp') {
-            // Would need to lookup port codes from pol_id/pod_id
-            return record.pol_id && record.pod_id ? `Port ${record.pol_id} → Port ${record.pod_id}` : '—';
+            // Don't show ugly IDs - just indicate it's port specific
+            return 'Specific Port Pair';
         }
         return '—';
     }

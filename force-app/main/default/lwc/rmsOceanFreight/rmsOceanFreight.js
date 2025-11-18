@@ -431,11 +431,11 @@ export default class RmsOceanFreight extends LightningElement {
             displayContainerType: rate.container_type || '—',
             displayCurrency: rate.currency || 'USD',
             displayTransitDays: rate.tt_days || '—',
-            displayBuyAmount: rate.buy_amount ? 
+            displayBuyAmount: (rate.buy_amount || rate.sell_price || rate.base_freight) ? 
                 new Intl.NumberFormat('en-US', {
                     style: 'currency',
                     currency: rate.currency || 'USD'
-                }).format(rate.buy_amount) : '—',
+                }).format(rate.buy_amount || rate.sell_price || rate.base_freight) : '—',
             displayValidFrom: this.formatDate(rate.valid_from),
             displayValidTo: this.formatDate(rate.valid_to)
         }));
