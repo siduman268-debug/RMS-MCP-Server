@@ -294,12 +294,10 @@ export default class RmsOceanFreight extends LightningElement {
             
             // Build filters from current selections
             if (this.filterVendorId) {
-                // Need to get contract IDs for vendor, or filter by contract_id
-                // For now, if vendor selected, we'll need to filter contracts first
-                if (this.filterContractId) {
-                    filters.contract_id = this.filterContractId;
-                }
-            } else if (this.filterContractId) {
+                filters.vendor_id = this.filterVendorId;
+            }
+            
+            if (this.filterContractId) {
                 filters.contract_id = this.filterContractId;
             }
             
@@ -315,13 +313,19 @@ export default class RmsOceanFreight extends LightningElement {
                 filters.container_type = this.filterContainerType;
             }
             
+            console.log('Loading rates with filters:', filters);
+            
             const filtersJson = JSON.stringify(filters);
             const data = await listRatesForLWC({ filtersJson: filtersJson });
             
             console.log('Ocean Freight Rates loaded:', data?.length || 0, 'records');
             this.rates = data || [];
             
-            this.showSuccessToast('Success', `Loaded ${this.rates.length} ocean freight rate(s)`);
+            if (this.rates.length > 0) {
+                this.showSuccessToast('Success', `Loaded ${this.rates.length} ocean freight rate(s)`);
+            } else {
+                this.showErrorToast('No Results', 'No ocean freight rates found matching the filters');
+            }
         } catch (error) {
             console.error('Error loading ocean freight rates:', error);
             this.rates = [];
@@ -424,21 +428,26 @@ export default class RmsOceanFreight extends LightningElement {
     get formattedRates() {
         if (!this.rates) return [];
         
-        return this.rates.map(rate => ({
-            ...rate,
-            displayOrigin: rate.origin_code || rate.pol_code || '—',
-            displayDestination: rate.destination_code || rate.pod_code || '—',
-            displayContainerType: rate.container_type || '—',
-            displayCurrency: rate.currency || 'USD',
-            displayTransitDays: rate.tt_days || '—',
-            displayBuyAmount: (rate.buy_amount || rate.sell_price || rate.base_freight) ? 
-                new Intl.NumberFormat('en-US', {
-                    style: 'currency',
-                    currency: rate.currency || 'USD'
-                }).format(rate.buy_amount || rate.sell_price || rate.base_freight) : '—',
-            displayValidFrom: this.formatDate(rate.valid_from),
-            displayValidTo: this.formatDate(rate.valid_to)
-        }));
+        return this.rates.map(rate => {
+            // Now querying ocean_freight_rate table directly, so buy_amount is the correct field
+            const buyAmount = rate.buy_amount || null;
+            
+            return {
+                ...rate,
+                displayOrigin: rate.origin_code || '—',
+                displayDestination: rate.destination_code || '—',
+                displayContainerType: rate.container_type || '—',
+                displayCurrency: rate.currency || 'USD',
+                displayTransitDays: rate.tt_days || '—',
+                displayBuyAmount: buyAmount ? 
+                    new Intl.NumberFormat('en-US', {
+                        style: 'currency',
+                        currency: rate.currency || 'USD'
+                    }).format(buyAmount) : '—',
+                displayValidFrom: this.formatDate(rate.valid_from),
+                displayValidTo: this.formatDate(rate.valid_to)
+            };
+        });
     }
     
     formatDate(dateString) {

@@ -3298,7 +3298,7 @@ async function createHttpServer() {
     }
   });
 
-  // List Ocean Freight Rates
+  // List Ocean Freight Rates (from ocean_freight_rate table directly)
   fastify.get('/api/ocean-freight-rates', async (request, reply) => {
     try {
       const { 
@@ -3306,9 +3306,8 @@ async function createHttpServer() {
         pod_code, 
         origin,
         destination,
-        // origin_trade_zone,  // TODO: Implement later
-        // destination_trade_zone,  // TODO: Implement later
-        vendor_name, 
+        vendor_id,
+        contract_id,
         container_type, 
         is_preferred, 
         is_active = 'true',
@@ -3316,11 +3315,40 @@ async function createHttpServer() {
         limit = '50'
       } = request.query as any;
 
+      // Query ocean_freight_rate table directly with joins to get related data
       let query = supabase
-        .from('mv_freight_sell_prices')
-        .select('*');
+        .from('ocean_freight_rate')
+        .select(`
+          id,
+          contract_id,
+          origin_code,
+          destination_code,
+          container_type,
+          buy_amount,
+          currency,
+          tt_days,
+          is_preferred,
+          valid_from,
+          valid_to,
+          tenant_id,
+          pol:pol_id (
+            unlocode,
+            location_name
+          ),
+          pod:pod_id (
+            unlocode,
+            location_name
+          ),
+          contract:contract_id (
+            id,
+            vendor_id,
+            name,
+            is_spot
+          )
+        `)
+        .eq('tenant_id', (request as any).tenant_id);
 
-      // Apply filters using materialized view fields
+      // Apply filters
       if (container_type) {
         query = query.eq('container_type', container_type);
       }
@@ -3330,28 +3358,66 @@ async function createHttpServer() {
       }
 
       // Prefer origin/destination (v4 API fields), fallback to pol_code/pod_code
-      // Note: Materialized view has origin_code/destination_code, not origin/destination
       if (origin) {
         query = query.eq('origin_code', origin);
       } else if (pol_code) {
-        query = query.eq('pol_code', pol_code);
+        // Need to lookup location by unlocode first
+        const { data: polLocation } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('unlocode', pol_code)
+          .single();
+        if (polLocation) {
+          query = query.eq('pol_id', polLocation.id);
+        }
       }
 
       if (destination) {
         query = query.eq('destination_code', destination);
       } else if (pod_code) {
-        query = query.eq('pod_code', pod_code);
+        // Need to lookup location by unlocode first
+        const { data: podLocation } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('unlocode', pod_code)
+          .single();
+        if (podLocation) {
+          query = query.eq('pod_id', podLocation.id);
+        }
       }
 
-      // Trade zone filters - TODO: Implement later
-      // Temporarily disabled to fix 500 errors
-
-      if (vendor_name) {
-        query = query.eq('carrier', vendor_name);
+      if (contract_id) {
+        query = query.eq('contract_id', parseInt(contract_id));
       }
 
-      // Order by rate_id
-      query = query.order('rate_id', { ascending: false });
+      // If vendor_id is specified, need to filter by contracts belonging to that vendor
+      if (vendor_id && !contract_id) {
+        // Get all contract IDs for this vendor
+        const { data: vendorContracts } = await supabase
+          .from('rate_contract')
+          .select('id')
+          .eq('vendor_id', parseInt(vendor_id))
+          .eq('tenant_id', (request as any).tenant_id);
+        
+        if (vendorContracts && vendorContracts.length > 0) {
+          const contractIds = vendorContracts.map(c => c.id);
+          query = query.in('contract_id', contractIds);
+        } else {
+          // No contracts for this vendor, return empty result
+          return reply.send({
+            success: true,
+            data: [],
+            pagination: {
+              page: parseInt(page),
+              limit: parseInt(limit),
+              count: 0
+            }
+          });
+        }
+      }
+
+      // Order by id (most recent first)
+      query = query.order('id', { ascending: false });
 
       // Apply pagination
       const pageNum = parseInt(page);
@@ -3359,17 +3425,43 @@ async function createHttpServer() {
       const offset = (pageNum - 1) * limitNum;
       query = query.range(offset, offset + limitNum - 1);
 
-      const { data, error } = await query;
+      const { data: rates, error } = await query;
 
       if (error) throw error;
 
+      // Transform data to flatten nested objects
+      const transformedData = (rates || []).map(rate => {
+        const pol = rate.pol as any;
+        const pod = rate.pod as any;
+        const contract = rate.contract as any;
+        
+        return {
+          id: rate.id,
+          contract_id: rate.contract_id,
+          origin_code: rate.origin_code || pol?.unlocode,
+          destination_code: rate.destination_code || pod?.unlocode,
+          origin_name: pol?.location_name,
+          destination_name: pod?.location_name,
+          container_type: rate.container_type,
+          buy_amount: rate.buy_amount,
+          currency: rate.currency,
+          tt_days: rate.tt_days,
+          is_preferred: rate.is_preferred,
+          valid_from: rate.valid_from,
+          valid_to: rate.valid_to,
+          vendor_id: contract?.vendor_id,
+          contract_name: contract?.name,
+          is_spot: contract?.is_spot
+        };
+      });
+
       return reply.send({
         success: true,
-        data: data || [],
+        data: transformedData,
         pagination: {
           page: pageNum,
           limit: limitNum,
-          count: data?.length || 0
+          count: transformedData.length
         }
       });
 
