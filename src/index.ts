@@ -3390,7 +3390,6 @@ async function createHttpServer() {
     try {
       const { 
         vendor_type, 
-        is_active = 'true',
         page = '1',
         limit = '100'
       } = request.query as any;
@@ -3403,10 +3402,6 @@ async function createHttpServer() {
       // Apply filters
       if (vendor_type) {
         query = query.eq('vendor_type', vendor_type);
-      }
-
-      if (is_active !== undefined) {
-        query = query.eq('is_active', is_active === 'true');
       }
 
       // Pagination
@@ -3484,7 +3479,6 @@ async function createHttpServer() {
     try {
       const { 
         vendor_id,
-        is_active = 'true',
         page = '1',
         limit = '100'
       } = request.query as any;
@@ -3497,10 +3491,6 @@ async function createHttpServer() {
       // Apply filters
       if (vendor_id) {
         query = query.eq('vendor_id', parseInt(vendor_id, 10));
-      }
-
-      if (is_active !== undefined) {
-        query = query.eq('is_active', is_active === 'true');
       }
 
       // Pagination
