@@ -127,5 +127,166 @@ public class MarginRuleService {
         
         return listRules(filters);
     }
+    
+    // ==========================================
+    // @AuraEnabled METHODS FOR LWC
+    // ==========================================
+    
+    /**
+     * @description List margin rules for LWC
+     * @param filtersJson JSON string of filter parameters
+     * @return List<Map<String, Object>> List of margin rules as maps
+     */
+    @AuraEnabled(cacheable=true)
+    public static List<Map<String, Object>> listRulesForLWC(String filtersJson) {
+        try {
+            Map<String, Object> filters = filtersJson != null ? 
+                (Map<String, Object>) JSON.deserializeUntyped(filtersJson) : 
+                new Map<String, Object>();
+            
+            String endpoint = '/api/margin-rules';
+            
+            if (filters != null && !filters.isEmpty()) {
+                List<String> params = new List<String>();
+                for (String key : filters.keySet()) {
+                    if (filters.get(key) != null) {
+                        params.add(key + '=' + EncodingUtil.urlEncode(String.valueOf(filters.get(key)), 'UTF-8'));
+                    }
+                }
+                if (!params.isEmpty()) {
+                    endpoint += '?' + String.join(params, '&');
+                }
+            }
+            
+            HttpResponse res = RMSApiUtil.makeApiCall(endpoint, 'GET', null);
+            Map<String, Object> response = RMSApiUtil.parseResponse(res);
+            
+            List<Map<String, Object>> rules = new List<Map<String, Object>>();
+            List<Object> dataList = (List<Object>) response.get('data');
+            
+            if (dataList != null) {
+                for (Object item : dataList) {
+                    rules.add((Map<String, Object>) item);
+                }
+            }
+            
+            // Filter fields based on field-level permissions
+            return RMSPermissionService.filterRecordsByPermission(rules, RMSPermissionService.ENTITY_MARGIN_RULE);
+        } catch (Exception e) {
+            throw new AuraHandledException('Error listing margin rules: ' + e.getMessage());
+        }
+    }
+    
+    /**
+     * @description Create margin rule for LWC
+     * @param ruleData Map of rule fields
+     * @return Map<String, Object> Created rule
+     */
+    @AuraEnabled
+    public static Map<String, Object> createRuleForLWC(Map<String, Object> ruleData) {
+        try {
+            // Check create permission - only pricing users can create margin rules (not sales users)
+            RMSPermissionService.validatePermission(RMSPermissionService.ENTITY_MARGIN_RULE, RMSPermissionService.PERMISSION_CREATE);
+            
+            // Ensure tenant_id is included (RLS enforcement)
+            ruleData = RMSApiUtil.addTenantToPayload(ruleData);
+            String body = JSON.serialize(ruleData);
+            HttpResponse res = RMSApiUtil.makeApiCall('/api/margin-rules', 'POST', body);
+            Map<String, Object> response = RMSApiUtil.parseResponse(res);
+            Map<String, Object> createdRule = (Map<String, Object>) response.get('data');
+            
+            // Filter fields based on field-level permissions
+            return RMSPermissionService.filterFieldsByPermission(createdRule, RMSPermissionService.ENTITY_MARGIN_RULE);
+        } catch (Exception e) {
+            throw new AuraHandledException('Error creating margin rule: ' + e.getMessage());
+        }
+    }
+    
+    /**
+     * @description Update margin rule for LWC
+     * @param ruleId RMS rule ID
+     * @param updates Map of fields to update
+     * @return Map<String, Object> Updated rule
+     */
+    @AuraEnabled
+    public static Map<String, Object> updateRuleForLWC(String ruleId, Map<String, Object> updates) {
+        try {
+            // Check edit permission - only pricing users can edit margin rules (not sales users)
+            RMSPermissionService.validatePermission(RMSPermissionService.ENTITY_MARGIN_RULE, RMSPermissionService.PERMISSION_EDIT);
+            
+            // Prevent tenant_id modification (RLS enforcement)
+            updates.remove('tenant_id');
+            
+            // Note: API RLS will enforce tenant isolation on the backend
+            String body = JSON.serialize(updates);
+            HttpResponse res = RMSApiUtil.makeApiCall('/api/margin-rules/' + ruleId, 'PUT', body);
+            Map<String, Object> response = RMSApiUtil.parseResponse(res);
+            Map<String, Object> updatedRule = (Map<String, Object>) response.get('data');
+            
+            // Verify tenant access (RLS check)
+            String ruleTenantId = (String) updatedRule.get('tenant_id');
+            String userTenantId = RMSApiUtil.getTenantId();
+            if (String.isNotBlank(ruleTenantId) && !ruleTenantId.equals(userTenantId)) {
+                throw new AuraHandledException('Access denied: This margin rule belongs to a different tenant.');
+            }
+            
+            // Filter fields based on field-level permissions
+            return RMSPermissionService.filterFieldsByPermission(updatedRule, RMSPermissionService.ENTITY_MARGIN_RULE);
+        } catch (Exception e) {
+            throw new AuraHandledException('Error updating margin rule: ' + e.getMessage());
+        }
+    }
+    
+    /**
+     * @description Delete margin rule for LWC
+     * @param ruleId RMS rule ID
+     * @return Boolean Success status
+     */
+    @AuraEnabled
+    public static Boolean deleteRuleForLWC(String ruleId) {
+        try {
+            // Check delete permission - only pricing users can delete margin rules
+            RMSPermissionService.validatePermission(RMSPermissionService.ENTITY_MARGIN_RULE, RMSPermissionService.PERMISSION_DELETE);
+            
+            // Note: API RLS will enforce tenant isolation on the backend
+            HttpResponse res = RMSApiUtil.makeApiCall('/api/margin-rules/' + ruleId, 'DELETE', null);
+            
+            if (res.getStatusCode() == 403 || res.getStatusCode() == 404) {
+                throw new AuraHandledException('Access denied: This margin rule belongs to a different tenant or does not exist.');
+            }
+            
+            return res.getStatusCode() >= 200 && res.getStatusCode() < 300;
+        } catch (Exception e) {
+            throw new AuraHandledException('Error deleting margin rule: ' + e.getMessage());
+        }
+    }
+    
+    /**
+     * @description Bulk create margin rules from CSV data
+     * @param rulesList List of rule maps
+     * @return List<Map<String, Object>> Results with created rules or errors
+     */
+    @AuraEnabled
+    public static List<Map<String, Object>> bulkCreateRules(List<Map<String, Object>> rulesList) {
+        try {
+            List<Map<String, Object>> results = new List<Map<String, Object>>();
+            
+            for (Map<String, Object> ruleData : rulesList) {
+                try {
+                    Map<String, Object> created = createRuleForLWC(ruleData);
+                    results.add(created);
+                } catch (Exception e) {
+                    Map<String, Object> errorResult = new Map<String, Object>();
+                    errorResult.put('error', e.getMessage());
+                    errorResult.put('data', ruleData);
+                    results.add(errorResult);
+                }
+            }
+            
+            return results;
+        } catch (Exception e) {
+            throw new AuraHandledException('Error in bulk create margin rules: ' + e.getMessage());
+        }
+    }
 }
 

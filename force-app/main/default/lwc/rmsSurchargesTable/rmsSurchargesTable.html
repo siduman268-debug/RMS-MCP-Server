@@ -1,0 +1,106 @@
+<template>
+    <div class="slds-card">
+        <div class="slds-card__header slds-grid">
+            <header class="slds-media slds-media_center slds-has-flexi-truncate">
+                <div class="slds-media__body">
+                    <h2 class="slds-card__header-title">
+                        <span>Surcharges ({records.length})</span>
+                    </h2>
+                </div>
+            </header>
+            <div class="slds-no-flex">
+                <div class="slds-button-group" role="group">
+                    <lightning-button 
+                        label="Create" 
+                        variant="brand"
+                        icon-name="utility:add"
+                        onclick={handleCreate}>
+                    </lightning-button>
+                    <lightning-button 
+                        label="Upload CSV" 
+                        variant="neutral"
+                        icon-name="utility:upload"
+                        onclick={handleUpload}>
+                    </lightning-button>
+                    <lightning-button 
+                        label="Export" 
+                        variant="neutral"
+                        icon-name="utility:download"
+                        onclick={handleExport}>
+                    </lightning-button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="slds-card__body slds-card__body_inner">
+            <template if:true={hasRecords}>
+                <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_striped">
+                    <thead>
+                        <tr class="slds-line-height_reset">
+                            <th scope="col" style="width: 3rem;">
+                                <lightning-input 
+                                    type="checkbox" 
+                                    checked={allSelected}
+                                    onchange={handleSelectAll}>
+                                </lightning-input>
+                            </th>
+                            <th scope="col" class="slds-is-sortable" data-field="charge_code" onclick={handleSort}>Charge Code</th>
+                            <th scope="col" class="slds-is-sortable" data-field="amount" onclick={handleSort}>Amount</th>
+                            <th scope="col">Currency</th>
+                            <th scope="col">Applies Scope</th>
+                            <th scope="col">UOM</th>
+                            <th scope="col">Calc Method</th>
+                            <th scope="col">Valid From</th>
+                            <th scope="col">Valid To</th>
+                            <th scope="col">Active</th>
+                            <th scope="col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template for:each={formattedRecords} for:item="record">
+                            <tr key={record.id}>
+                                <td data-label="Select">
+                                    <lightning-input 
+                                        type="checkbox" 
+                                        value={record.id}
+                                        checked={record.isSelected}
+                                        onchange={handleSelectRecord}>
+                                    </lightning-input>
+                                </td>
+                                <td data-label="Charge Code">{record.displayChargeCode}</td>
+                                <td data-label="Amount">{record.formattedAmount}</td>
+                                <td data-label="Currency">{record.displayCurrency}</td>
+                                <td data-label="Applies Scope">{record.displayAppliesScope}</td>
+                                <td data-label="UOM">{record.displayUom}</td>
+                                <td data-label="Calc Method">{record.displayCalcMethod}</td>
+                                <td data-label="Valid From">{record.formattedValidFrom}</td>
+                                <td data-label="Valid To">{record.formattedValidTo}</td>
+                                <td data-label="Active">
+                                    <template if:true={record.is_active}>
+                                        <lightning-icon icon-name="utility:check" size="small" variant="success"></lightning-icon>
+                                    </template>
+                                    <template if:false={record.is_active}>
+                                        <lightning-icon icon-name="utility:close" size="small" variant="error"></lightning-icon>
+                                    </template>
+                                </td>
+                                <td data-label="Actions">
+                                    <div class="slds-button-group" role="group">
+                                        <lightning-button-icon icon-name="utility:preview" variant="border-filled" alternative-text="View" data-id={record.id} onclick={handleView}></lightning-button-icon>
+                                        <lightning-button-icon icon-name="utility:edit" variant="border-filled" alternative-text="Edit" data-id={record.id} onclick={handleEdit}></lightning-button-icon>
+                                        <lightning-button-icon icon-name="utility:delete" variant="border-filled" alternative-text="Delete" data-id={record.id} onclick={handleDelete}></lightning-button-icon>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </template>
+            <template if:false={hasRecords}>
+                <div class="slds-text-align_center slds-p-around_large">
+                    <p>No surcharges found. Click "Create" to add a new surcharge.</p>
+                </div>
+            </template>
+        </div>
+    </div>
+</template>
+

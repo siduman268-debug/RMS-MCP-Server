@@ -1,6 +1,6 @@
 import { LightningElement, track, wire } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
-import getOceanFreightRates from '@salesforce/apex/OceanFreightRateService.listRates';
+import listRatesForLWC from '@salesforce/apex/OceanFreightRateService.listRatesForLWC';
 
 export default class OceanFreightRateList extends LightningElement {
     @track rates = [];
@@ -31,7 +31,7 @@ export default class OceanFreightRateList extends LightningElement {
         if (this.podCode) filters.pod_code = this.podCode;
         if (this.containerType) filters.container_type = this.containerType;
         
-        getOceanFreightRates({ filters: filters })
+        listRatesForLWC({ filtersJson: JSON.stringify(filters) })
             .then(result => {
                 this.rates = result;
                 this.totalRecords = result.length;
@@ -89,8 +89,8 @@ export default class OceanFreightRateList extends LightningElement {
         this.selectedRate = null;
     }
     
-    handleRateSaved() {
-        this.showModalClose();
+    handleRateSaved(event) {
+        this.handleModalClose();
         this.loadRates();
         this.showToast('Success', 'Rate saved successfully', 'success');
     }

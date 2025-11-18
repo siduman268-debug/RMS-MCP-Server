@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <label>Sales User Permission Set</label>
+    <protected>false</protected>
+    <values>
+        <field>Role__c</field>
+        <value xsi:type="xsd:string">SALES_USER</value>
+    </values>
+    <values>
+        <field>Permission_Set_Mapping__c</field>
+        <value xsi:type="xsd:string">RMS_SALES_USER, RMS_SALES_MANAGER</value>
+    </values>
+</CustomMetadata>

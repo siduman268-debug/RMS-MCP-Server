@@ -2952,8 +2952,8 @@ async function createHttpServer() {
   fastify.post('/api/ocean-freight-rates', async (request, reply) => {
     try {
       const { 
-        pol_code, 
-        pod_code, 
+        origin_code, 
+        destination_code, 
         container_type, 
         buy_amount, 
         currency,
@@ -2966,39 +2966,39 @@ async function createHttpServer() {
       } = request.body as any;
 
       // Validate required fields
-      if (!pol_code || !pod_code || !container_type || !buy_amount || !currency || !contract_id) {
+      if (!origin_code || !destination_code || !container_type || !buy_amount || !currency || !contract_id) {
         return reply.status(400).send({
           success: false,
-          error: 'Missing required fields: pol_code, pod_code, container_type, buy_amount, currency, contract_id'
+          error: 'Missing required fields: origin_code, destination_code, container_type, buy_amount, currency, contract_id'
         });
       }
 
       // Get location IDs using unlocode (like MCP tool)
-      const { data: polData, error: polError } = await supabase
+      const { data: originData, error: originError } = await supabase
         .from('locations')
         .select('id')
-        .eq('unlocode', pol_code)
+        .eq('unlocode', origin_code)
         .eq('is_active', true)
         .single();
 
-      if (polError || !polData) {
+      if (originError || !originData) {
         return reply.status(404).send({
           success: false,
-          error: `POL location not found: ${pol_code}`
+          error: `Origin location not found: ${origin_code}`
         });
       }
 
-      const { data: podData, error: podError } = await supabase
+      const { data: destinationData, error: destinationError } = await supabase
         .from('locations')
         .select('id')
-        .eq('unlocode', pod_code)
+        .eq('unlocode', destination_code)
         .eq('is_active', true)
         .single();
 
-      if (podError || !podData) {
+      if (destinationError || !destinationData) {
         return reply.status(404).send({
           success: false,
-          error: `POD location not found: ${pod_code}`
+          error: `Destination location not found: ${destination_code}`
         });
       }
 
@@ -3025,8 +3025,10 @@ async function createHttpServer() {
       const { data, error } = await supabase
         .from('ocean_freight_rate')
         .insert({
-          pol_id: polData.id,
-          pod_id: podData.id,
+          pol_id: originData.id,
+          pod_id: destinationData.id,
+          origin_code: origin_code,
+          destination_code: destination_code,
           contract_id: contract_id,
           container_type,
           buy_amount,
@@ -3043,6 +3045,8 @@ async function createHttpServer() {
           contract_id,
           pol_id,
           pod_id,
+          origin_code,
+          destination_code,
           container_type,
           buy_amount,
           currency,
@@ -3075,6 +3079,8 @@ async function createHttpServer() {
     try {
       const { rateId } = request.params as any;
       const { 
+        origin_code,
+        destination_code,
         buy_amount, 
         currency,
         tt_days, 
@@ -3084,6 +3090,43 @@ async function createHttpServer() {
       } = request.body as any;
 
       const updates: any = {};
+
+      // Handle origin_code/destination_code changes (update both code and ID)
+      if (origin_code !== undefined) {
+        const { data: originData, error: originError } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('unlocode', origin_code)
+          .eq('is_active', true)
+          .single();
+
+        if (originError || !originData) {
+          return reply.status(404).send({
+            success: false,
+            error: `Origin location not found: ${origin_code}`
+          });
+        }
+        updates.origin_code = origin_code;
+        updates.pol_id = originData.id;
+      }
+
+      if (destination_code !== undefined) {
+        const { data: destinationData, error: destinationError } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('unlocode', destination_code)
+          .eq('is_active', true)
+          .single();
+
+        if (destinationError || !destinationData) {
+          return reply.status(404).send({
+            success: false,
+            error: `Destination location not found: ${destination_code}`
+          });
+        }
+        updates.destination_code = destination_code;
+        updates.pod_id = destinationData.id;
+      }
 
       if (buy_amount !== undefined) updates.buy_amount = buy_amount;
       if (currency !== undefined) updates.currency = currency;
@@ -3102,6 +3145,8 @@ async function createHttpServer() {
           contract_id,
           pol_id,
           pod_id,
+          origin_code,
+          destination_code,
           container_type,
           buy_amount,
           currency,
@@ -3180,11 +3225,36 @@ async function createHttpServer() {
     try {
       const { rateId } = request.params as any;
 
-      // Use the same materialized view that the working APIs use
+      // Get the actual ocean_freight_rate record with location codes for editing
       const { data, error } = await supabase
-        .from('mv_freight_sell_prices')
-        .select('*')
-        .eq('rate_id', rateId)
+        .from('ocean_freight_rate')
+        .select(`
+          id,
+          contract_id,
+          pol_id,
+          pod_id,
+          origin_code,
+          destination_code,
+          container_type,
+          buy_amount,
+          currency,
+          tt_days,
+          via_port_id,
+          is_preferred,
+          valid_from,
+          valid_to,
+          tenant_id,
+          pol:pol_id (
+            unlocode,
+            location_name
+          ),
+          pod:pod_id (
+            unlocode,
+            location_name
+          )
+        `)
+        .eq('id', rateId)
+        .eq('tenant_id', (request as any).tenant_id)
         .single();
 
       if (error) throw error;
@@ -3196,9 +3266,28 @@ async function createHttpServer() {
         });
       }
 
+      // Transform to include origin_code and destination_code for LWC form
+      // Use origin_code/destination_code from table if available, otherwise use location lookup
+      const originCode = data.origin_code || (data.pol as any)?.unlocode || null;
+      const destinationCode = data.destination_code || (data.pod as any)?.unlocode || null;
+      const originName = (data.pol as any)?.location_name || null;
+      const destinationName = (data.pod as any)?.location_name || null;
+
+      const transformedData = {
+        ...data,
+        origin_code: originCode,
+        destination_code: destinationCode,
+        origin_name: originName,
+        destination_name: destinationName
+      };
+
+      // Remove nested objects
+      delete (transformedData as any).pol;
+      delete (transformedData as any).pod;
+
       return reply.send({
         success: true,
-        data: data
+        data: transformedData
       });
 
     } catch (error) {

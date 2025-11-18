@@ -4,6 +4,7 @@ import { NavigationMixin } from 'lightning/navigation';
 import listVendors from '@salesforce/apex/RMSVendorService.listVendors';
 import listContracts from '@salesforce/apex/RMSContractService.listContracts';
 import listRates from '@salesforce/apex/OceanFreightRateService.listRatesForLWC';
+import getRateForLWC from '@salesforce/apex/OceanFreightRateService.getRateForLWC';
 import listSurcharges from '@salesforce/apex/SurchargeService.listSurchargesForLWC';
 import listMarginRules from '@salesforce/apex/MarginRuleService.listRulesForLWC';
 
@@ -139,10 +140,30 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
         if (entityType && entityType !== this.activeTab) {
             this.activeTab = entityType;
         }
-        this.currentRecord = this.getRecordById(recordId);
-        this.modalMode = 'edit';
-        this.modalTitle = `Edit ${this.getEntityLabel()}`;
-        this.showModal = true;
+        
+        // For rates, fetch the full ocean freight rate record (not from materialized view)
+        if (entityType === 'rates') {
+            this.loading = true;
+            getRateForLWC({ rateId: recordId })
+                .then(rate => {
+                    this.currentRecord = rate;
+                    this.modalMode = 'edit';
+                    this.modalTitle = `Edit Ocean Freight Rate`;
+                    this.showModal = true;
+                    this.loading = false;
+                })
+                .catch(error => {
+                    this.showErrorToast('Error', 'Failed to load rate: ' + (error.body?.message || error.message));
+                    this.loading = false;
+                });
+        } else {
+            // For other entities, use cached data
+            this.currentRecord = this.getRecordById(recordId);
+            this.modalMode = 'edit';
+            this.modalTitle = `Edit ${this.getEntityLabel()}`;
+            this.showModal = true;
+        }
+        
         // Restore original tab
         this.activeTab = originalTab;
     }

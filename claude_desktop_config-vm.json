@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "rms-supabase-server": {
+      "command": "ssh",
+      "args": [
+        "user@vm-ip-or-hostname",
+        "-n",
+        "cd ~/RMS/rms-mcp-server && node dist/index.js"
+      ],
+      "env": {
+        "SUPABASE_URL": "https://xsvwhctzwpfcwmmvbgmf.supabase.co",
+        "SUPABASE_SERVICE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzdndoY3R6d3BmY3dtbXZiZ21mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTIwMzUwMiwiZXhwIjoyMDc0Nzc5NTAyfQ.kY0FKyzntAj0RXgLyfe2y1dIeMlnGMfV50FSoyW0J2I",
+        "JWT_SECRET": "your-super-secret-key-change-in-production"
+      }
+    }
+  },
+  "_comment": "VM Configuration - Uses SSH to connect to VM. Update 'user@vm-ip-or-hostname' with your actual VM credentials. For Windows, you may need to use plink.exe or WSL ssh."
+}
+

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <label>Sales User Rate</label>
+    <protected>false</protected>
+    <values>
+        <field>Role__c</field>
+        <value xsi:type="xsd:string">SALES_USER</value>
+    </values>
+    <values>
+        <field>Entity__c</field>
+        <value xsi:type="xsd:string">RATE</value>
+    </values>
+    <values>
+        <field>Permissions__c</field>
+        <value xsi:type="xsd:string">VIEW</value>
+    </values>
+    <values>
+        <field>Viewable_Fields__c</field>
+        <value xsi:type="xsd:string">id,pol_code,pod_code,container_type,currency,tt_days,valid_from,valid_to,is_preferred</value>
+    </values>
+</CustomMetadata>

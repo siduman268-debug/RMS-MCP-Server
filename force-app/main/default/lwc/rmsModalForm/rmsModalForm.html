@@ -1,0 +1,182 @@
+<template>
+    <template if:true={isUploadMode}>
+        <div class="slds-form-element">
+            <label class="slds-form-element__label" for="csv-file">
+                <abbr class="slds-required" title="required">*</abbr> Upload CSV File
+            </label>
+            <div class="slds-form-element__control">
+                <lightning-input 
+                    type="file" 
+                    accept=".csv"
+                    label="Select CSV File"
+                    onchange={handleFileUpload}>
+                </lightning-input>
+            </div>
+        </div>
+        
+        <template if:true={csvPreview}>
+            <div class="slds-m-top_medium">
+                <h3 class="slds-text-heading_small">CSV Preview (first 5 rows)</h3>
+                <table class="slds-table slds-table_bordered slds-table_cell-buffer slds-m-top_small">
+                    <thead>
+                        <tr>
+                            <template for:each={csvPreview} for:item="row">
+                                <template if:true={row.first}>
+                                    <template for:each={row} for:item="header">
+                                        <th key={header}>{header}</th>
+                                    </template>
+                                </template>
+                            </template>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template for:each={csvPreview} for:item="row">
+                            <tr key={row}>
+                                <template for:each={row} for:item="value">
+                                    <td key={value}>{value}</td>
+                                </template>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <p class="slds-text-body_small slds-m-top_small">
+                    {csvPreview.length} rows will be imported. Please review and click Save to proceed.
+                </p>
+            </div>
+        </template>
+    </template>
+    
+    <template if:false={isUploadMode}>
+        <lightning-record-edit-form>
+            <template if:true={isViewMode}>
+                <!-- View Mode - Display only -->
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <template for:each={formattedFields} for:item="fieldData">
+                        <div key={fieldData.key} class="slds-col slds-size_1-of-2">
+                            <div class="slds-form-element">
+                                <label class="slds-form-element__label">{fieldData.label}</label>
+                                <div class="slds-form-element__control">
+                                    <div class="slds-form-element__static">{fieldData.value}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            
+            <template if:false={isViewMode}>
+                <!-- Create/Edit Mode - Editable Form -->
+                <div class="slds-grid slds-wrap slds-gutters">
+                    <template for:each={formFields} for:item="field">
+                        <div key={field.name} class="slds-col slds-size_1-of-2">
+                            <template if:true={field.isTextField}>
+                                <lightning-input 
+                                    type="text" 
+                                    name={field.name}
+                                    label={field.label}
+                                    value={field.value}
+                                    placeholder={field.placeholder}
+                                    max-length={field.maxLength}
+                                    required={field.required}
+                                    onchange={handleInputChange}>
+                                </lightning-input>
+                            </template>
+                            
+                            <template if:true={field.isNumberField}>
+                                <lightning-input 
+                                    type="number" 
+                                    name={field.name}
+                                    label={field.label}
+                                    value={field.value}
+                                    min={field.min}
+                                    step={field.step}
+                                    required={field.required}
+                                    onchange={handleInputChange}>
+                                </lightning-input>
+                            </template>
+                            
+                            <template if:true={field.isDateField}>
+                                <lightning-input 
+                                    type="date" 
+                                    name={field.name}
+                                    label={field.label}
+                                    value={field.value}
+                                    required={field.required}
+                                    onchange={handleInputChange}>
+                                </lightning-input>
+                            </template>
+                            
+                            <template if:true={field.isCheckboxField}>
+                                <lightning-input 
+                                    type="checkbox" 
+                                    name={field.name}
+                                    label={field.label}
+                                    checked={field.value}
+                                    onchange={handleInputChange}>
+                                </lightning-input>
+                            </template>
+                            
+                            <template if:true={field.isPicklistField}>
+                                <lightning-combobox 
+                                    name={field.name}
+                                    label={field.label}
+                                    value={field.value}
+                                    options={field.options}
+                                    required={field.required}
+                                    onchange={handleInputChange}>
+                                </lightning-combobox>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            
+            <template if:false={isViewMode}>
+                <div class="slds-m-top_medium">
+                    <lightning-button 
+                        label="Save" 
+                        variant="brand"
+                        onclick={handleSave}
+                        disabled={loading}>
+                    </lightning-button>
+                    <lightning-button 
+                        label="Cancel" 
+                        variant="neutral"
+                        onclick={handleClose}>
+                    </lightning-button>
+                </div>
+            </template>
+        </lightning-record-edit-form>
+    </template>
+    
+    <template if:true={isViewMode}>
+        <div class="slds-m-top_medium">
+            <lightning-button 
+                label="Close" 
+                variant="neutral"
+                onclick={handleClose}>
+            </lightning-button>
+        </div>
+    </template>
+    
+    <template if:true={isUploadMode}>
+        <div class="slds-m-top_medium">
+            <lightning-button 
+                label="Upload" 
+                variant="brand"
+                onclick={handleSave}
+                disabled={isUploadDisabled}>
+            </lightning-button>
+            <lightning-button 
+                label="Cancel" 
+                variant="neutral"
+                onclick={handleClose}>
+            </lightning-button>
+        </div>
+    </template>
+    
+    <template if:true={loading}>
+        <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+    </template>
+</template>
+

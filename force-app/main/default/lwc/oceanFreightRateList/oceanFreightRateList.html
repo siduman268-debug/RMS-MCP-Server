@@ -165,19 +165,24 @@
         </template>
 
         <!-- Create/Edit Modal -->
+        <!-- Note: Using rmsModalForm component instead of ocean-freight-rate-form -->
         <template if:true={showCreateModal}>
-            <c-ocean-freight-rate-form
-                onrate-saved={handleRateSaved}
+            <c-rms-modal-form
+                entity-type="rates"
+                mode="create"
+                onsave={handleRateSaved}
                 onclose={handleModalClose}>
-            </c-ocean-freight-rate-form>
+            </c-rms-modal-form>
         </template>
         
         <template if:true={showEditModal}>
-            <c-ocean-freight-rate-form
-                rate={selectedRate}
-                onrate-saved={handleRateSaved}
+            <c-rms-modal-form
+                entity-type="rates"
+                mode="edit"
+                record={selectedRate}
+                onsave={handleRateSaved}
                 onclose={handleModalClose}>
-            </c-ocean-freight-rate-form>
+            </c-rms-modal-form>
         </template>
         
     </lightning-card>
