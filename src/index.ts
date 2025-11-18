@@ -3508,7 +3508,7 @@ async function createHttpServer() {
       const offset = (pageNum - 1) * pageSize;
 
       query = query
-        .order('contract_number', { ascending: true, nullsLast: true })
+        .order('id', { ascending: true })
         .range(offset, offset + pageSize - 1);
 
       const { data, error, count } = await query;
