@@ -84,10 +84,8 @@ export default class RmsOceanFreight extends LightningElement {
                 `${c.contract_number}` : 
                 c.name || `Contract ${c.id}`;
             
-            // Display vendor name if available
-            const displayVendor = c.vendor_name ? 
-                `${c.vendor_name}` : 
-                '';
+            // Display vendor name if available (vendor_code will be added later)
+            const displayVendor = c.vendor_name || '';
             
             return {
                 ...c,

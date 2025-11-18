@@ -3483,18 +3483,10 @@ async function createHttpServer() {
         limit = '100'
       } = request.query as any;
 
-      // Query with vendor join to include vendor name
+      // Query rate_contract table
       let query = supabase
         .from('rate_contract')
-        .select(`
-          *,
-          vendor:vendor_id (
-            id,
-            name,
-            vendor_code,
-            Logo_URL
-          )
-        `)
+        .select('*')
         .eq('tenant_id', (request as any).tenant_id);
 
       // Apply filters
@@ -3511,22 +3503,43 @@ async function createHttpServer() {
         .order('id', { ascending: true })
         .range(offset, offset + pageSize - 1);
 
-      const { data, error, count } = await query;
+      const { data: contracts, error, count } = await query;
 
       if (error) throw error;
 
-      // Flatten vendor data into contract object
-      const formattedData = (data || []).map(contract => {
-        const vendor = contract.vendor;
-        delete contract.vendor;
+      // If we have contracts, fetch vendor data
+      let formattedData = contracts || [];
+      
+      if (contracts && contracts.length > 0) {
+        // Get unique vendor IDs
+        const vendorIds = [...new Set(contracts.map(c => c.vendor_id).filter(id => id))];
         
-        return {
-          ...contract,
-          vendor_name: vendor?.name || null,
-          vendor_code: vendor?.vendor_code || null,
-          vendor_logo: vendor?.Logo_URL || null
-        };
-      });
+        // Fetch vendor data
+        const { data: vendors, error: vendorError } = await supabase
+          .from('vendor')
+          .select('id, name, Logo_URL')
+          .in('id', vendorIds)
+          .eq('tenant_id', (request as any).tenant_id);
+        
+        if (vendorError) {
+          console.error('Error fetching vendors:', vendorError);
+        }
+        
+        // Create vendor lookup map
+        const vendorMap = new Map(
+          (vendors || []).map(v => [v.id, v])
+        );
+        
+        // Merge vendor data into contracts
+        formattedData = contracts.map(contract => {
+          const vendor = vendorMap.get(contract.vendor_id);
+          return {
+            ...contract,
+            vendor_name: vendor?.name || null,
+            vendor_logo: vendor?.Logo_URL || null
+          };
+        });
+      }
 
       return reply.send({
         success: true,

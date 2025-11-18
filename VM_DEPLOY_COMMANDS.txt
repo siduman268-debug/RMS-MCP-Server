@@ -1,0 +1,62 @@
+=========================================================
+VM DEPLOYMENT COMMANDS - Copy & Paste These
+=========================================================
+
+# 1. SSH to your VM
+ssh ec2-user@your-vm-ip
+
+# 2. Navigate to project
+cd ~/rms-mcp-server
+
+# 3. Pull latest code
+git pull origin master
+
+# 4. Stop containers
+docker-compose down
+
+# 5. Rebuild
+docker-compose build
+
+# 6. Start containers
+docker-compose up -d
+
+# 7. Check health
+curl http://localhost:3000/health
+
+# 8. Test contracts API
+TOKEN=$(curl -s -X POST "http://localhost:3000/api/auth/token" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
+
+curl -X GET "http://localhost:3000/api/contracts?limit=5" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "x-tenant-id: 00000000-0000-0000-0000-000000000001" | jq
+
+# 9. Check logs if needed
+docker-compose logs -f --tail=50
+
+=========================================================
+EXPECTED OUTPUT from contracts API:
+=========================================================
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "contract_number": "1-SPOT-202510-001",    ← NEW!
+      "name": "Spot Ocean Base",
+      "vendor_id": 1,
+      "vendor_name": "Generic Carrier",          ← NEW!
+      "vendor_code": null,                       ← NEW!
+      "vendor_logo": null,                       ← NEW!
+      "effective_from": "2025-10-07",
+      "effective_to": "2026-01-05",
+      "is_spot": true,
+      "currency": "USD",
+      "tenant_id": "00000000-0000-0000-0000-000000000001"
+    }
+  ]
+}
+
+=========================================================
+
