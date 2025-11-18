@@ -5,8 +5,9 @@ public with sharing class RMSMarginRuleService {
         try {
             String endpoint = '/api/margin-rules?limit=1000';
             
+            // API uses 'level' not 'scope'
             if (String.isNotBlank(scope)) {
-                endpoint += '&scope=' + EncodingUtil.urlEncode(scope, 'UTF-8');
+                endpoint += '&level=' + EncodingUtil.urlEncode(scope, 'UTF-8');
             }
             
             HttpResponse res = RMSApiUtil.makeApiCall(endpoint, 'GET', null);

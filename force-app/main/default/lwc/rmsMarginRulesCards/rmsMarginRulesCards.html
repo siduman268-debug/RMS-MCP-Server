@@ -115,6 +115,10 @@
                                         <lightning-icon icon-name="utility:location" size="xx-small"></lightning-icon>
                                         <span>{rule.displayReference}</span>
                                     </div>
+                                    <div class="rule-info">
+                                        <lightning-icon icon-name="utility:package" size="xx-small"></lightning-icon>
+                                        <span>{rule.displayMode} | {rule.displayContainer}</span>
+                                    </div>
                                     <template if:true={rule.priority}>
                                         <div class="rule-priority">
                                             <lightning-icon icon-name="utility:priority" size="xx-small"></lightning-icon>

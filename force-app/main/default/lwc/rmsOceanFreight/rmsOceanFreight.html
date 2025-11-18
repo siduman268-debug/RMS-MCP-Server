@@ -24,32 +24,29 @@
                 <h3 class="slds-text-heading_small slds-m-bottom_medium">Filter Rates</h3>
                 <div class="slds-grid slds-gutters slds-wrap">
                     <!-- Column 1: Vendor, Contract -->
-                    <div class="slds-col slds-size_1-of-2">
-                        <div class="slds-form-element slds-m-bottom_small">
-                            <lightning-combobox
-                                label="Vendor"
-                                value={filterVendorId}
-                                options={vendorOptions}
-                                placeholder="Select vendor..."
-                                onchange={handleVendorChange}>
-                            </lightning-combobox>
-                        </div>
+                    <div class="slds-col slds-size_1-of-3">
+                        <lightning-combobox
+                            label="Vendor"
+                            value={filterVendorId}
+                            options={vendorOptions}
+                            placeholder="Select vendor..."
+                            onchange={handleVendorChange}
+                            class="slds-m-bottom_small">
+                        </lightning-combobox>
                         
-                        <div class="slds-form-element slds-m-bottom_small">
-                            <lightning-combobox
-                                label="Contract"
-                                value={filterContractId}
-                                options={contractOptions}
-                                placeholder="Select contract..."
-                                onchange={handleContractChange}
-                                disabled={isContractDisabled}>
-                            </lightning-combobox>
-                        </div>
+                        <lightning-combobox
+                            label="Contract"
+                            value={filterContractId}
+                            options={contractOptions}
+                            placeholder="Select contract..."
+                            onchange={handleContractChange}
+                            disabled={isContractDisabled}
+                            class="slds-m-bottom_small">
+                        </lightning-combobox>
                     </div>
-                
-                <div class="slds-grid slds-gutters slds-wrap">
-                    <!-- Origin/Destination/Container Type Filters -->
-                    <div class="slds-col slds-size_1-of-2">
+                    
+                    <!-- Column 2: Origin, Destination -->
+                    <div class="slds-col slds-size_1-of-3">
                         <div class="slds-form-element slds-m-bottom_small port-lookup-container">
                             <label class="slds-form-element__label">
                                 Origin
@@ -129,16 +126,18 @@
                                 </template>
                             </div>
                         </div>
-                        
-                        <div class="slds-form-element slds-m-bottom_small">
-                            <lightning-combobox
-                                label="Container Type"
-                                value={filterContainerType}
-                                options={containerTypeOptions}
-                                placeholder="Select container type..."
-                                onchange={handleContainerTypeChange}>
-                            </lightning-combobox>
-                        </div>
+                    </div>
+                    
+                    <!-- Column 3: Container Type -->
+                    <div class="slds-col slds-size_1-of-3">
+                        <lightning-combobox
+                            label="Container Type"
+                            value={filterContainerType}
+                            options={containerTypeOptions}
+                            placeholder="Select container type..."
+                            onchange={handleContainerTypeChange}
+                            class="slds-m-bottom_small">
+                        </lightning-combobox>
                     </div>
                 </div>
                 

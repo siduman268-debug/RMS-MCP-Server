@@ -1,34 +1,34 @@
 /* Margin Rules Cards Container */
 .margin-rules-container {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 1rem;
     padding: 1rem 0;
 }
 
-/* Margin Rule Card */
+/* Margin Rule Card - Matches Schedule Theme */
 .margin-rule-card {
-    background-color: var(--slds-g-color-neutral-base-100, #ffffff);
-    border: 1px solid var(--slds-g-color-border-base-4, #dddbda);
-    border-radius: var(--slds-g-radius-border-3, 0.5rem);
+    background-color: #ffffff;
+    border: 1px solid #dddbda;
+    border-radius: 0.5rem;
     padding: 1.25rem;
     display: flex;
     flex-direction: column;
     position: relative;
     transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
-    box-shadow: var(--slds-g-shadow-1, 0 1px 2px rgba(0, 0, 0, 0.05));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .margin-rule-card:hover {
-    box-shadow: var(--slds-g-shadow-3, 0 4px 8px rgba(0, 0, 0, 0.12));
-    border-color: var(--slds-g-color-brand-base-30, #1b96ff);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+    border-color: #1b96ff;
     transform: translateY(-2px);
 }
 
 .margin-rule-card.selected {
-    border-color: var(--slds-g-color-brand-base-50, #0176d3);
-    box-shadow: var(--slds-g-shadow-3, 0 4px 8px rgba(0, 0, 0, 0.12));
-    background-color: var(--slds-g-color-brand-base-95, #eef4ff);
+    border-color: #0176d3;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+    background-color: #eef4ff;
 }
 
 /* Rule Header */
@@ -116,17 +116,19 @@
 }
 
 .rule-reference,
+.rule-info,
 .rule-priority {
     display: flex;
     align-items: center;
     gap: 0.25rem;
     font-size: 0.75rem;
-    color: var(--slds-g-color-neutral-base-50, #706e6b);
+    color: #706e6b;
 }
 
 .rule-reference lightning-icon,
+.rule-info lightning-icon,
 .rule-priority lightning-icon {
-    --sds-c-icon-color-foreground-default: var(--slds-g-color-neutral-base-60, #706e6b);
+    --sds-c-icon-color-foreground-default: #706e6b;
 }
 
 /* Selected Indicator */

@@ -39,68 +39,88 @@ export default class RmsMarginRulesCards extends LightningElement {
     get formattedRecords() {
         return this.filteredRecords.map(record => {
             const isSelected = this.isRecordSelected(record.id);
+            // Map API field names to UI field names
+            const scope = record.level; // API uses 'level'
+            const type = record.mark_kind; // API uses 'mark_kind'
+            const value = record.mark_value; // API uses 'mark_value'
+            
+            // Check if rule is active based on dates
+            const now = new Date();
+            const validFrom = record.valid_from ? new Date(record.valid_from) : null;
+            const validTo = record.valid_to ? new Date(record.valid_to) : null;
+            const isActive = (!validFrom || now >= validFrom) && (!validTo || now <= validTo);
             
             return {
                 ...record,
                 isSelected: isSelected,
                 cardClass: isSelected ? 'margin-rule-card selected' : 'margin-rule-card',
-                displayScope: this.formatScope(record.scope),
-                displayType: this.formatType(record.type),
-                displayValue: this.formatValue(record.value, record.type),
+                displayScope: this.formatScope(scope),
+                displayType: this.formatType(type),
+                displayValue: this.formatValue(value, type),
                 displayPriority: record.priority || '—',
-                displayStatus: record.is_active ? 'Active' : 'Inactive',
+                displayStatus: isActive ? 'Active' : 'Inactive',
                 displayReference: this.formatReference(record),
-                statusClass: record.is_active ? 'status-badge active' : 'status-badge inactive',
-                typeClass: this.getTypeClass(record.type)
+                statusClass: isActive ? 'status-badge active' : 'status-badge inactive',
+                typeClass: this.getTypeClass(type),
+                displayMode: record.mode || '—',
+                displayContainer: record.container_type || 'All'
             };
         });
     }
     
-    formatScope(scope) {
-        if (!scope) return '—';
+    formatScope(level) {
+        if (!level) return '—';
         const scopeMap = {
             'global': 'Global',
             'trade_zone': 'Trade Zone',
-            'port_pair': 'Port Pair'
+            'port_pair': 'Port Pair',
+            'tz': 'Trade Zone', // Alternative mapping
+            'pp': 'Port Pair'   // Alternative mapping
         };
-        return scopeMap[scope] || scope;
+        return scopeMap[level] || level.charAt(0).toUpperCase() + level.slice(1);
     }
     
-    formatType(type) {
-        if (!type) return '—';
+    formatType(markKind) {
+        if (!markKind) return '—';
         const typeMap = {
             'percentage': 'Percentage',
             'fixed': 'Fixed Amount',
-            'multiplier': 'Multiplier'
+            'multiplier': 'Multiplier',
+            'percent': 'Percentage', // Alternative mapping
+            'value': 'Fixed Amount'  // Alternative mapping
         };
-        return typeMap[type] || type;
+        return typeMap[markKind] || markKind.charAt(0).toUpperCase() + markKind.slice(1);
     }
     
-    formatValue(value, type) {
+    formatValue(value, markKind) {
         if (value === null || value === undefined) return '—';
-        if (type === 'percentage') {
+        if (markKind === 'percentage' || markKind === 'percent') {
             return `${value}%`;
-        } else if (type === 'multiplier') {
+        } else if (markKind === 'multiplier') {
             return `×${value}`;
         }
         return String(value);
     }
     
     formatReference(record) {
-        if (record.scope === 'global') return 'All';
-        if (record.scope === 'trade_zone') {
-            return `${record.pol_trade_zone || '—'} → ${record.pod_trade_zone || '—'}`;
+        const level = record.level;
+        if (level === 'global') return 'All Locations';
+        if (level === 'trade_zone' || level === 'tz') {
+            const origin = record.tz_o || '—';
+            const destination = record.tz_d || '—';
+            return `${origin} → ${destination}`;
         }
-        if (record.scope === 'port_pair') {
-            return `${record.pol_code || '—'} → ${record.pod_code || '—'}`;
+        if (level === 'port_pair' || level === 'pp') {
+            // Would need to lookup port codes from pol_id/pod_id
+            return record.pol_id && record.pod_id ? `Port ${record.pol_id} → Port ${record.pod_id}` : '—';
         }
         return '—';
     }
     
-    getTypeClass(type) {
-        if (type === 'percentage') return 'type-badge percentage';
-        if (type === 'fixed') return 'type-badge fixed';
-        if (type === 'multiplier') return 'type-badge multiplier';
+    getTypeClass(markKind) {
+        if (markKind === 'percentage' || markKind === 'percent') return 'type-badge percentage';
+        if (markKind === 'fixed' || markKind === 'value') return 'type-badge fixed';
+        if (markKind === 'multiplier') return 'type-badge multiplier';
         return 'type-badge';
     }
     
