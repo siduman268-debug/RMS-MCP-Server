@@ -133,10 +133,12 @@ export default class RmsVendorsTable extends LightningElement {
         return this.records.map(record => {
             const logoPath = this.getVendorLogo(record.name);
             const initials = this.getVendorInitials(record.name);
+            const isSelected = this.isRecordSelected(record.id);
             
             return {
                 ...record,
-                isSelected: this.isRecordSelected(record.id),
+                isSelected: isSelected,
+                cardClass: isSelected ? 'vendor-card selected' : 'vendor-card',
                 displayAlias: record.alias || '—',
                 displayType: this.formatVendorType(record.vendor_type),
                 displayMode: this.formatMode(record.mode),

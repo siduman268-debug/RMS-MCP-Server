@@ -37,7 +37,7 @@
             <template if:true={hasRecords}>
                 <div class="vendor-cards-container">
                     <template for:each={formattedRecords} for:item="vendor">
-                        <div key={vendor.id} class={vendor.isSelected ? 'vendor-card selected' : 'vendor-card'}>
+                        <div key={vendor.id} class={vendor.cardClass}>
                             <!-- Checkbox -->
                             <div class="card-checkbox">
                                 <lightning-input 
