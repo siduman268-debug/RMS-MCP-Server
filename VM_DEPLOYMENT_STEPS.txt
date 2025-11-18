@@ -1,0 +1,64 @@
+RMS VM Deployment Steps
+========================
+
+✅ Local Changes Committed and Pushed
+Commit: f14cbd4 - Add Ocean Freight management tab and vendor/contract API endpoints
+
+📋 Next Steps:
+
+1. SSH into VM:
+   ssh user@13.204.127.113
+
+2. Run the update script:
+   cd ~/RMS/rms-mcp-server
+   bash update-vm.sh
+
+   Or manually:
+   git pull origin master
+   npm install
+   npm run build
+   docker-compose down
+   docker-compose build
+   docker-compose up -d
+
+3. Verify deployment:
+   curl http://localhost:3000/health
+
+4. Test new endpoints:
+   # Get JWT token
+   curl -X POST http://localhost:3000/api/auth/token \
+     -H "Content-Type: application/json" \
+     -d '{"tenant_id":"00000000-0000-0000-0000-000000000001","user_id":"test_user"}'
+
+   # Test vendors endpoint (replace TOKEN with the token from above)
+   curl -X GET "http://localhost:3000/api/vendors?is_active=true" \
+     -H "Authorization: Bearer TOKEN" \
+     -H "x-tenant-id: 00000000-0000-0000-0000-000000000001"
+
+   # Test contracts endpoint
+   curl -X GET "http://localhost:3000/api/contracts?is_active=true" \
+     -H "Authorization: Bearer TOKEN" \
+     -H "x-tenant-id: 00000000-0000-0000-0000-000000000001"
+
+5. Check container logs:
+   docker-compose logs -f rms-mcp-server
+
+6. Test from Salesforce:
+   - Open RMS Management app
+   - Go to "Ocean Freight" tab
+   - Verify vendors load without 404 errors
+   - Test vendor -> contract -> rates workflow
+
+📝 What was deployed:
+- New /api/vendors endpoint with tenant isolation
+- New /api/contracts endpoint with tenant isolation
+- New Ocean Freight LWC component
+- Updated rmsManagement component with new tab
+- Fixed rmsRatesTable event dispatching
+- Updated RMSApiUtil for origin_code/destination_code mapping
+
+🔒 Security:
+- All endpoints protected with JWT authentication
+- Tenant isolation enforced at all layers
+- RLS policies verified and active
+

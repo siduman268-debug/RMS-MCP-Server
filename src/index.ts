@@ -3483,9 +3483,18 @@ async function createHttpServer() {
         limit = '100'
       } = request.query as any;
 
+      // Query with vendor join to include vendor name
       let query = supabase
         .from('rate_contract')
-        .select('*')
+        .select(`
+          *,
+          vendor:vendor_id (
+            id,
+            name,
+            vendor_code,
+            Logo_URL
+          )
+        `)
         .eq('tenant_id', (request as any).tenant_id);
 
       // Apply filters
@@ -3499,20 +3508,33 @@ async function createHttpServer() {
       const offset = (pageNum - 1) * pageSize;
 
       query = query
-        .order('id', { ascending: true })
+        .order('contract_number', { ascending: true, nullsLast: true })
         .range(offset, offset + pageSize - 1);
 
       const { data, error, count } = await query;
 
       if (error) throw error;
 
+      // Flatten vendor data into contract object
+      const formattedData = (data || []).map(contract => {
+        const vendor = contract.vendor;
+        delete contract.vendor;
+        
+        return {
+          ...contract,
+          vendor_name: vendor?.name || null,
+          vendor_code: vendor?.vendor_code || null,
+          vendor_logo: vendor?.Logo_URL || null
+        };
+      });
+
       return reply.send({
         success: true,
-        data: data || [],
+        data: formattedData,
         pagination: {
           page: pageNum,
           limit: pageSize,
-          total: count || data?.length || 0
+          total: count || formattedData?.length || 0
         }
       });
 

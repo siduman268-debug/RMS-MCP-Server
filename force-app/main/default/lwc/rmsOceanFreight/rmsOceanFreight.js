@@ -52,24 +52,69 @@ export default class RmsOceanFreight extends LightningElement {
         ];
     }
     
-    get vendorOptions() {
-        return [
-            { label: 'All Vendors', value: '' },
-            ...this.vendors.map(v => ({
-                label: v.name || v.alias || `Vendor ${v.id}`,
-                value: String(v.id)
-            }))
-        ];
+    get formattedVendors() {
+        return this.vendors.map(v => {
+            const initials = this.getInitials(v.name || 'V');
+            const displayType = this.formatVendorType(v.vendor_type);
+            const isSelected = String(v.id) === this.filterVendorId;
+            const cssClass = `vendor-card ${isSelected ? 'selected' : ''}`;
+            
+            return {
+                ...v,
+                initials: initials,
+                displayType: displayType,
+                isSelected: isSelected,
+                cssClass: cssClass
+            };
+        });
     }
     
-    get contractOptions() {
-        return [
-            { label: 'All Contracts', value: '' },
-            ...this.contracts.map(c => ({
-                label: c.contract_number || `Contract ${c.id}`,
-                value: String(c.id)
-            }))
-        ];
+    get formattedContracts() {
+        return this.contracts.map(c => {
+            const isSelected = String(c.id) === this.filterContractId;
+            const cssClass = `contract-card ${isSelected ? 'selected' : ''}`;
+            const badgeClass = `contract-badge ${c.is_spot ? 'spot' : 'contract'}`;
+            const displayType = c.is_spot ? 'SPOT' : 'CONTRACT';
+            const displayDates = c.effective_from && c.effective_to ? 
+                `${this.formatDate(c.effective_from)} - ${this.formatDate(c.effective_to)}` : 
+                'No dates';
+            
+            // Display contract number or fallback to name
+            const displayName = c.contract_number ? 
+                `${c.contract_number}` : 
+                c.name || `Contract ${c.id}`;
+            
+            // Display vendor name if available
+            const displayVendor = c.vendor_name ? 
+                `${c.vendor_name}` : 
+                '';
+            
+            return {
+                ...c,
+                isSelected: isSelected,
+                cssClass: cssClass,
+                badgeClass: badgeClass,
+                displayType: displayType,
+                displayDates: displayDates,
+                displayName: displayName,
+                displayVendor: displayVendor
+            };
+        });
+    }
+    
+    getInitials(name) {
+        if (!name) return 'V';
+        const words = name.split(' ').filter(w => w.length > 0);
+        if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
+        return words.slice(0, 2).map(w => w[0]).join('').toUpperCase();
+    }
+    
+    formatVendorType(type) {
+        if (!type) return '';
+        return type.replace(/_/g, ' ').toLowerCase()
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
     }
     
     get isContractDisabled() {
@@ -82,7 +127,7 @@ export default class RmsOceanFreight extends LightningElement {
     
     async loadVendors() {
         try {
-            const data = await listVendors({ vendorType: null, isActive: true });
+            const data = await listVendors({ vendorType: null, isActive: null });
             this.vendors = data || [];
         } catch (error) {
             console.error('Error loading vendors:', error);
@@ -108,7 +153,7 @@ export default class RmsOceanFreight extends LightningElement {
     async loadContracts(vendorId) {
         try {
             const vendorIdDecimal = parseFloat(vendorId);
-            const data = await listContracts({ vendorId: vendorIdDecimal, isActive: true });
+            const data = await listContracts({ vendorId: vendorIdDecimal, isActive: null });
             this.contracts = data || [];
         } catch (error) {
             console.error('Error loading contracts:', error);
@@ -252,6 +297,46 @@ export default class RmsOceanFreight extends LightningElement {
         this.destinationDisplay = label || code;
         this.showDestinationDropdown = false;
         this.destinationSearchResults = [];
+    }
+    
+    handleVendorCardClick(event) {
+        const vendorId = event.currentTarget.dataset.vendorId;
+        
+        // Toggle selection
+        if (this.filterVendorId === vendorId) {
+            this.filterVendorId = '';
+            this.filterContractId = '';
+            this.contracts = [];
+        } else {
+            this.filterVendorId = vendorId;
+            this.filterContractId = '';
+            this.loadContracts(vendorId);
+        }
+    }
+    
+    handleContractCardClick(event) {
+        const contractId = event.currentTarget.dataset.contractId;
+        
+        // Toggle selection
+        if (this.filterContractId === contractId) {
+            this.filterContractId = '';
+        } else {
+            this.filterContractId = contractId;
+        }
+    }
+    
+    formatDate(dateString) {
+        if (!dateString) return '';
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        } catch (e) {
+            return dateString;
+        }
     }
     
     handleContainerTypeChange(event) {

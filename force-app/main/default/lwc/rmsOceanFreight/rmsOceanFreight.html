@@ -19,33 +19,115 @@
         </div>
         
         <div class="slds-card__body slds-card__body_inner">
-            <!-- Simple Filter Section -->
-            <div class="slds-p-around_medium slds-border_bottom">
-                <h3 class="slds-text-heading_small slds-m-bottom_medium">Filter Rates</h3>
-                <div class="slds-grid slds-gutters slds-wrap">
-                    <!-- Column 1: Vendor, Contract -->
-                    <div class="slds-col slds-size_1-of-2">
-                        <div class="slds-form-element slds-m-bottom_small">
-                            <lightning-combobox
-                                label="Vendor"
-                                value={filterVendorId}
-                                options={vendorOptions}
-                                placeholder="Select vendor..."
-                                onchange={handleVendorChange}>
-                            </lightning-combobox>
+            <!-- Beautiful Card-Based Filter Section -->
+            <div class="slds-p-around_medium">
+                <h3 class="slds-text-heading_small slds-m-bottom_medium">Select Vendor & Contract</h3>
+                
+                <!-- Vendor Selection Cards -->
+                <div class="slds-m-bottom_large">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <lightning-icon icon-name="standard:account" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+                            Select Vendor
+                        </div>
+                        <div class="section-count">{vendors.length} Available</div>
+                    </div>
+                    
+                    <template if:true={vendors.length}>
+                        <div class="vendor-cards-container">
+                            <template for:each={formattedVendors} for:item="vendor">
+                                <div key={vendor.id} 
+                                     class={vendor.cssClass}
+                                     data-vendor-id={vendor.id}
+                                     onclick={handleVendorCardClick}>
+                                    <template if:true={vendor.Logo_URL}>
+                                        <img src={vendor.Logo_URL} alt={vendor.name} class="vendor-logo" />
+                                    </template>
+                                    <template if:false={vendor.Logo_URL}>
+                                        <div class="vendor-logo-placeholder">
+                                            {vendor.initials}
+                                        </div>
+                                    </template>
+                                    <div class="vendor-name">{vendor.name}</div>
+                                    <div class="vendor-type">{vendor.displayType}</div>
+                                    <template if:true={vendor.isSelected}>
+                                        <div class="selected-indicator">
+                                            <lightning-icon icon-name="utility:check" size="xx-small" alternative-text="Selected" variant="inverse"></lightning-icon>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                    
+                    <template if:false={vendors.length}>
+                        <div class="empty-state">
+                            <lightning-icon icon-name="utility:warning" size="small" class="empty-state-icon"></lightning-icon>
+                            <p>No vendors available</p>
+                        </div>
+                    </template>
+                </div>
+                
+                <!-- Contract Selection Cards -->
+                <template if:true={filterVendorId}>
+                    <div class="slds-m-bottom_large">
+                        <div class="section-header">
+                            <div class="section-title">
+                                <lightning-icon icon-name="standard:contract" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+                                Select Contract
+                            </div>
+                            <div class="section-count">{contracts.length} Available</div>
                         </div>
                         
-                        <div class="slds-form-element slds-m-bottom_small">
-                            <lightning-combobox
-                                label="Contract"
-                                value={filterContractId}
-                                options={contractOptions}
-                                placeholder="Select contract..."
-                                onchange={handleContractChange}
-                                disabled={isContractDisabled}>
-                            </lightning-combobox>
-                        </div>
+                        <template if:true={contracts.length}>
+                            <div class="contract-cards-container">
+                                <template for:each={formattedContracts} for:item="contract">
+                                    <div key={contract.id} 
+                                         class={contract.cssClass}
+                                         data-contract-id={contract.id}
+                                         onclick={handleContractCardClick}>
+                                        <div class="contract-header">
+                                            <div class="contract-name">{contract.displayName}</div>
+                                            <span class={contract.badgeClass}>{contract.displayType}</span>
+                                        </div>
+                                        <div class="contract-details">
+                                            <template if:true={contract.displayVendor}>
+                                                <div class="contract-detail">
+                                                    <lightning-icon icon-name="standard:account" size="xx-small"></lightning-icon>
+                                                    {contract.displayVendor}
+                                                </div>
+                                            </template>
+                                            <div class="contract-detail">
+                                                <lightning-icon icon-name="utility:event" size="xx-small"></lightning-icon>
+                                                {contract.displayDates}
+                                            </div>
+                                            <div class="contract-detail">
+                                                <lightning-icon icon-name="utility:currency" size="xx-small"></lightning-icon>
+                                                {contract.currency}
+                                            </div>
+                                        </div>
+                                        <template if:true={contract.isSelected}>
+                                            <div class="selected-indicator">
+                                                <lightning-icon icon-name="utility:check" size="xx-small" alternative-text="Selected" variant="inverse"></lightning-icon>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        
+                        <template if:false={contracts.length}>
+                            <div class="empty-state">
+                                <lightning-icon icon-name="utility:info" size="small" class="empty-state-icon"></lightning-icon>
+                                <p>No contracts available for this vendor</p>
+                            </div>
+                        </template>
                     </div>
+                </template>
+                
+                <div class="slds-grid slds-gutters slds-wrap">
+                    <!-- Origin/Destination/Container Type Filters -->
+                    <div class="slds-col slds-size_1-of-1">
                     
                     <!-- Column 2: Origin, Destination, Container Type -->
                     <div class="slds-col slds-size_1-of-2">

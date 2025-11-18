@@ -24,3 +24,239 @@
 .port-dropdown-item:hover {
     background-color: #f3f2f2;
 }
+
+/* Vendor Cards Grid */
+.vendor-cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 0.5rem;
+}
+
+.vendor-card {
+    border: 2px solid #e5e5e5;
+    border-radius: 8px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    min-height: 140px;
+}
+
+.vendor-card:hover {
+    border-color: #0176d3;
+    box-shadow: 0 4px 12px rgba(1, 118, 211, 0.15);
+    transform: translateY(-2px);
+}
+
+.vendor-card.selected {
+    border-color: #0176d3;
+    background: #f3f9ff;
+    box-shadow: 0 0 0 2px rgba(1, 118, 211, 0.2);
+}
+
+.vendor-logo {
+    width: 80px;
+    height: 50px;
+    object-fit: contain;
+    margin-bottom: 0.5rem;
+}
+
+.vendor-logo-placeholder {
+    width: 80px;
+    height: 50px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+    color: white;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.vendor-name {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: #080707;
+    margin-bottom: 0.25rem;
+    line-height: 1.2;
+}
+
+.vendor-type {
+    font-size: 0.75rem;
+    color: #706e6b;
+    text-transform: capitalize;
+}
+
+/* Contract Cards Grid */
+.contract-cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 0.5rem;
+}
+
+.contract-card {
+    border: 2px solid #e5e5e5;
+    border-radius: 8px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.contract-card:hover {
+    border-color: #0176d3;
+    box-shadow: 0 4px 12px rgba(1, 118, 211, 0.15);
+    transform: translateY(-2px);
+}
+
+.contract-card.selected {
+    border-color: #0176d3;
+    background: #f3f9ff;
+    box-shadow: 0 0 0 2px rgba(1, 118, 211, 0.2);
+}
+
+.contract-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.contract-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #080707;
+    flex: 1;
+}
+
+.contract-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.contract-badge.spot {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.contract-badge.contract {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.contract-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.contract-detail {
+    font-size: 0.75rem;
+    color: #706e6b;
+    display: flex;
+    align-items: center;
+}
+
+.contract-detail lightning-icon {
+    margin-right: 0.25rem;
+}
+
+/* Section Headers */
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+    background: #f3f3f3;
+    border-radius: 4px;
+}
+
+.section-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #3e3e3c;
+}
+
+.section-count {
+    font-size: 0.75rem;
+    color: #706e6b;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: #706e6b;
+}
+
+.empty-state-icon {
+    margin-bottom: 0.5rem;
+}
+
+/* Loading State */
+.loading-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+/* Scrollbar Styling */
+.vendor-cards-container::-webkit-scrollbar,
+.contract-cards-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.vendor-cards-container::-webkit-scrollbar-track,
+.contract-cards-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.vendor-cards-container::-webkit-scrollbar-thumb,
+.contract-cards-container::-webkit-scrollbar-thumb {
+    background: #c9c9c9;
+    border-radius: 4px;
+}
+
+.vendor-cards-container::-webkit-scrollbar-thumb:hover,
+.contract-cards-container::-webkit-scrollbar-thumb:hover {
+    background: #999;
+}
+
+/* Selected Indicator */
+.selected-indicator {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background: #0176d3;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vendor-card,
+.contract-card {
+    position: relative;
+}
