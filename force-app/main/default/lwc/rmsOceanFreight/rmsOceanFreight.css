@@ -1,0 +1,26 @@
+/* Port lookup dropdown styling */
+.port-lookup-container {
+    position: relative;
+}
+
+.port-lookup-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 7000;
+    max-height: 300px;
+    overflow-y: auto;
+    margin-top: 4px;
+    box-shadow: 0 2px 3px 0 rgba(0, 0, 0, 0.16);
+    border: 1px solid #dddbda;
+}
+
+.port-dropdown-item {
+    cursor: pointer;
+    padding: 8px 12px;
+}
+
+.port-dropdown-item:hover {
+    background-color: #f3f2f2;
+}

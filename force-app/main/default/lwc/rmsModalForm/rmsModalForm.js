@@ -36,7 +36,14 @@ export default class RmsModalForm extends LightningElement {
         // Handle prop updates (especially when mode or record changes)
         if (this.mode === 'edit' || this.mode === 'view') {
             if (this.record && Object.keys(this.record).length > 0) {
-                this.formData = { ...this.record };
+                // Force update formData when record changes
+                const recordKeys = Object.keys(this.record);
+                const formKeys = Object.keys(this.formData || {});
+                if (recordKeys.length !== formKeys.length || 
+                    recordKeys.some(key => this.record[key] !== this.formData[key])) {
+                    this.formData = { ...this.record };
+                    console.log('rmsModalForm: Updated formData from record', this.formData);
+                }
             }
         }
     }

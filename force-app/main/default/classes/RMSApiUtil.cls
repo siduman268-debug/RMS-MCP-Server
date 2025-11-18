@@ -111,8 +111,9 @@ public with sharing class RMSApiUtil {
             when 'Ocean_Freight_Rate__c' {
                 Ocean_Freight_Rate__c rate = (Ocean_Freight_Rate__c) record;
                 payload.put('contract_id', rate.Contract_ID__c);
-                payload.put('origin_code', rate.Origin_Code__c != null ? rate.Origin_Code__c : rate.POL_Code__c);
-                payload.put('destination_code', rate.Destination_Code__c != null ? rate.Destination_Code__c : rate.POD_Code__c);
+                // Use POL_Code__c/POD_Code__c from Salesforce, map to origin_code/destination_code for API
+                payload.put('origin_code', rate.POL_Code__c);
+                payload.put('destination_code', rate.POD_Code__c);
                 payload.put('container_type', rate.Container_Type__c);
                 payload.put('buy_amount', rate.Buy_Amount__c);
                 payload.put('currency', rate.Currency__c);
@@ -168,13 +169,11 @@ public with sharing class RMSApiUtil {
                 Ocean_Freight_Rate__c rate = new Ocean_Freight_Rate__c();
                 rate.RMS_ID__c = String.valueOf(apiData.get('id'));
                 rate.Contract_ID__c = (Decimal) apiData.get('contract_id');
-                // Prefer origin_code/destination_code, fallback to pol_code/pod_code for backward compatibility
+                // API returns origin_code/destination_code, map to POL_Code__c/POD_Code__c in Salesforce
                 String originCode = (String) apiData.get('origin_code');
                 String destinationCode = (String) apiData.get('destination_code');
                 rate.POL_Code__c = originCode != null ? originCode : (String) apiData.get('pol_code');
                 rate.POD_Code__c = destinationCode != null ? destinationCode : (String) apiData.get('pod_code');
-                rate.Origin_Code__c = originCode != null ? originCode : (String) apiData.get('pol_code');
-                rate.Destination_Code__c = destinationCode != null ? destinationCode : (String) apiData.get('pod_code');
                 rate.Container_Type__c = (String) apiData.get('container_type');
                 rate.Buy_Amount__c = (Decimal) apiData.get('buy_amount');
                 rate.Currency__c = (String) apiData.get('currency');

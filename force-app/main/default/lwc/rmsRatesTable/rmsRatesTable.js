@@ -59,30 +59,88 @@ export default class RmsRatesTable extends LightningElement {
     ];
     
     handleCreate() {
-        this.dispatchEvent(new CustomEvent('create'));
+        this.dispatchEvent(new CustomEvent('create', {
+            detail: { entityType: 'rates' }
+        }));
     }
     
     handleEdit(event) {
+        // Get recordId from button data attribute
+        const button = event.currentTarget || event.target.closest('[data-id]');
+        const recordId = button?.dataset?.id || button?.dataset?.recordId;
+        
+        if (!recordId) {
+            console.error('No record ID found in edit event', event);
+            console.error('Button element:', button);
+            return;
+        }
+        
+        console.log('rmsRatesTable handleEdit:', recordId);
+        
         this.dispatchEvent(new CustomEvent('edit', {
-            detail: { recordId: event.currentTarget.dataset.id, entityType: 'rates' }
+            detail: { recordId: recordId, entityType: 'rates' },
+            bubbles: true,
+            composed: true
         }));
     }
     
     handleView(event) {
+        // Get recordId from button data attribute
+        const button = event.currentTarget || event.target.closest('[data-id]');
+        const recordId = button?.dataset?.id || button?.dataset?.recordId;
+        
+        if (!recordId) {
+            console.error('No record ID found in view event', event);
+            console.error('Button element:', button);
+            return;
+        }
+        
+        console.log('rmsRatesTable handleView:', recordId);
+        
         this.dispatchEvent(new CustomEvent('view', {
-            detail: { recordId: event.currentTarget.dataset.id, entityType: 'rates' }
+            detail: { recordId: recordId, entityType: 'rates' },
+            bubbles: true,
+            composed: true
         }));
     }
     
     handleDelete(event) {
+        // Get recordId from button data attribute
+        const button = event.currentTarget || event.target.closest('[data-id]');
+        const recordId = button?.dataset?.id || button?.dataset?.recordId;
+        
+        if (!recordId) {
+            console.error('No record ID found in delete event', event);
+            console.error('Button element:', button);
+            return;
+        }
+        
+        console.log('rmsRatesTable handleDelete:', recordId);
+        
         this.dispatchEvent(new CustomEvent('delete', {
-            detail: { recordId: event.currentTarget.dataset.id, entityType: 'rates' }
+            detail: { recordId: recordId, entityType: 'rates' },
+            bubbles: true,
+            composed: true
         }));
     }
     
     handleMarkPreferred(event) {
+        // Get recordId from button data attribute
+        const button = event.currentTarget || event.target.closest('[data-id]');
+        const recordId = button?.dataset?.id || button?.dataset?.recordId;
+        
+        if (!recordId) {
+            console.error('No record ID found in mark preferred event', event);
+            console.error('Button element:', button);
+            return;
+        }
+        
+        console.log('rmsRatesTable handleMarkPreferred:', recordId);
+        
         this.dispatchEvent(new CustomEvent('markpreferred', {
-            detail: { recordId: event.currentTarget.dataset.id }
+            detail: { recordId: recordId },
+            bubbles: true,
+            composed: true
         }));
     }
     
@@ -238,9 +296,13 @@ export default class RmsRatesTable extends LightningElement {
             const displayOrigin = originName ? `${originName} (${originCode})` : (originCode || '—');
             const displayDestination = destinationName ? `${destinationName} (${destinationCode})` : (destinationCode || '—');
             
+            // Use rate_id if available (from materialized view), otherwise use id
+            const recordId = record.rate_id || record.id;
+            
             return {
                 ...record,
-                isSelected: this.isRecordSelected(record.id),
+                id: recordId, // Ensure id is always set
+                isSelected: this.isRecordSelected(recordId),
                 // Origin/Destination display
                 originCode: originCode,
                 destinationCode: destinationCode,
@@ -352,7 +414,8 @@ export default class RmsRatesTable extends LightningElement {
         this.showPolDropdown = false;
         this.polSearchResults = [];
         
-        this.triggerFilterChange();
+        // Don't auto-fetch - wait for "Fetch Rates" button click
+        // this.triggerFilterChange();
     }
     
     handlePodSelect(event) {
@@ -367,7 +430,8 @@ export default class RmsRatesTable extends LightningElement {
         this.showPodDropdown = false;
         this.podSearchResults = [];
         
-        this.triggerFilterChange();
+        // Don't auto-fetch - wait for "Fetch Rates" button click
+        // this.triggerFilterChange();
     }
     
     searchPolPorts(searchTerm) {
@@ -441,13 +505,25 @@ export default class RmsRatesTable extends LightningElement {
     }
     
     handleFilterChange(event) {
-        const filterName = event.currentTarget.dataset.filter;
-        const filterValue = event.target.value;
+        // Handle changes to combobox/input filters (Container Type, Vendor Name, Preferred)
+        const filterName = event.target.dataset.filter || event.currentTarget.dataset.filter;
+        const value = event.target.value || event.currentTarget.value;
         
-        // Update local filter state
-        this[`filter${this.capitalize(filterName)}`] = filterValue;
+        // Update the appropriate filter property
+        switch(filterName) {
+            case 'container_type':
+                this.filterContainerType = value;
+                break;
+            case 'vendor_name':
+                this.filterVendorName = value;
+                break;
+            case 'is_preferred':
+                this.filterPreferred = value;
+                break;
+        }
         
-        this.triggerFilterChange();
+        // Don't auto-fetch - wait for "Fetch Rates" button click
+        // this.triggerFilterChange();
     }
     
     triggerFilterChange() {
@@ -479,6 +555,7 @@ export default class RmsRatesTable extends LightningElement {
     
     handleFetchRates() {
         // Trigger filter change to fetch rates with current filters
+        // This is called when user clicks "Fetch Rates" button
         this.triggerFilterChange();
     }
     
@@ -568,7 +645,8 @@ export default class RmsRatesTable extends LightningElement {
         this.showOriginTradeZoneDropdown = false;
         this.originTradeZoneResults = [];
         
-        this.triggerFilterChange();
+        // Don't auto-fetch - wait for "Fetch Rates" button click
+        // this.triggerFilterChange();
     }
     
     handleDestinationTradeZoneSelect(event) {
@@ -580,7 +658,8 @@ export default class RmsRatesTable extends LightningElement {
         this.showDestinationTradeZoneDropdown = false;
         this.destinationTradeZoneResults = [];
         
-        this.triggerFilterChange();
+        // Don't auto-fetch - wait for "Fetch Rates" button click
+        // this.triggerFilterChange();
     }
     
     searchOriginTradeZones(searchTerm) {

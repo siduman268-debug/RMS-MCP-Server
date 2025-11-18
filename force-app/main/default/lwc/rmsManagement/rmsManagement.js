@@ -5,6 +5,9 @@ import listVendors from '@salesforce/apex/RMSVendorService.listVendors';
 import listContracts from '@salesforce/apex/RMSContractService.listContracts';
 import listRates from '@salesforce/apex/OceanFreightRateService.listRatesForLWC';
 import getRateForLWC from '@salesforce/apex/OceanFreightRateService.getRateForLWC';
+import createRateForLWC from '@salesforce/apex/OceanFreightRateService.createRateForLWC';
+import updateRateForLWC from '@salesforce/apex/OceanFreightRateService.updateRateForLWC';
+import markRateAsPreferred from '@salesforce/apex/OceanFreightRateService.markRateAsPreferred';
 import listSurcharges from '@salesforce/apex/SurchargeService.listSurchargesForLWC';
 import listMarginRules from '@salesforce/apex/MarginRuleService.listRulesForLWC';
 
@@ -82,12 +85,19 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     
     async loadRates() {
         try {
+            this.loading = true;
+            console.log('Loading rates with filters:', this.rateFilters);
             const filtersJson = JSON.stringify(this.rateFilters || {});
             const data = await listRates({ filtersJson: filtersJson });
+            console.log('Rates loaded:', data?.length || 0, 'records');
             this.rates = data || [];
+            this.loading = false;
         } catch (error) {
             console.error('Error loading rates:', error);
-            this.showErrorToast('Error loading rates', error.body?.message || error.message);
+            console.error('Error details:', JSON.stringify(error, null, 2));
+            this.rates = [];
+            this.loading = false;
+            this.showErrorToast('Error loading rates', error.body?.message || error.message || 'Unknown error');
         }
     }
     
@@ -125,63 +135,183 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     }
     
     // Modal handlers
-    handleCreate() {
+    handleCreate(event) {
+        // Get entity type from event detail if provided (from child component)
+        const entityType = event?.detail?.entityType || this.activeTab;
+        
+        // Temporarily set activeTab to ensure correct form is shown
+        const originalTab = this.activeTab;
+        if (entityType && entityType !== this.activeTab) {
+            this.activeTab = entityType;
+        }
+        
         this.currentRecord = {};
         this.modalMode = 'create';
         this.modalTitle = `Create New ${this.getEntityLabel()}`;
         this.showModal = true;
+        
+        // Restore original tab after modal opens
+        this.activeTab = originalTab;
     }
     
     handleEdit(event) {
-        const recordId = event.detail?.recordId || event.currentTarget?.dataset?.id;
-        const entityType = event.detail?.entityType || this.activeTab;
-        // Temporarily set activeTab to ensure correct data retrieval
-        const originalTab = this.activeTab;
-        if (entityType && entityType !== this.activeTab) {
-            this.activeTab = entityType;
-        }
-        
-        // For rates, fetch the full ocean freight rate record (not from materialized view)
-        if (entityType === 'rates') {
-            this.loading = true;
-            getRateForLWC({ rateId: recordId })
+        try {
+            // Extract recordId from multiple possible sources
+            let recordId = null;
+            let entityType = this.activeTab;
+            
+            // Check event.detail first (from CustomEvent)
+            if (event?.detail?.recordId) {
+                recordId = event.detail.recordId;
+                entityType = event.detail.entityType || entityType;
+            }
+            // Check event.currentTarget.dataset.id (direct button click)
+            else if (event?.currentTarget?.dataset?.id) {
+                recordId = event.currentTarget.dataset.id;
+            }
+            // Check event.target.closest (button icon click)
+            else if (event?.target) {
+                const button = event.target.closest('[data-id]');
+                if (button) {
+                    recordId = button.dataset.id;
+                }
+            }
+            
+            if (!recordId) {
+                console.error('No record ID found', event);
+                console.error('Event structure:', JSON.stringify(event, Object.getOwnPropertyNames(event)));
+                this.showErrorToast('Error', 'Record ID is missing');
+                return;
+            }
+            
+            console.log('handleEdit called', { recordId, entityType, activeTab: this.activeTab, eventDetail: event?.detail });
+            
+            // Temporarily set activeTab to ensure correct data retrieval
+            const originalTab = this.activeTab;
+            if (entityType && entityType !== this.activeTab) {
+                this.activeTab = entityType;
+            }
+            
+            // For rates and oceanFreight, fetch full record for editing
+            if (entityType === 'rates' || entityType === 'oceanFreight') {
+                // Try to get from cached data first
+                const cachedRecord = this.getRecordById(recordId);
+                console.log('Cached record for edit:', cachedRecord);
+                
+                // Always fetch from server for edit (need full record with all fields)
+                this.loading = true;
+                
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Request timeout after 15 seconds')), 15000)
+                );
+                
+                Promise.race([
+                    getRateForLWC({ rateId: recordId }),
+                    timeoutPromise
+                ])
                 .then(rate => {
-                    this.currentRecord = rate;
-                    this.modalMode = 'edit';
-                    this.modalTitle = `Edit Ocean Freight Rate`;
-                    this.showModal = true;
-                    this.loading = false;
+                    console.log('Rate loaded:', rate);
+                    if (rate && Object.keys(rate).length > 0) {
+                        this.currentRecord = rate;
+                        this.modalMode = 'edit';
+                        this.modalTitle = entityType === 'oceanFreight' ? `Edit Ocean Freight Rate` : `Edit ${this.getEntityLabel()}`;
+                        this.showModal = true;
+                        this.loading = false;
+                        this.activeTab = originalTab;
+                    } else {
+                        throw new Error('Rate data is empty');
+                    }
                 })
                 .catch(error => {
-                    this.showErrorToast('Error', 'Failed to load rate: ' + (error.body?.message || error.message));
+                    console.error('Error loading rate:', error);
+                    // If fetch fails but we have cached data, use it
+                    if (cachedRecord && Object.keys(cachedRecord).length > 0) {
+                        console.log('Using cached record as fallback');
+                        this.currentRecord = cachedRecord;
+                        this.modalMode = 'edit';
+                        this.modalTitle = entityType === 'oceanFreight' ? `Edit Ocean Freight Rate` : `Edit ${this.getEntityLabel()}`;
+                        this.showModal = true;
+                        this.showErrorToast('Warning', 'Could not load full record details. Using cached data. ' + (error.body?.message || error.message || ''));
+                    } else {
+                        this.showErrorToast('Error', 'Failed to load rate: ' + (error.body?.message || error.message || 'Unknown error'));
+                    }
                     this.loading = false;
+                    this.activeTab = originalTab;
                 });
-        } else {
-            // For other entities, use cached data
-            this.currentRecord = this.getRecordById(recordId);
-            this.modalMode = 'edit';
-            this.modalTitle = `Edit ${this.getEntityLabel()}`;
-            this.showModal = true;
+            } else {
+                // For other entities, use cached data
+                this.currentRecord = this.getRecordById(recordId);
+                this.modalMode = 'edit';
+                this.modalTitle = `Edit ${this.getEntityLabel()}`;
+                this.showModal = true;
+                this.activeTab = originalTab;
+            }
+        } catch (error) {
+            console.error('Error in handleEdit:', error);
+            this.showErrorToast('Error', 'Failed to edit record: ' + (error.message || 'Unknown error'));
+            this.loading = false;
         }
-        
-        // Restore original tab
-        this.activeTab = originalTab;
     }
     
     handleView(event) {
-        const recordId = event.detail?.recordId || event.currentTarget?.dataset?.id;
-        const entityType = event.detail?.entityType || this.activeTab;
-        // Temporarily set activeTab to ensure correct data retrieval
-        const originalTab = this.activeTab;
-        if (entityType && entityType !== this.activeTab) {
-            this.activeTab = entityType;
+        try {
+            // Extract recordId from multiple possible sources
+            let recordId = null;
+            let entityType = this.activeTab;
+            
+            // Check event.detail first (from CustomEvent)
+            if (event?.detail?.recordId) {
+                recordId = event.detail.recordId;
+                entityType = event.detail.entityType || entityType;
+            }
+            // Check event.currentTarget.dataset.id (direct button click)
+            else if (event?.currentTarget?.dataset?.id) {
+                recordId = event.currentTarget.dataset.id;
+            }
+            // Check event.target.closest (button icon click)
+            else if (event?.target) {
+                const button = event.target.closest('[data-id]');
+                if (button) {
+                    recordId = button.dataset.id;
+                }
+            }
+            
+            if (!recordId) {
+                console.error('No record ID found', event);
+                console.error('Event structure:', JSON.stringify(event, Object.getOwnPropertyNames(event)));
+                this.showErrorToast('Error', 'Record ID is missing');
+                return;
+            }
+            
+            console.log('handleView called', { recordId, entityType, activeTab: this.activeTab, eventDetail: event?.detail });
+            
+            // Temporarily set activeTab to ensure correct data retrieval
+            const originalTab = this.activeTab;
+            if (entityType && entityType !== this.activeTab) {
+                this.activeTab = entityType;
+            }
+            
+            // For rates and oceanFreight, use cached data from table (view doesn't need full record)
+            if (entityType === 'rates' || entityType === 'oceanFreight') {
+                const cachedRecord = this.getRecordById(recordId);
+                this.currentRecord = cachedRecord || {};
+                this.modalMode = 'view';
+                this.modalTitle = `View Ocean Freight Rate`;
+                this.showModal = true;
+                this.activeTab = originalTab;
+            } else {
+                // For other entities, use cached data
+                this.currentRecord = this.getRecordById(recordId);
+                this.modalMode = 'view';
+                this.modalTitle = `View ${this.getEntityLabel()}`;
+                this.showModal = true;
+                this.activeTab = originalTab;
+            }
+        } catch (error) {
+            console.error('Error in handleView:', error);
+            this.showErrorToast('Error', 'Failed to view record: ' + (error.message || 'Unknown error'));
+            this.loading = false;
         }
-        this.currentRecord = this.getRecordById(recordId);
-        this.modalMode = 'view';
-        this.modalTitle = `View ${this.getEntityLabel()}`;
-        this.showModal = true;
-        // Restore original tab
-        this.activeTab = originalTab;
     }
     
     handleUpload() {
@@ -197,18 +327,64 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
         this.modalMode = '';
     }
     
-    handleSave() {
-        // Validation and save logic will be in child components
-        const modal = this.template.querySelector('c-rms-modal');
-        if (modal) {
-            modal.handleSave();
+    handleSave(event) {
+        // Get save event details from modal form
+        const { entityType, mode, data } = event.detail || {};
+        
+        if (!data) {
+            // Try to get from modal component directly
+            const modal = this.template.querySelector('c-rms-modal-form');
+            if (modal) {
+                modal.handleSave();
+            }
+            return;
+        }
+        
+        // Handle save based on entity type
+        this.saveRecord(entityType, mode, data);
+    }
+    
+    async saveRecord(entityType, mode, data) {
+        this.loading = true;
+        try {
+            if (entityType === 'rates' || entityType === 'oceanFreight') {
+                if (mode === 'create') {
+                    const createResult = await createRateForLWC({ rateData: data });
+                    this.showSuccessToast('Rate created', 'Ocean freight rate has been created successfully.');
+                } else if (mode === 'edit') {
+                    const updateResult = await updateRateForLWC({ rateId: data.id, updates: data });
+                    this.showSuccessToast('Rate updated', 'Ocean freight rate has been updated successfully.');
+                }
+            }
+            // TODO: Add handlers for other entity types (vendors, contracts, surcharges, marginRules)
+            
+            // Close modal and refresh data
+            this.showModal = false;
+            this.currentRecord = {};
+            this.modalMode = '';
+            this.refreshCurrentTab();
+        } catch (error) {
+            this.showErrorToast('Error saving', error.body?.message || error.message || 'Failed to save record');
+        } finally {
+            this.loading = false;
         }
     }
     
+    handleSaveSuccess() {
+        // Called when save is successful (for modal form callback)
+        this.showModal = false;
+        this.currentRecord = {};
+        this.modalMode = '';
+        this.refreshCurrentTab();
+    }
+    
     handleDelete(event) {
-        const recordId = event.currentTarget.dataset.id;
-        this.recordToDelete = this.getRecordById(recordId);
-        this.showDeleteConfirm = true;
+        // Handle both direct button clicks and events from child components
+        const recordId = event.detail?.recordId || event.currentTarget?.dataset?.id;
+        if (recordId) {
+            this.recordToDelete = this.getRecordById(recordId);
+            this.showDeleteConfirm = true;
+        }
     }
     
     handleDeleteConfirm() {
@@ -245,8 +421,11 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     }
     
     handleMarkPreferred(event) {
-        const rateId = event.currentTarget.dataset.id;
-        this.markRateAsPreferred(rateId);
+        // Handle both direct button clicks and events from child components
+        const rateId = event.detail?.recordId || event.currentTarget?.dataset?.id;
+        if (rateId) {
+            this.markRateAsPreferred(rateId);
+        }
     }
     
     // Selection handlers
@@ -276,7 +455,12 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     // Helper methods
     getRecordById(recordId) {
         const data = this.getCurrentData();
-        return data.find(record => (record.id || record.RMS_ID__c) === recordId) || {};
+        // Check multiple possible ID field names (id, rate_id, RMS_ID__c)
+        return data.find(record => 
+            (record.id === recordId) || 
+            (record.rate_id === recordId) || 
+            (record.RMS_ID__c === recordId)
+        ) || {};
     }
     
     getCurrentData() {
@@ -287,6 +471,8 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
                 return this.contracts;
             case 'rates':
                 return this.rates;
+            case 'oceanFreight':
+                return this.rates; // Uses same data source
             case 'surcharges':
                 return this.surcharges;
             case 'marginRules':
@@ -301,6 +487,7 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             'vendors': 'Vendor',
             'contracts': 'Contract',
             'rates': 'Ocean Freight Rate',
+            'oceanFreight': 'Ocean Freight Rate',
             'surcharges': 'Surcharge',
             'marginRules': 'Margin Rule'
         };
@@ -324,8 +511,18 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     async markRateAsPreferred(rateId) {
         this.loading = true;
         try {
-            // Update preferred status
-            this.showSuccessToast('Rate updated', 'The rate has been marked as preferred.');
+            // Get current preferred status and toggle it
+            const rate = this.getRecordById(rateId);
+            const currentPreferred = rate.is_preferred || false;
+            const newPreferred = !currentPreferred;
+            
+            // Call Apex to update preferred status
+            const result = await markRateAsPreferred({ rateId: rateId, isPreferred: newPreferred });
+            
+            this.showSuccessToast(
+                'Rate updated', 
+                `The rate has been ${newPreferred ? 'marked as preferred' : 'unmarked as preferred'}.`
+            );
             this.refreshCurrentTab();
         } catch (error) {
             this.showErrorToast('Error updating rate', error.body?.message || error.message);
@@ -335,7 +532,7 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     }
     
     refreshCurrentTab() {
-        // Force refresh by updating filters
+        // Force refresh by updating filters or reloading data
         switch (this.activeTab) {
             case 'vendors':
                 this.vendorFilters = { ...this.vendorFilters };
@@ -345,6 +542,13 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
                 break;
             case 'rates':
                 this.rateFilters = { ...this.rateFilters };
+                break;
+            case 'oceanFreight':
+                // Trigger refresh in ocean freight component
+                const oceanFreightComponent = this.template.querySelector('c-rms-ocean-freight');
+                if (oceanFreightComponent) {
+                    oceanFreightComponent.loadRates();
+                }
                 break;
             case 'surcharges':
                 this.surchargeFilters = { ...this.surchargeFilters };

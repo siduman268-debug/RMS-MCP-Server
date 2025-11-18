@@ -3381,6 +3381,194 @@ async function createHttpServer() {
     }
   });
 
+  // ============================================================================
+  // VENDOR API ENDPOINTS
+  // ============================================================================
+
+  // List Vendors
+  fastify.get('/api/vendors', async (request, reply) => {
+    try {
+      const { 
+        vendor_type, 
+        is_active = 'true',
+        page = '1',
+        limit = '100'
+      } = request.query as any;
+
+      let query = supabase
+        .from('vendor')
+        .select('*')
+        .eq('tenant_id', (request as any).tenant_id);
+
+      // Apply filters
+      if (vendor_type) {
+        query = query.eq('vendor_type', vendor_type);
+      }
+
+      if (is_active !== undefined) {
+        query = query.eq('is_active', is_active === 'true');
+      }
+
+      // Pagination
+      const pageNum = parseInt(page, 10);
+      const pageSize = parseInt(limit, 10);
+      const offset = (pageNum - 1) * pageSize;
+
+      query = query
+        .order('name', { ascending: true })
+        .range(offset, offset + pageSize - 1);
+
+      const { data, error, count } = await query;
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data || [],
+        pagination: {
+          page: pageNum,
+          limit: pageSize,
+          total: count || data?.length || 0
+        }
+      });
+
+    } catch (error) {
+      console.error('Error listing vendors:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Get Vendor by ID
+  fastify.get('/api/vendors/:vendorId', async (request, reply) => {
+    try {
+      const { vendorId } = request.params as any;
+
+      const { data, error } = await supabase
+        .from('vendor')
+        .select('*')
+        .eq('id', vendorId)
+        .eq('tenant_id', (request as any).tenant_id)
+        .single();
+
+      if (error) throw error;
+
+      if (!data) {
+        return reply.status(404).send({
+          success: false,
+          error: `Vendor not found: ${vendorId}`
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // ============================================================================
+  // CONTRACT API ENDPOINTS
+  // ============================================================================
+
+  // List Contracts
+  fastify.get('/api/contracts', async (request, reply) => {
+    try {
+      const { 
+        vendor_id,
+        is_active = 'true',
+        page = '1',
+        limit = '100'
+      } = request.query as any;
+
+      let query = supabase
+        .from('rate_contract')
+        .select('*')
+        .eq('tenant_id', (request as any).tenant_id);
+
+      // Apply filters
+      if (vendor_id) {
+        query = query.eq('vendor_id', parseInt(vendor_id, 10));
+      }
+
+      if (is_active !== undefined) {
+        query = query.eq('is_active', is_active === 'true');
+      }
+
+      // Pagination
+      const pageNum = parseInt(page, 10);
+      const pageSize = parseInt(limit, 10);
+      const offset = (pageNum - 1) * pageSize;
+
+      query = query
+        .order('contract_number', { ascending: true })
+        .range(offset, offset + pageSize - 1);
+
+      const { data, error, count } = await query;
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data || [],
+        pagination: {
+          page: pageNum,
+          limit: pageSize,
+          total: count || data?.length || 0
+        }
+      });
+
+    } catch (error) {
+      console.error('Error listing contracts:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Get Contract by ID
+  fastify.get('/api/contracts/:contractId', async (request, reply) => {
+    try {
+      const { contractId } = request.params as any;
+
+      const { data, error } = await supabase
+        .from('rate_contract')
+        .select('*')
+        .eq('id', contractId)
+        .eq('tenant_id', (request as any).tenant_id)
+        .single();
+
+      if (error) throw error;
+
+      if (!data) {
+        return reply.status(404).send({
+          success: false,
+          error: `Contract not found: ${contractId}`
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // ==========================================
   // SURCHARGE CRUD APIs (using surcharge table directly)
   // ==========================================
