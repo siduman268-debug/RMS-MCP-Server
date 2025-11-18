@@ -652,6 +652,492 @@ curl -X POST http://localhost:3000/api/v4/schedules/search \
 
 ---
 
+## 🗂️ RMS Data Management - CRUD APIs
+
+### Vendors
+
+#### List Vendors
+**Endpoint**: `GET /api/vendors`
+
+**Query Parameters**:
+- `vendor_type` (optional): Filter by vendor type (e.g., "carrier")
+- `page` (default: 1): Page number
+- `limit` (default: 100): Records per page
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "MAERSK",
+      "alias": "Maersk Line",
+      "vendor_type": "carrier",
+      "mode": "ocean",
+      "external_ref": "MSK",
+      "Logo_URL": "https://...",
+      "tenant_id": "..."
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 100,
+    "total": 50
+  }
+}
+```
+
+#### Get Single Vendor
+**Endpoint**: `GET /api/vendors/:vendorId`
+
+#### Create Vendor
+**Endpoint**: `POST /api/vendors`
+
+**Request Body**:
+```json
+{
+  "name": "MSC",
+  "alias": "Mediterranean Shipping Company",
+  "vendor_type": "carrier",
+  "mode": "ocean",
+  "external_ref": "MSC"
+}
+```
+
+#### Update Vendor
+**Endpoint**: `PUT /api/vendors/:vendorId`
+
+**Request Body**: (only include fields to update)
+```json
+{
+  "alias": "MSC Mediterranean Shipping Company",
+  "Logo_URL": "https://..."
+}
+```
+
+#### Delete Vendor
+**Endpoint**: `DELETE /api/vendors/:vendorId`
+
+---
+
+### Contracts
+
+#### List Contracts
+**Endpoint**: `GET /api/contracts`
+
+**Query Parameters**:
+- `vendor_id` (optional): Filter by vendor ID
+- `page` (default: 1): Page number
+- `limit` (default: 100): Records per page
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "contract_number": "1-SPOT-202511-001",
+      "vendor_id": 1,
+      "vendor_name": "MAERSK",
+      "vendor_logo": "https://...",
+      "name": "Spot Ocean Base",
+      "mode": "ocean",
+      "effective_from": "2025-10-07",
+      "effective_to": "2026-01-05",
+      "is_spot": true,
+      "currency": "USD",
+      "tenant_id": "..."
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 100,
+    "total": 25
+  }
+}
+```
+
+#### Get Single Contract
+**Endpoint**: `GET /api/contracts/:contractId`
+
+#### Create Contract
+**Endpoint**: `POST /api/contracts`
+
+**Request Body**:
+```json
+{
+  "vendor_id": 1,
+  "name": "Annual Contract 2025",
+  "mode": "ocean",
+  "effective_from": "2025-01-01",
+  "effective_to": "2025-12-31",
+  "is_spot": false,
+  "currency": "USD",
+  "terms": {}
+}
+```
+
+**Note**: `contract_number` is auto-generated using format: `{vendor_id}-{SPOT|CNTR}-{YYYYMM}-{sequence}`
+
+#### Update Contract
+**Endpoint**: `PUT /api/contracts/:contractId`
+
+#### Delete Contract
+**Endpoint**: `DELETE /api/contracts/:contractId`
+
+---
+
+### Ocean Freight Rates
+
+#### List Ocean Freight Rates
+**Endpoint**: `GET /api/ocean-freight-rates`
+
+**Query Parameters**:
+- `origin` (optional): Origin port code (e.g., "INNSA")
+- `destination` (optional): Destination port code (e.g., "NLRTM")
+- `vendor_id` (optional): Filter by vendor ID
+- `contract_id` (optional): Filter by contract ID
+- `container_type` (optional): Filter by container type (e.g., "40HC")
+- `is_preferred` (optional): Filter by preferred status (true/false)
+- `page` (default: 1): Page number
+- `limit` (default: 50): Records per page
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 123,
+      "contract_id": 1,
+      "origin_code": "INNSA",
+      "destination_code": "NLRTM",
+      "origin_name": "Nhava Sheva",
+      "destination_name": "Rotterdam",
+      "container_type": "40HC",
+      "buy_amount": 1500.00,
+      "currency": "USD",
+      "tt_days": 28,
+      "is_preferred": false,
+      "valid_from": "2025-01-01",
+      "valid_to": "2025-12-31",
+      "vendor_id": 1,
+      "contract_name": "Spot Ocean Base",
+      "is_spot": true
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "count": 45
+  }
+}
+```
+
+**Note**: This endpoint queries the `ocean_freight_rate` table directly with JOINs to `locations` and `rate_contract` tables for real-time data.
+
+#### Get Single Ocean Freight Rate
+**Endpoint**: `GET /api/ocean-freight-rates/:rateId`
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 123,
+    "contract_id": 1,
+    "origin_code": "INNSA",
+    "destination_code": "NLRTM",
+    "origin_name": "Nhava Sheva",
+    "destination_name": "Rotterdam",
+    "container_type": "40HC",
+    "buy_amount": 1500.00,
+    "currency": "USD",
+    "tt_days": 28,
+    "is_preferred": false,
+    "valid_from": "2025-01-01",
+    "valid_to": "2025-12-31"
+  }
+}
+```
+
+#### Create Ocean Freight Rate
+**Endpoint**: `POST /api/ocean-freight-rates`
+
+**Request Body**:
+```json
+{
+  "contract_id": 1,
+  "origin_code": "INNSA",
+  "destination_code": "NLRTM",
+  "container_type": "40HC",
+  "buy_amount": 1500.00,
+  "currency": "USD",
+  "tt_days": 28,
+  "valid_from": "2025-01-01",
+  "valid_to": "2025-12-31",
+  "is_preferred": false
+}
+```
+
+**Note**: The API automatically looks up `pol_id` and `pod_id` from the `locations` table based on `origin_code` and `destination_code`.
+
+#### Update Ocean Freight Rate
+**Endpoint**: `PUT /api/ocean-freight-rates/:rateId`
+
+**Request Body**: (only include fields to update)
+```json
+{
+  "buy_amount": 1600.00,
+  "tt_days": 26,
+  "valid_to": "2026-01-31"
+}
+```
+
+#### Delete Ocean Freight Rate
+**Endpoint**: `DELETE /api/ocean-freight-rates/:rateId`
+
+#### Mark Rate as Preferred
+**Endpoint**: `PUT /api/ocean-freight-rates/:rateId`
+
+**Request Body**:
+```json
+{
+  "is_preferred": true
+}
+```
+
+---
+
+### Surcharges
+
+#### List Surcharges
+**Endpoint**: `GET /api/surcharges`
+
+**Query Parameters**:
+- `location_code` (optional): Filter by location UN/LOCODE
+- `vendor_id` (optional): Filter by vendor ID
+- `contract_id` (optional): Filter by contract ID
+- `applies_scope` (optional): Filter by scope (global/location/contract)
+- `page` (default: 1): Page number
+- `limit` (default: 50): Records per page
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "Terminal Handling Charge",
+      "code": "THC",
+      "amount": 150.00,
+      "currency": "USD",
+      "applies_scope": "location",
+      "location_code": "INNSA",
+      "vendor_id": null,
+      "contract_id": null,
+      "container_type": null,
+      "valid_from": "2025-01-01",
+      "valid_to": "2025-12-31",
+      "tenant_id": "..."
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "count": 25
+  }
+}
+```
+
+#### Get Single Surcharge
+**Endpoint**: `GET /api/surcharges/:surchargeId`
+
+#### Create Surcharge
+**Endpoint**: `POST /api/surcharges`
+
+**Request Body**:
+```json
+{
+  "name": "Terminal Handling Charge",
+  "code": "THC",
+  "amount": 150.00,
+  "currency": "USD",
+  "applies_scope": "location",
+  "location_code": "INNSA",
+  "container_type": null,
+  "valid_from": "2025-01-01",
+  "valid_to": "2025-12-31"
+}
+```
+
+**Scope Types**:
+- `global`: Applies to all rates
+- `location`: Applies to specific location (requires `location_code`)
+- `contract`: Applies to specific contract (requires `contract_id`)
+- `vendor`: Applies to specific vendor (requires `vendor_id`)
+
+#### Update Surcharge
+**Endpoint**: `PUT /api/surcharges/:surchargeId`
+
+#### Delete Surcharge
+**Endpoint**: `DELETE /api/surcharges/:surchargeId`
+
+---
+
+### Margin Rules
+
+#### List Margin Rules
+**Endpoint**: `GET /api/margin-rules`
+
+**Query Parameters**:
+- `level` (optional): Filter by level (global/trade_zone/port_pair)
+- `mark_kind` (optional): Filter by type (percentage/fixed/multiplier)
+- `component_type` (optional): Filter by component type
+- `page` (default: 1): Page number
+- `limit` (default: 50): Records per page
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "level": "port_pair",
+      "pol_id": 123,
+      "pod_id": 456,
+      "origin_code": "INNSA",
+      "origin_name": "Nhava Sheva",
+      "origin_country": "IN",
+      "destination_code": "NLRTM",
+      "destination_name": "Rotterdam",
+      "destination_country": "NL",
+      "tz_o": null,
+      "tz_d": null,
+      "mode": "ocean",
+      "container_type": null,
+      "component_type": "ocean_freight",
+      "mark_kind": "percentage",
+      "mark_value": 15.5,
+      "valid_from": "2025-01-01",
+      "valid_to": "2025-12-31",
+      "priority": 100,
+      "tenant_id": "..."
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "count": 13
+  }
+}
+```
+
+**Note**: The API enriches margin rules with port names by joining with the `locations` table. It returns `origin_code`/`origin_name` instead of `pol_code`/`pol_name` to align with the pricing migration strategy.
+
+#### Get Single Margin Rule
+**Endpoint**: `GET /api/margin-rules/:ruleId`
+
+#### Create Margin Rule
+**Endpoint**: `POST /api/margin-rules`
+
+**Request Body** (Port Pair):
+```json
+{
+  "level": "port_pair",
+  "pol_code": "INNSA",
+  "pod_code": "NLRTM",
+  "mode": "ocean",
+  "container_type": null,
+  "component_type": "ocean_freight",
+  "mark_kind": "percentage",
+  "mark_value": 15.5,
+  "valid_from": "2025-01-01",
+  "valid_to": "2025-12-31",
+  "priority": 100
+}
+```
+
+**Request Body** (Trade Zone):
+```json
+{
+  "level": "trade_zone",
+  "tz_o": "ISC-W",
+  "tz_d": "GULF",
+  "mode": "ocean",
+  "container_type": null,
+  "component_type": "ocean_freight",
+  "mark_kind": "percentage",
+  "mark_value": 10.0,
+  "valid_from": "2025-01-01",
+  "valid_to": "2025-12-31",
+  "priority": 50
+}
+```
+
+**Request Body** (Global):
+```json
+{
+  "level": "global",
+  "mode": null,
+  "container_type": null,
+  "component_type": "ocean_freight",
+  "mark_kind": "percentage",
+  "mark_value": 15.0,
+  "valid_from": "2025-01-01",
+  "valid_to": "2025-12-31",
+  "priority": 10
+}
+```
+
+**Level Types**:
+- `global`: Applies to all routes
+- `trade_zone`: Applies to specific trade zone pair (requires `tz_o` and `tz_d`)
+- `port_pair`: Applies to specific port pair (requires `pol_code` and `pod_code`)
+
+**Mark Kind Types**:
+- `percentage`: Markup as percentage (e.g., 15 = 15%)
+- `fixed`: Fixed amount markup
+- `multiplier`: Multiplier (e.g., 1.2 = 20% markup)
+
+#### Update Margin Rule
+**Endpoint**: `PUT /api/margin-rules/:ruleId`
+
+**Request Body**: (only include fields to update)
+```json
+{
+  "mark_value": 17.5,
+  "priority": 110
+}
+```
+
+#### Delete Margin Rule
+**Endpoint**: `DELETE /api/margin-rules/:ruleId`
+
+---
+
+## 🔍 Field Name Migration Strategy
+
+### Origin/Destination vs POL/POD
+
+The RMS system uses the following naming convention:
+
+- **`origin`/`destination`**: Used for pricing and cargo location (where cargo starts/ends)
+- **`pol`/`pod`**: Reserved for routing perspective (where vessel loads/discharges)
+
+**Current Implementation**:
+- Ocean Freight Rates: Use `origin_code`/`destination_code` in API, but store as `pol_id`/`pod_id` in database (initially same values)
+- Margin Rules: Database uses `pol_id`/`pod_id`, but API exposes as `origin_code`/`origin_name` and `destination_code`/`destination_name`
+- Future: `pol`/`pod` may diverge from `origin`/`destination` for inland/routing scenarios
+
+**Migration Document**: See `DATABASE_MIGRATION_STRATEGY.md` for full details.
+
+---
+
 ## 🔗 Support
 
 For issues or questions:
@@ -662,7 +1148,7 @@ For issues or questions:
 
 ---
 
-*Last Updated: 2025-11-12*  
+*Last Updated: 2025-11-18*  
 *API Version: 4.0*
 
 
