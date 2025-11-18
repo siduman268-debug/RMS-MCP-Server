@@ -4494,17 +4494,67 @@ async function createHttpServer() {
       if (mark_kind) query = query.eq('mark_kind', mark_kind);
       if (component_type) query = query.eq('component_type', component_type);
 
-      const { data, error } = await query;
+      const { data: rules, error } = await query;
 
       if (error) throw error;
 
+      // Enrich with port names for port_pair rules
+      // Note: margin_rule_v2 currently uses pol_id/pod_id but we'll expose as origin/destination
+      // to align with the migration strategy for pricing (origin/destination for cargo, pol/pod for routing)
+      let enrichedData = rules || [];
+      
+      if (enrichedData.length > 0) {
+        // Get unique port IDs
+        const portIds = new Set<number>();
+        enrichedData.forEach(rule => {
+          if (rule.pol_id) portIds.add(rule.pol_id);
+          if (rule.pod_id) portIds.add(rule.pod_id);
+        });
+        
+        if (portIds.size > 0) {
+          // Fetch port data
+          const { data: ports, error: portError } = await supabase
+            .from('locations')
+            .select('id, unlocode, location_name, country_code')
+            .in('id', Array.from(portIds));
+          
+          if (!portError && ports) {
+            // Create port lookup map
+            const portMap = new Map(
+              ports.map(p => [p.id, p])
+            );
+            
+            // Enrich rules with port data (expose as origin/destination for consistency)
+            enrichedData = enrichedData.map(rule => {
+              const enriched: any = { ...rule };
+              
+              if (rule.pol_id && portMap.has(rule.pol_id)) {
+                const origin = portMap.get(rule.pol_id);
+                enriched.origin_code = origin?.unlocode;
+                enriched.origin_name = origin?.location_name;
+                enriched.origin_country = origin?.country_code;
+              }
+              
+              if (rule.pod_id && portMap.has(rule.pod_id)) {
+                const destination = portMap.get(rule.pod_id);
+                enriched.destination_code = destination?.unlocode;
+                enriched.destination_name = destination?.location_name;
+                enriched.destination_country = destination?.country_code;
+              }
+              
+              return enriched;
+            });
+          }
+        }
+      }
+
       return reply.send({
         success: true,
-        data: data || [],
+        data: enrichedData,
         pagination: {
           page: pageNum,
           limit: limitNum,
-          count: data?.length || 0
+          count: enrichedData?.length || 0
         }
       });
 

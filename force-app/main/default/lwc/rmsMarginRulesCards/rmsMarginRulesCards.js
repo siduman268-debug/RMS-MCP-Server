@@ -28,9 +28,9 @@ export default class RmsMarginRulesCards extends LightningElement {
         
         let filtered = [...this.rules];
         
-        // Apply scope filter
+        // Apply scope filter (using 'level' from API)
         if (this.filterScope) {
-            filtered = filtered.filter(rule => rule.scope === this.filterScope);
+            filtered = filtered.filter(rule => rule.level === this.filterScope);
         }
         
         return filtered;
@@ -111,8 +111,16 @@ export default class RmsMarginRulesCards extends LightningElement {
             return `${origin} → ${destination}`;
         }
         if (level === 'port_pair' || level === 'pp') {
-            // Don't show ugly IDs - just indicate it's port specific
-            return 'Specific Port Pair';
+            // Display actual port names if available (from API enrichment)
+            // API now returns origin_code/origin_name instead of pol_code/pol_name
+            const originName = record.origin_name || record.origin_code || 'Unknown';
+            const destinationName = record.destination_name || record.destination_code || 'Unknown';
+            
+            // Show port name (code) format
+            const origin = record.origin_code ? `${originName} (${record.origin_code})` : originName;
+            const destination = record.destination_code ? `${destinationName} (${record.destination_code})` : destinationName;
+            
+            return `${origin} → ${destination}`;
         }
         return '—';
     }
