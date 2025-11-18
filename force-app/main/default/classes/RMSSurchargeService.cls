@@ -66,7 +66,8 @@ public with sharing class RMSSurchargeService {
     @AuraEnabled
     public static Map<String, Object> createSurcharge(Map<String, Object> surchargeData) {
         try {
-            HttpResponse res = RMSApiUtil.makeApiCall('/api/surcharges', 'POST', surchargeData);
+            String body = JSON.serialize(surchargeData);
+            HttpResponse res = RMSApiUtil.makeApiCall('/api/surcharges', 'POST', body);
             Map<String, Object> response = RMSApiUtil.parseResponse(res);
             return (Map<String, Object>) response.get('data');
         } catch (Exception e) {
@@ -77,7 +78,8 @@ public with sharing class RMSSurchargeService {
     @AuraEnabled
     public static Map<String, Object> updateSurcharge(String surchargeId, Map<String, Object> updates) {
         try {
-            HttpResponse res = RMSApiUtil.makeApiCall('/api/surcharges/' + surchargeId, 'PUT', updates);
+            String body = JSON.serialize(updates);
+            HttpResponse res = RMSApiUtil.makeApiCall('/api/surcharges/' + surchargeId, 'PUT', body);
             Map<String, Object> response = RMSApiUtil.parseResponse(res);
             return (Map<String, Object>) response.get('data');
         } catch (Exception e) {

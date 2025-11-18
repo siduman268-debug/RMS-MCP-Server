@@ -44,7 +44,8 @@ public with sharing class RMSMarginRuleService {
     @AuraEnabled
     public static Map<String, Object> createMarginRule(Map<String, Object> ruleData) {
         try {
-            HttpResponse res = RMSApiUtil.makeApiCall('/api/margin-rules', 'POST', ruleData);
+            String body = JSON.serialize(ruleData);
+            HttpResponse res = RMSApiUtil.makeApiCall('/api/margin-rules', 'POST', body);
             Map<String, Object> response = RMSApiUtil.parseResponse(res);
             return (Map<String, Object>) response.get('data');
         } catch (Exception e) {
@@ -55,7 +56,8 @@ public with sharing class RMSMarginRuleService {
     @AuraEnabled
     public static Map<String, Object> updateMarginRule(String ruleId, Map<String, Object> updates) {
         try {
-            HttpResponse res = RMSApiUtil.makeApiCall('/api/margin-rules/' + ruleId, 'PUT', updates);
+            String body = JSON.serialize(updates);
+            HttpResponse res = RMSApiUtil.makeApiCall('/api/margin-rules/' + ruleId, 'PUT', body);
             Map<String, Object> response = RMSApiUtil.parseResponse(res);
             return (Map<String, Object>) response.get('data');
         } catch (Exception e) {
