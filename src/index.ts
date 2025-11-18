@@ -3470,6 +3470,124 @@ async function createHttpServer() {
     }
   });
 
+  // Create Vendor
+  fastify.post('/api/vendors', async (request, reply) => {
+    try {
+      const { 
+        name,
+        alias,
+        vendor_type,
+        mode,
+        external_ref
+      } = request.body as any;
+
+      // Validate required fields
+      if (!name || !vendor_type) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Missing required fields: name, vendor_type'
+        });
+      }
+
+      // Create the vendor
+      const { data, error } = await supabase
+        .from('vendor')
+        .insert({
+          name,
+          alias: alias || null,
+          vendor_type,
+          mode: mode || [],
+          external_ref: external_ref || null,
+          tenant_id: (request as any).tenant_id
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      console.error('Error creating vendor:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Update Vendor
+  fastify.put('/api/vendors/:vendorId', async (request, reply) => {
+    try {
+      const { vendorId } = request.params as any;
+      const updates = request.body as any;
+
+      // Remove fields that shouldn't be updated
+      delete updates.id;
+      delete updates.tenant_id;
+      delete updates.created_at;
+
+      const { data, error } = await supabase
+        .from('vendor')
+        .update(updates)
+        .eq('id', vendorId)
+        .eq('tenant_id', (request as any).tenant_id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (!data) {
+        return reply.status(404).send({
+          success: false,
+          error: `Vendor not found: ${vendorId}`
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      console.error('Error updating vendor:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Delete Vendor
+  fastify.delete('/api/vendors/:vendorId', async (request, reply) => {
+    try {
+      const { vendorId } = request.params as any;
+
+      const { error } = await supabase
+        .from('vendor')
+        .delete()
+        .eq('id', vendorId)
+        .eq('tenant_id', (request as any).tenant_id);
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        message: `Vendor ${vendorId} deleted successfully`
+      });
+
+    } catch (error) {
+      console.error('Error deleting vendor:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // ============================================================================
   // CONTRACT API ENDPOINTS
   // ============================================================================
@@ -3587,6 +3705,133 @@ async function createHttpServer() {
       });
 
     } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Create Contract
+  fastify.post('/api/contracts', async (request, reply) => {
+    try {
+      const { 
+        vendor_id,
+        name,
+        mode,
+        is_spot,
+        effective_from,
+        effective_to,
+        currency,
+        source_ref,
+        terms
+      } = request.body as any;
+
+      // Validate required fields
+      if (!vendor_id || !mode || !effective_from || !effective_to || !currency) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Missing required fields: vendor_id, mode, effective_from, effective_to, currency'
+        });
+      }
+
+      // Create the contract
+      const { data, error } = await supabase
+        .from('rate_contract')
+        .insert({
+          vendor_id,
+          name: name || null,
+          mode,
+          is_spot: is_spot || false,
+          effective_from,
+          effective_to,
+          currency,
+          source_ref: source_ref || null,
+          terms: terms || {},
+          tenant_id: (request as any).tenant_id
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      console.error('Error creating contract:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Update Contract
+  fastify.put('/api/contracts/:contractId', async (request, reply) => {
+    try {
+      const { contractId } = request.params as any;
+      const updates = request.body as any;
+
+      // Remove fields that shouldn't be updated
+      delete updates.id;
+      delete updates.tenant_id;
+      delete updates.created_at;
+      delete updates.contract_number; // Auto-generated field
+
+      const { data, error } = await supabase
+        .from('rate_contract')
+        .update(updates)
+        .eq('id', contractId)
+        .eq('tenant_id', (request as any).tenant_id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (!data) {
+        return reply.status(404).send({
+          success: false,
+          error: `Contract not found: ${contractId}`
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+
+    } catch (error) {
+      console.error('Error updating contract:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Delete Contract
+  fastify.delete('/api/contracts/:contractId', async (request, reply) => {
+    try {
+      const { contractId } = request.params as any;
+
+      const { error } = await supabase
+        .from('rate_contract')
+        .delete()
+        .eq('id', contractId)
+        .eq('tenant_id', (request as any).tenant_id);
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        message: `Contract ${contractId} deleted successfully`
+      });
+
+    } catch (error) {
+      console.error('Error deleting contract:', error);
       return reply.status(500).send({
         success: false,
         error: error instanceof Error ? error.message : String(error)
