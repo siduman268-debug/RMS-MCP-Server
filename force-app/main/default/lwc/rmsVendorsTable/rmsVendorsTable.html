@@ -34,6 +34,47 @@
         </div>
         
         <div class="slds-card__body slds-card__body_inner">
+            <!-- Filter Section -->
+            <div class="slds-p-around_medium slds-border_bottom">
+                <div class="slds-grid slds-gutters slds-wrap">
+                    <div class="slds-col slds-size_1-of-3">
+                        <lightning-input
+                            label="Search by Name"
+                            type="text"
+                            value={filterName}
+                            placeholder="Enter vendor name..."
+                            onchange={handleFilterNameChange}>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-3">
+                        <lightning-combobox
+                            label="Filter by Mode"
+                            value={filterMode}
+                            options={modeOptions}
+                            placeholder="Select mode..."
+                            onchange={handleFilterModeChange}>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-3">
+                        <lightning-combobox
+                            label="Filter by Status"
+                            value={filterStatus}
+                            options={statusOptions}
+                            placeholder="Select status..."
+                            onchange={handleFilterStatusChange}>
+                        </lightning-combobox>
+                    </div>
+                </div>
+                <div class="slds-m-top_small">
+                    <lightning-button
+                        label="Clear Filters"
+                        variant="neutral"
+                        icon-name="utility:clear"
+                        onclick={handleClearFilters}>
+                    </lightning-button>
+                </div>
+            </div>
+            
             <template if:true={hasRecords}>
                 <div class="vendor-cards-container">
                     <template for:each={formattedRecords} for:item="vendor">

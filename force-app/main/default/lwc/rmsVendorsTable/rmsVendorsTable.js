@@ -28,6 +28,11 @@ export default class RmsVendorsTable extends LightningElement {
     @track sortedBy;
     @track sortedDirection = 'asc';
     
+    // Filter properties
+    @track filterName = '';
+    @track filterMode = '';
+    @track filterStatus = '';
+    
     handleCreate() {
         this.dispatchEvent(new CustomEvent('create'));
     }
@@ -128,9 +133,57 @@ export default class RmsVendorsTable extends LightningElement {
         return this.selectedRecords && this.selectedRecords.includes(recordId);
     }
     
-    get formattedRecords() {
+    get modeOptions() {
+        return [
+            { label: 'All Modes', value: '' },
+            { label: 'Ocean', value: 'ocean' },
+            { label: 'Air', value: 'air' },
+            { label: 'Rail', value: 'rail' },
+            { label: 'Road', value: 'road' },
+            { label: 'Barge', value: 'barge' }
+        ];
+    }
+    
+    get statusOptions() {
+        return [
+            { label: 'All Status', value: '' },
+            { label: 'Active', value: 'active' },
+            { label: 'Inactive', value: 'inactive' }
+        ];
+    }
+    
+    get filteredRecords() {
         if (!this.records) return [];
-        return this.records.map(record => {
+        
+        return this.records.filter(record => {
+            // Name filter
+            if (this.filterName && record.name) {
+                if (!record.name.toLowerCase().includes(this.filterName.toLowerCase())) {
+                    return false;
+                }
+            }
+            
+            // Mode filter
+            if (this.filterMode && record.mode) {
+                const modes = Array.isArray(record.mode) ? record.mode : [record.mode];
+                if (!modes.some(m => m.toLowerCase() === this.filterMode.toLowerCase())) {
+                    return false;
+                }
+            }
+            
+            // Status filter
+            if (this.filterStatus) {
+                const isActive = record.is_active === true || record.is_active === 'true';
+                if (this.filterStatus === 'active' && !isActive) return false;
+                if (this.filterStatus === 'inactive' && isActive) return false;
+            }
+            
+            return true;
+        });
+    }
+    
+    get formattedRecords() {
+        return this.filteredRecords.map(record => {
             const logoPath = this.getVendorLogo(record.name);
             const initials = this.getVendorInitials(record.name);
             const isSelected = this.isRecordSelected(record.id);
@@ -188,6 +241,24 @@ export default class RmsVendorsTable extends LightningElement {
     formatMode(mode) {
         if (!mode || !Array.isArray(mode) || mode.length === 0) return '—';
         return mode.map(m => m.charAt(0).toUpperCase() + m.slice(1)).join(', ');
+    }
+    
+    handleFilterNameChange(event) {
+        this.filterName = event.target.value;
+    }
+    
+    handleFilterModeChange(event) {
+        this.filterMode = event.detail.value;
+    }
+    
+    handleFilterStatusChange(event) {
+        this.filterStatus = event.detail.value;
+    }
+    
+    handleClearFilters() {
+        this.filterName = '';
+        this.filterMode = '';
+        this.filterStatus = '';
     }
     
     formatDate(dateString) {

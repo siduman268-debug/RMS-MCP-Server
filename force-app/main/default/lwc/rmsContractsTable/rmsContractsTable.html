@@ -4,6 +4,7 @@
             <header class="slds-media slds-media_center slds-has-flexi-truncate">
                 <div class="slds-media__body">
                     <h2 class="slds-card__header-title">
+                        <lightning-icon icon-name="standard:contract" size="small" class="slds-m-right_x-small"></lightning-icon>
                         <span>Contracts ({records.length})</span>
                     </h2>
                 </div>
@@ -33,84 +34,189 @@
         </div>
         
         <div class="slds-card__body slds-card__body_inner">
+            <!-- Filter Section -->
+            <div class="slds-p-around_medium slds-border_bottom">
+                <div class="slds-grid slds-gutters slds-wrap">
+                    <div class="slds-col slds-size_1-of-4">
+                        <lightning-input
+                            label="Search by Vendor"
+                            type="text"
+                            value={filterVendor}
+                            placeholder="Enter vendor name..."
+                            onchange={handleFilterVendorChange}>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-4">
+                        <lightning-input
+                            label="Search by Contract #"
+                            type="text"
+                            value={filterContractNumber}
+                            placeholder="Enter contract number..."
+                            onchange={handleFilterContractNumberChange}>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-4">
+                        <lightning-combobox
+                            label="Filter by Type"
+                            value={filterType}
+                            options={typeOptions}
+                            placeholder="Select type..."
+                            onchange={handleFilterTypeChange}>
+                        </lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-4">
+                        <lightning-combobox
+                            label="Filter by Status"
+                            value={filterStatus}
+                            options={statusOptions}
+                            placeholder="Select status..."
+                            onchange={handleFilterStatusChange}>
+                        </lightning-combobox>
+                    </div>
+                </div>
+                <div class="slds-m-top_small">
+                    <lightning-button
+                        label="Clear Filters"
+                        variant="neutral"
+                        icon-name="utility:clear"
+                        onclick={handleClearFilters}>
+                    </lightning-button>
+                </div>
+            </div>
+            
             <template if:true={hasRecords}>
-                <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_striped">
-                    <thead>
-                        <tr class="slds-line-height_reset">
-                            <th scope="col" style="width: 3rem;">
+                <div class="contract-cards-container">
+                    <template for:each={formattedRecords} for:item="contract">
+                        <div key={contract.id} class={contract.cardClass}>
+                            <!-- Checkbox -->
+                            <div class="card-checkbox">
                                 <lightning-input 
                                     type="checkbox" 
-                                    checked={allSelected}
-                                    onchange={handleSelectAll}>
+                                    value={contract.id}
+                                    checked={contract.isSelected}
+                                    data-record-id={contract.id}
+                                    onchange={handleSelectRecord}>
                                 </lightning-input>
-                            </th>
-                            <th scope="col" class="slds-is-sortable">
-                                <div class="slds-grid slds-grid_align-spread slds-has-flexi-truncate" data-field="contract_number" onclick={handleSort}>
-                                    <span class="slds-truncate">Contract #</span>
-                                    <lightning-icon 
-                                        if:true={isSortedByContractNumber}
-                                        icon-name={sortIconName} 
-                                        size="x-small">
-                                    </lightning-icon>
+                            </div>
+                            
+                            <!-- Contract Header -->
+                            <div class="contract-card-header">
+                                <div class="contract-title">
+                                    <div class="contract-number">{contract.displayContractNumber}</div>
+                                    <div class="contract-name">{contract.name}</div>
                                 </div>
-                            </th>
-                            <th scope="col" class="slds-is-sortable">
-                                <div class="slds-grid slds-grid_align-spread slds-has-flexi-truncate" data-field="vendor_id" onclick={handleSort}>
-                                    <span class="slds-truncate">Vendor ID</span>
-                                    <lightning-icon 
-                                        if:true={isSortedByVendorId}
-                                        icon-name={sortIconName} 
-                                        size="x-small">
-                                    </lightning-icon>
+                                <span class={contract.typeClass}>{contract.typeLabel}</span>
+                            </div>
+                            
+                            <!-- Vendor Info -->
+                            <template if:true={contract.vendor_name}>
+                                <div class="contract-vendor">
+                                    <template if:true={contract.hasLogo}>
+                                        <img src={contract.logoPath} alt={contract.displayVendorName} class="vendor-logo-small" />
+                                    </template>
+                                    <template if:false={contract.hasLogo}>
+                                        <div class="vendor-logo-placeholder-small">
+                                            {contract.vendorInitials}
+                                        </div>
+                                    </template>
+                                    <div class="vendor-name-small">{contract.displayVendorName}</div>
                                 </div>
-                            </th>
-                            <th scope="col">Valid From</th>
-                            <th scope="col">Valid To</th>
-                            <th scope="col">Active</th>
-                            <th scope="col">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template for:each={formattedRecords} for:item="record">
-                            <tr key={record.id}>
-                                <td data-label="Select">
-                                    <lightning-input 
-                                        type="checkbox" 
-                                        value={record.id}
-                                        checked={record.isSelected}
-                                        onchange={handleSelectRecord}>
-                                    </lightning-input>
-                                </td>
-                                <td data-label="Contract #">{record.displayContractNumber}</td>
-                                <td data-label="Vendor ID">{record.displayVendorId}</td>
-                                <td data-label="Valid From">{record.formattedValidFrom}</td>
-                                <td data-label="Valid To">{record.formattedValidTo}</td>
-                                <td data-label="Active">
-                                    <template if:true={record.is_active}>
-                                        <lightning-icon icon-name="utility:check" size="small" variant="success"></lightning-icon>
-                                    </template>
-                                    <template if:false={record.is_active}>
-                                        <lightning-icon icon-name="utility:close" size="small" variant="error"></lightning-icon>
-                                    </template>
-                                </td>
-                                <td data-label="Actions">
-                                    <div class="slds-button-group" role="group">
-                                        <lightning-button-icon icon-name="utility:preview" variant="border-filled" alternative-text="View" data-id={record.id} onclick={handleView}></lightning-button-icon>
-                                        <lightning-button-icon icon-name="utility:edit" variant="border-filled" alternative-text="Edit" data-id={record.id} onclick={handleEdit}></lightning-button-icon>
-                                        <lightning-button-icon icon-name="utility:delete" variant="border-filled" alternative-text="Delete" data-id={record.id} onclick={handleDelete}></lightning-button-icon>
+                            </template>
+                            
+                            <!-- Contract Details -->
+                            <div class="contract-details">
+                                <div class="contract-detail-row">
+                                    <span class="detail-label">Mode:</span>
+                                    <span class="mode-badge">{contract.displayMode}</span>
+                                </div>
+                                
+                                <div class="contract-detail-row">
+                                    <span class="detail-label">Valid From:</span>
+                                    <span class="date-badge">
+                                        <lightning-icon icon-name="utility:event" size="xx-small"></lightning-icon>
+                                        {contract.formattedValidFrom}
+                                    </span>
+                                </div>
+                                
+                                <div class="contract-detail-row">
+                                    <span class="detail-label">Valid To:</span>
+                                    <span class="date-badge">
+                                        <lightning-icon icon-name="utility:event" size="xx-small"></lightning-icon>
+                                        {contract.formattedValidTo}
+                                    </span>
+                                </div>
+                                
+                                <div class="contract-detail-row">
+                                    <span class="detail-label">Currency:</span>
+                                    <span class="currency-badge">
+                                        <lightning-icon icon-name="utility:currency" size="xx-small"></lightning-icon>
+                                        {contract.currency}
+                                    </span>
+                                </div>
+                                
+                                <template if:true={contract.source_ref}>
+                                    <div class="contract-detail-row">
+                                        <span class="detail-label">Source Ref:</span>
+                                        <span class="detail-value">{contract.source_ref}</span>
                                     </div>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
+                                </template>
+                                
+                                <div class="contract-detail-row">
+                                    <span class="detail-label">Status:</span>
+                                    <template if:true={contract.is_active}>
+                                        <span class="status-badge active">
+                                            <lightning-icon icon-name="utility:check" size="xx-small"></lightning-icon>
+                                            Active
+                                        </span>
+                                    </template>
+                                    <template if:false={contract.is_active}>
+                                        <span class="status-badge inactive">
+                                            <lightning-icon icon-name="utility:close" size="xx-small"></lightning-icon>
+                                            Inactive
+                                        </span>
+                                    </template>
+                                </div>
+                            </div>
+                            
+                            <!-- Card Actions -->
+                            <div class="card-actions">
+                                <lightning-button-icon 
+                                    icon-name="utility:preview" 
+                                    variant="border-filled" 
+                                    alternative-text="View"
+                                    title="View Details"
+                                    data-id={contract.id}
+                                    onclick={handleView}>
+                                </lightning-button-icon>
+                                <lightning-button-icon 
+                                    icon-name="utility:edit" 
+                                    variant="border-filled" 
+                                    alternative-text="Edit"
+                                    title="Edit Contract"
+                                    data-id={contract.id}
+                                    onclick={handleEdit}>
+                                </lightning-button-icon>
+                                <lightning-button-icon 
+                                    icon-name="utility:delete" 
+                                    variant="border-filled" 
+                                    alternative-text="Delete"
+                                    title="Delete Contract"
+                                    data-id={contract.id}
+                                    onclick={handleDelete}>
+                                </lightning-button-icon>
+                            </div>
+                        </div>
+                    </template>
+                </div>
             </template>
+            
             <template if:false={hasRecords}>
-                <div class="slds-text-align_center slds-p-around_large">
-                    <p>No contracts found. Click "Create" to add a new contract.</p>
+                <div class="empty-state">
+                    <lightning-icon icon-name="utility:contract_alt" size="large"></lightning-icon>
+                    <h3 class="slds-text-heading_small slds-m-top_medium">No Contracts Found</h3>
+                    <p class="slds-m-top_small">Click "Create" to add your first contract.</p>
                 </div>
             </template>
         </div>
     </div>
 </template>
-
