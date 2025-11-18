@@ -115,6 +115,10 @@ export default class RmsSurchargesTable extends LightningElement {
         ];
     }
     
+    get isContractDisabled() {
+        return this.contracts.length === 0;
+    }
+    
     get hasRecords() {
         return this.surcharges && this.surcharges.length > 0;
     }
