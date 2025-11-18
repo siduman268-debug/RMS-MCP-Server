@@ -5,6 +5,26 @@ export default class RmsVendorsTable extends LightningElement {
     @api records = [];
     @api selectedRecords = [];
     
+    // Vendor/Carrier logo mapping - matches static resource names in Salesforce
+    vendorLogoMap = {
+        'MAERSK': '/resource/carrier_maersk',
+        'MSC': '/resource/carrier_msc',
+        'CMA CGM': '/resource/carrier_cma_cgm',
+        'CMA': '/resource/carrier_cma_cgm',
+        'COSCO': '/resource/carrier_cosco',
+        'EVERGREEN': '/resource/carrier_evergreen',
+        'HAPAG': '/resource/carrier_hapag_lloyd',
+        'HAPAG-LLOYD': '/resource/carrier_hapag_lloyd',
+        'ONE': '/resource/carrier_one',
+        'YANG MING': '/resource/carrier_yang_ming',
+        'ZIM': '/resource/carrier_zim',
+        'OOCL': '/resource/carrier_oocl',
+        'ACME': '/resource/carrier_acme',
+        'ACME LINES': '/resource/carrier_acme',
+        'GENERIC': '/resource/carrier_generic',
+        'GENERIC CARRIER': '/resource/carrier_generic'
+    };
+    
     @track sortedBy;
     @track sortedDirection = 'asc';
     
@@ -110,13 +130,62 @@ export default class RmsVendorsTable extends LightningElement {
     
     get formattedRecords() {
         if (!this.records) return [];
-        return this.records.map(record => ({
-            ...record,
-            isSelected: this.isRecordSelected(record.id),
-            displayAlias: record.alias || '—',
-            displayType: record.type || '—',
-            formattedDate: this.formatDate(record.valid_from)
-        }));
+        return this.records.map(record => {
+            const logoPath = this.getVendorLogo(record.name);
+            const initials = this.getVendorInitials(record.name);
+            
+            return {
+                ...record,
+                isSelected: this.isRecordSelected(record.id),
+                displayAlias: record.alias || '—',
+                displayType: this.formatVendorType(record.vendor_type),
+                displayMode: this.formatMode(record.mode),
+                formattedDate: this.formatDate(record.valid_from),
+                logoPath: logoPath,
+                hasLogo: !!logoPath,
+                initials: initials
+            };
+        });
+    }
+    
+    getVendorLogo(vendorName) {
+        if (!vendorName) return null;
+        
+        const nameUpper = vendorName.toUpperCase().trim();
+        
+        // Check exact match first
+        if (this.vendorLogoMap[nameUpper]) {
+            return this.vendorLogoMap[nameUpper];
+        }
+        
+        // Check if vendor name contains any of the known carriers
+        for (const [key, value] of Object.entries(this.vendorLogoMap)) {
+            if (nameUpper.includes(key)) {
+                return value;
+            }
+        }
+        
+        return null;
+    }
+    
+    getVendorInitials(name) {
+        if (!name) return 'V';
+        const words = name.split(' ').filter(w => w.length > 0);
+        if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
+        return words.slice(0, 2).map(w => w[0]).join('').toUpperCase();
+    }
+    
+    formatVendorType(type) {
+        if (!type) return '—';
+        return type.replace(/_/g, ' ').toLowerCase()
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+    }
+    
+    formatMode(mode) {
+        if (!mode || !Array.isArray(mode) || mode.length === 0) return '—';
+        return mode.map(m => m.charAt(0).toUpperCase() + m.slice(1)).join(', ');
     }
     
     formatDate(dateString) {

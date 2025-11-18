@@ -4,6 +4,7 @@
             <header class="slds-media slds-media_center slds-has-flexi-truncate">
                 <div class="slds-media__body">
                     <h2 class="slds-card__header-title">
+                        <lightning-icon icon-name="standard:account" size="small" class="slds-m-right_x-small"></lightning-icon>
                         <span>Vendors ({records.length})</span>
                     </h2>
                 </div>
@@ -34,118 +35,116 @@
         
         <div class="slds-card__body slds-card__body_inner">
             <template if:true={hasRecords}>
-                <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_striped">
-                    <thead>
-                        <tr class="slds-line-height_reset">
-                            <th scope="col" style="width: 3rem;">
+                <div class="vendor-cards-container">
+                    <template for:each={formattedRecords} for:item="vendor">
+                        <div key={vendor.id} class={vendor.isSelected ? 'vendor-card selected' : 'vendor-card'}>
+                            <!-- Checkbox -->
+                            <div class="card-checkbox">
                                 <lightning-input 
                                     type="checkbox" 
-                                    checked={allSelected}
-                                    onchange={handleSelectAll}>
+                                    value={vendor.id}
+                                    checked={vendor.isSelected}
+                                    data-record-id={vendor.id}
+                                    onchange={handleSelectRecord}>
                                 </lightning-input>
-                            </th>
-                            <th scope="col" class="slds-is-sortable">
-                                <div class="slds-grid slds-grid_align-spread slds-has-flexi-truncate" data-field="name" onclick={handleSort}>
-                                    <span class="slds-truncate" title="Name">Name</span>
-                                    <lightning-icon 
-                                        if:true={isSortedByName}
-                                        icon-name={sortIconName} 
-                                        size="x-small" 
-                                        alternative-text="Sorted">
-                                    </lightning-icon>
-                                </div>
-                            </th>
-                            <th scope="col" class="slds-is-sortable">
-                                <div class="slds-grid slds-grid_align-spread slds-has-flexi-truncate" data-field="alias" onclick={handleSort}>
-                                    <span class="slds-truncate" title="Alias">Alias</span>
-                                    <lightning-icon 
-                                        if:true={isSortedByAlias}
-                                        icon-name={sortIconName} 
-                                        size="x-small" 
-                                        alternative-text="Sorted">
-                                    </lightning-icon>
-                                </div>
-                            </th>
-                            <th scope="col" class="slds-is-sortable">
-                                <div class="slds-grid slds-grid_align-spread slds-has-flexi-truncate" data-field="type" onclick={handleSort}>
-                                    <span class="slds-truncate" title="Type">Type</span>
-                                    <lightning-icon 
-                                        if:true={isSortedByType}
-                                        icon-name={sortIconName} 
-                                        size="x-small" 
-                                        alternative-text="Sorted">
-                                    </lightning-icon>
-                                </div>
-                            </th>
-                            <th scope="col">Active</th>
-                            <th scope="col">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template for:each={formattedRecords} for:item="record">
-                            <tr key={record.id}>
-                                <td data-label="Select">
-                                    <lightning-input 
-                                        type="checkbox" 
-                                        value={record.id}
-                                        checked={record.isSelected}
-                                        data-record-id={record.id}
-                                        onchange={handleSelectRecord}>
-                                    </lightning-input>
-                                </td>
-                                <td data-label="Name">
-                                    <div class="slds-truncate" title={record.name}>{record.name}</div>
-                                </td>
-                                <td data-label="Alias">
-                                    <div class="slds-truncate" title={record.displayAlias}>{record.displayAlias}</div>
-                                </td>
-                                <td data-label="Type">
-                                    <div class="slds-truncate" title={record.displayType}>{record.displayType}</div>
-                                </td>
-                                <td data-label="Active">
-                                    <template if:true={record.is_active}>
-                                        <lightning-icon icon-name="utility:check" size="small" variant="success"></lightning-icon>
-                                    </template>
-                                    <template if:false={record.is_active}>
-                                        <lightning-icon icon-name="utility:close" size="small" variant="error"></lightning-icon>
-                                    </template>
-                                </td>
-                                <td data-label="Actions">
-                                    <div class="slds-button-group" role="group">
-                                        <lightning-button-icon 
-                                            icon-name="utility:preview" 
-                                            variant="border-filled" 
-                                            alternative-text="View"
-                                            data-id={record.id}
-                                            onclick={handleView}>
-                                        </lightning-button-icon>
-                                        <lightning-button-icon 
-                                            icon-name="utility:edit" 
-                                            variant="border-filled" 
-                                            alternative-text="Edit"
-                                            data-id={record.id}
-                                            onclick={handleEdit}>
-                                        </lightning-button-icon>
-                                        <lightning-button-icon 
-                                            icon-name="utility:delete" 
-                                            variant="border-filled" 
-                                            alternative-text="Delete"
-                                            data-id={record.id}
-                                            onclick={handleDelete}>
-                                        </lightning-button-icon>
+                            </div>
+                            
+                            <!-- Card Header with Logo -->
+                            <div class="vendor-card-header">
+                                <template if:true={vendor.hasLogo}>
+                                    <img src={vendor.logoPath} alt={vendor.name} class="vendor-logo" />
+                                </template>
+                                <template if:false={vendor.hasLogo}>
+                                    <div class="vendor-logo-placeholder">
+                                        {vendor.initials}
                                     </div>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
+                                </template>
+                                
+                                <div class="vendor-info">
+                                    <div class="vendor-name">{vendor.name}</div>
+                                    <div class="vendor-type">{vendor.displayType}</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Vendor Details -->
+                            <div class="vendor-details">
+                                <template if:true={vendor.alias}>
+                                    <div class="vendor-detail-row">
+                                        <span class="detail-label">Alias:</span>
+                                        <span class="detail-value">{vendor.displayAlias}</span>
+                                    </div>
+                                </template>
+                                
+                                <template if:true={vendor.mode}>
+                                    <div class="vendor-detail-row">
+                                        <span class="detail-label">Mode:</span>
+                                        <span class="mode-badge">{vendor.displayMode}</span>
+                                    </div>
+                                </template>
+                                
+                                <template if:true={vendor.external_ref}>
+                                    <div class="vendor-detail-row">
+                                        <span class="detail-label">External Ref:</span>
+                                        <span class="detail-value">{vendor.external_ref}</span>
+                                    </div>
+                                </template>
+                                
+                                <div class="vendor-detail-row">
+                                    <span class="detail-label">Status:</span>
+                                    <template if:true={vendor.is_active}>
+                                        <span class="status-badge active">
+                                            <lightning-icon icon-name="utility:check" size="xx-small"></lightning-icon>
+                                            Active
+                                        </span>
+                                    </template>
+                                    <template if:false={vendor.is_active}>
+                                        <span class="status-badge inactive">
+                                            <lightning-icon icon-name="utility:close" size="xx-small"></lightning-icon>
+                                            Inactive
+                                        </span>
+                                    </template>
+                                </div>
+                            </div>
+                            
+                            <!-- Card Actions -->
+                            <div class="card-actions">
+                                <lightning-button-icon 
+                                    icon-name="utility:preview" 
+                                    variant="border-filled" 
+                                    alternative-text="View"
+                                    title="View Details"
+                                    data-id={vendor.id}
+                                    onclick={handleView}>
+                                </lightning-button-icon>
+                                <lightning-button-icon 
+                                    icon-name="utility:edit" 
+                                    variant="border-filled" 
+                                    alternative-text="Edit"
+                                    title="Edit Vendor"
+                                    data-id={vendor.id}
+                                    onclick={handleEdit}>
+                                </lightning-button-icon>
+                                <lightning-button-icon 
+                                    icon-name="utility:delete" 
+                                    variant="border-filled" 
+                                    alternative-text="Delete"
+                                    title="Delete Vendor"
+                                    data-id={vendor.id}
+                                    onclick={handleDelete}>
+                                </lightning-button-icon>
+                            </div>
+                        </div>
+                    </template>
+                </div>
             </template>
+            
             <template if:false={hasRecords}>
-                <div class="slds-text-align_center slds-p-around_large">
-                    <p>No vendors found. Click "Create" to add a new vendor.</p>
+                <div class="empty-state">
+                    <lightning-icon icon-name="utility:groups" size="large"></lightning-icon>
+                    <h3 class="slds-text-heading_small slds-m-top_medium">No Vendors Found</h3>
+                    <p class="slds-m-top_small">Click "Create" to add your first vendor.</p>
                 </div>
             </template>
         </div>
     </div>
 </template>
-
