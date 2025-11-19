@@ -456,7 +456,7 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     }
     
     handleDataLoad(event) {
-        // Handle data loaded from child components (e.g., Ocean Freight, Surcharges)
+        // Handle data loaded from child components (e.g., Ocean Freight, Surcharges, Margin Rules)
         const { data, entityType } = event.detail;
         console.log('Data loaded from child:', entityType, data?.length);
         
@@ -464,6 +464,8 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             this.oceanFreightRates = [...(data || [])];
         } else if (entityType === 'surcharges') {
             this.surcharges = [...(data || [])];
+        } else if (entityType === 'marginRules') {
+            this.marginRules = [...(data || [])];
         }
     }
     
@@ -724,7 +726,13 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
                 }
                 break;
             case 'marginRules':
-                await this.loadMarginRules();
+                // Trigger refresh in margin rules cards component
+                const marginRulesComponent = this.template.querySelector('c-rms-margin-rules-cards');
+                if (marginRulesComponent && typeof marginRulesComponent.handleFetchRules === 'function') {
+                    await marginRulesComponent.handleFetchRules();
+                } else {
+                    await this.loadMarginRules();
+                }
                 break;
         }
         console.log('refreshTab completed for:', entityType);

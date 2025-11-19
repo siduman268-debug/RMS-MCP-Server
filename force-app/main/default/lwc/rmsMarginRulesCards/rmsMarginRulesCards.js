@@ -140,6 +140,7 @@ export default class RmsMarginRulesCards extends LightningElement {
         this.filterScope = event.detail.value;
     }
     
+    @api
     async handleFetchRules() {
         this.loading = true;
         try {
@@ -148,6 +149,16 @@ export default class RmsMarginRulesCards extends LightningElement {
             });
             
             this.rules = data || [];
+            
+            // Dispatch data to parent for view/edit/delete operations
+            this.dispatchEvent(new CustomEvent('dataload', {
+                detail: { 
+                    data: this.rules,
+                    entityType: 'marginRules'
+                },
+                bubbles: true,
+                composed: true
+            }));
             
             if (this.rules.length === 0) {
                 this.showToast('Info', 'No margin rules found', 'info');
