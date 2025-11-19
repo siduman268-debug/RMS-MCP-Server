@@ -428,11 +428,11 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             
             console.log('Save result:', result);
             
-            // Close modal and refresh data
+            // Close modal and refresh data using the entity type (not activeTab)
             this.showModal = false;
             this.currentRecord = {};
             this.modalMode = '';
-            await this.refreshCurrentTab();
+            await this.refreshTab(entityType);
             
         } catch (error) {
             console.error('Error saving record:', error);
@@ -653,8 +653,8 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             
             console.log('Delete result:', result);
             
-            // Refresh data
-            await this.refreshCurrentTab();
+            // Refresh data using stored entity type (not activeTab which may have changed)
+            await this.refreshTab(entityType);
             
         } catch (error) {
             console.error('Error deleting record:', error);
