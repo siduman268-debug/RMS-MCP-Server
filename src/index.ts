@@ -4812,6 +4812,9 @@ async function createHttpServer() {
   // Create Margin Rule
   fastify.post('/api/margin-rules', async (request, reply) => {
     try {
+      console.log('🔍 [MARGIN RULE CREATE] Starting margin rule creation');
+      console.log('🔍 [MARGIN RULE CREATE] Request body:', request.body);
+      
       const { 
         level,
         pol_code,
@@ -4829,7 +4832,9 @@ async function createHttpServer() {
       } = request.body as any;
 
       // Validate required fields
+      console.log('🔍 [MARGIN RULE CREATE] Validating required fields:', { level, mark_kind, mark_value });
       if (!level || !mark_kind || !mark_value) {
+        console.log('❌ [MARGIN RULE CREATE] Missing required fields');
         return reply.status(400).send({
           success: false,
           error: 'Missing required fields: level, mark_kind, mark_value'
@@ -4875,24 +4880,28 @@ async function createHttpServer() {
       }
 
       // Create the margin rule
+      const insertData = {
+        level,
+        pol_id: polId,
+        pod_id: podId,
+        tz_o,
+        tz_d,
+        mode,
+        container_type,
+        component_type,
+        mark_kind,
+        mark_value,
+        valid_from: valid_from || new Date().toISOString().split('T')[0],
+        valid_to: valid_to || '2099-12-31',
+        priority: priority || 100,
+        tenant_id: (request as any).tenant_id
+      };
+      
+      console.log('🔍 [MARGIN RULE CREATE] Insert data:', insertData);
+      
       const { data, error } = await supabase
         .from('margin_rule_v2')
-        .insert({
-          level,
-          pol_id: polId,
-          pod_id: podId,
-          tz_o,
-          tz_d,
-          mode,
-          container_type,
-          component_type,
-          mark_kind,
-          mark_value,
-          valid_from: valid_from || new Date().toISOString().split('T')[0],
-          valid_to: valid_to || '2099-12-31',
-          priority: priority || 100,
-          tenant_id: (request as any).tenant_id
-        })
+        .insert(insertData)
         .select(`
           id,
           level,
@@ -4912,17 +4921,23 @@ async function createHttpServer() {
         `)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [MARGIN RULE CREATE] Database error:', error);
+        throw error;
+      }
 
+      console.log('✅ [MARGIN RULE CREATE] Margin rule created successfully:', data);
+      
       return reply.send({
         success: true,
         data: data
       });
 
-    } catch (error) {
+    } catch (error: any) {
+      console.error('❌ [MARGIN RULE CREATE] Unexpected error:', error);
       return reply.status(500).send({
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: error.message || String(error)
       });
     }
   });
