@@ -39,16 +39,16 @@ export const CURRENCY_CODES = [
 ];
 
 // ==========================================
-// VENDOR TYPES
+// VENDOR TYPES (must match database CHECK constraint)
 // ==========================================
 export const VENDOR_TYPES = [
-    { label: 'Ocean Carrier', value: 'ocean_carrier' },
-    { label: 'Forwarder', value: 'forwarder' },
-    { label: 'Trucking Company', value: 'trucking' },
-    { label: 'Rail Company', value: 'rail' },
-    { label: 'Warehouse', value: 'warehouse' },
-    { label: 'Customs Broker', value: 'customs_broker' },
-    { label: 'Other', value: 'other' }
+    { label: 'Ocean Carrier', value: 'OCEAN_CARRIER' },
+    { label: 'Freight Forwarder', value: 'FREIGHT_FORWARDER' },
+    { label: 'Haulage (Road)', value: 'HAULAGE_ROAD' },
+    { label: 'Haulage (Rail)', value: 'HAULAGE_RAIL' },
+    { label: 'Haulage (Barge)', value: 'HAULAGE_BARGE' },
+    { label: 'Air Carrier', value: 'AIR_CARRIER' },
+    { label: 'Customs Broker', value: 'CUSTOMS_BROKER' }
 ];
 
 // ==========================================
@@ -140,20 +140,20 @@ export const VENDOR_FIELDS = {
 
 export const CONTRACT_FIELDS = {
     vendor_id: { label: 'Vendor', type: 'lookup', required: true, relatedEntity: 'vendors' },
-    name: { label: 'Contract Name', type: 'text', required: false, maxLength: 255 },
+    name: { label: 'Contract Name', type: 'text', required: true, maxLength: 255 },
     contract_number: { label: 'Contract Number', type: 'text', required: false, maxLength: 100, readOnly: true },
     mode: { label: 'Mode', type: 'picklist', required: true, options: [
-        { label: 'Ocean', value: 'OCEAN' },
-        { label: 'Air', value: 'AIR' },
-        { label: 'Rail', value: 'RAIL' },
-        { label: 'Truck', value: 'TRUCK' }
+        { label: 'OCEAN', value: 'OCEAN' },
+        { label: 'AIR', value: 'AIR' },
+        { label: 'RAIL', value: 'RAIL' },
+        { label: 'TRUCK', value: 'TRUCK' }
     ]},
-    is_spot: { label: 'Spot Contract', type: 'checkbox', required: false, defaultValue: false },
+    is_spot: { label: 'Spot Contract', type: 'checkbox', required: false, defaultValue: true },
     effective_from: { label: 'Effective From', type: 'date', required: true },
     effective_to: { label: 'Effective To', type: 'date', required: true },
     currency: { label: 'Currency', type: 'picklist', required: true, options: CURRENCY_CODES, defaultValue: 'USD' },
     source_ref: { label: 'Source Reference', type: 'text', required: false, maxLength: 255 },
-    terms: { label: 'Terms', type: 'textarea', required: false }
+    terms: { label: 'Terms (JSON)', type: 'textarea', required: false, placeholder: 'Enter JSON object or leave empty for {}' }
 };
 
 export const RATE_FIELDS = {
@@ -172,17 +172,18 @@ export const RATE_FIELDS = {
 
 export const SURCHARGE_FIELDS = {
     vendor_id: { label: 'Vendor', type: 'lookup', required: true, relatedEntity: 'vendors' },
-    contract_id: { label: 'Contract (optional)', type: 'lookup', required: false, relatedEntity: 'contracts' },
+    contract_id: { label: 'Contract', type: 'lookup', required: true, relatedEntity: 'contracts' },
     charge_code: { label: 'Charge Code', type: 'picklist', required: true, options: CHARGE_CODES },
-    amount: { label: 'Amount', type: 'number', required: true, min: 0, step: 0.01 },
-    currency: { label: 'Currency', type: 'picklist', required: false, options: CURRENCY_CODES, defaultValue: 'USD' },
-    uom: { label: 'Unit of Measure', type: 'picklist', required: false, options: UOM_OPTIONS, defaultValue: 'per_cntr' },
     applies_scope: { label: 'Applies Scope', type: 'picklist', required: true, options: APPLIES_SCOPE_OPTIONS },
-    pol_code: { label: 'Origin Port (optional)', type: 'portlookup', required: false, maxLength: 10 },
-    pod_code: { label: 'Destination Port (optional)', type: 'portlookup', required: false, maxLength: 10 },
+    uom: { label: 'Unit of Measure', type: 'picklist', required: true, options: UOM_OPTIONS, defaultValue: 'per_cntr' },
+    amount: { label: 'Amount', type: 'number', required: true, min: 0, step: 0.01 },
+    currency: { label: 'Currency', type: 'picklist', required: true, options: CURRENCY_CODES, defaultValue: 'USD' },
+    calc_method: { label: 'Calculation Method', type: 'picklist', required: true, options: CALC_METHOD_OPTIONS, defaultValue: 'flat' },
+    pol_code: { label: 'POL (optional)', type: 'portlookup', required: false, maxLength: 10 },
+    pod_code: { label: 'POD (optional)', type: 'portlookup', required: false, maxLength: 10 },
     container_type: { label: 'Container Type (optional)', type: 'picklist', required: false, options: [{ label: 'All', value: '' }, ...CONTAINER_TYPES] },
-    valid_from: { label: 'Valid From', type: 'date', required: true },
-    valid_to: { label: 'Valid To', type: 'date', required: true }
+    valid_from: { label: 'Valid From', type: 'date', required: false },
+    valid_to: { label: 'Valid To', type: 'date', required: false }
 };
 
 export const MARGIN_RULE_FIELDS = {
@@ -192,10 +193,10 @@ export const MARGIN_RULE_FIELDS = {
     tz_o: { label: 'Origin Trade Zone (for trade_zone)', type: 'text', required: false, maxLength: 50 },
     tz_d: { label: 'Destination Trade Zone (for trade_zone)', type: 'text', required: false, maxLength: 50 },
     mode: { label: 'Mode (optional)', type: 'picklist', required: false, options: [
-        { label: 'Ocean', value: 'OCEAN' },
-        { label: 'Air', value: 'AIR' },
-        { label: 'Rail', value: 'RAIL' },
-        { label: 'Truck', value: 'TRUCK' }
+        { label: 'OCEAN', value: 'OCEAN' },
+        { label: 'AIR', value: 'AIR' },
+        { label: 'RAIL', value: 'RAIL' },
+        { label: 'TRUCK', value: 'TRUCK' }
     ]},
     container_type: { label: 'Container Type (optional)', type: 'picklist', required: false, options: [{ label: 'All', value: '' }, ...CONTAINER_TYPES] },
     component_type: { label: 'Component (optional)', type: 'picklist', required: false, options: [
@@ -203,10 +204,10 @@ export const MARGIN_RULE_FIELDS = {
         { label: 'Total', value: 'total' }
     ]},
     mark_kind: { label: 'Markup Type', type: 'picklist', required: true, options: MARK_KIND_OPTIONS },
-    mark_value: { label: 'Markup Value', type: 'number', required: true, min: 0, step: 0.01 },
-    priority: { label: 'Priority', type: 'number', required: false, min: 1, defaultValue: 100 },
-    valid_from: { label: 'Valid From', type: 'date', required: false },
-    valid_to: { label: 'Valid To', type: 'date', required: false }
+    mark_value: { label: 'Markup Value', type: 'number', required: true, min: 0, step: 0.0001 },
+    priority: { label: 'Priority', type: 'number', required: true, min: 1, defaultValue: 100 },
+    valid_from: { label: 'Valid From', type: 'date', required: true, defaultValue: 'CURRENT_DATE' },
+    valid_to: { label: 'Valid To', type: 'date', required: true, defaultValue: '2099-12-31' }
 };
 
 // ==========================================
