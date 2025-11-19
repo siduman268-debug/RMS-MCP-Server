@@ -456,12 +456,14 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     }
     
     handleDataLoad(event) {
-        // Handle data loaded from child components (e.g., Ocean Freight)
+        // Handle data loaded from child components (e.g., Ocean Freight, Surcharges)
         const { data, entityType } = event.detail;
         console.log('Data loaded from child:', entityType, data?.length);
         
         if (entityType === 'oceanFreight') {
             this.oceanFreightRates = [...(data || [])];
+        } else if (entityType === 'surcharges') {
+            this.surcharges = [...(data || [])];
         }
     }
     

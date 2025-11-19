@@ -47,10 +47,19 @@ export default class RmsModalForm extends LightningElement {
     }
     
     initializeFormData() {
+        console.log('rmsModalForm: initializeFormData called', { 
+            mode: this.mode, 
+            entityType: this.entityType,
+            recordKeys: this.record ? Object.keys(this.record).length : 0,
+            record: this.record 
+        });
+        
         if (this.mode === 'edit' || this.mode === 'view') {
             this.formData = this.record && Object.keys(this.record).length > 0 ? { ...this.record } : {};
+            console.log('rmsModalForm: formData set for edit/view', this.formData);
         } else if (this.mode === 'create') {
             this.formData = this.getDefaultFormData();
+            console.log('rmsModalForm: formData set for create', this.formData);
         }
     }
     

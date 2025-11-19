@@ -299,6 +299,16 @@ export default class RmsSurchargesTable extends LightningElement {
             
             this.surcharges = data || [];
             
+            // Dispatch data to parent for view/edit/delete operations
+            this.dispatchEvent(new CustomEvent('dataload', {
+                detail: { 
+                    data: this.surcharges,
+                    entityType: 'surcharges'
+                },
+                bubbles: true,
+                composed: true
+            }));
+            
             if (this.surcharges.length === 0) {
                 this.showToast('Info', 'No surcharges found', 'info');
             }
