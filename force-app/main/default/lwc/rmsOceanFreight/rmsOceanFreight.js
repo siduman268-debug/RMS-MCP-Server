@@ -353,7 +353,9 @@ export default class RmsOceanFreight extends LightningElement {
     
     handleCreate() {
         this.dispatchEvent(new CustomEvent('create', {
-            detail: { entityType: 'oceanFreight' }
+            detail: { entityType: 'oceanFreight' },
+            bubbles: true,
+            composed: true
         }));
     }
     

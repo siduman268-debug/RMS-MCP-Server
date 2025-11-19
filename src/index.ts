@@ -3013,6 +3013,9 @@ async function createHttpServer() {
         via_port_code
       } = request.body as any;
 
+      const tenantId = (request as any).tenant_id;
+      console.log('📥 [RATE CREATE] Request:', { origin_code, destination_code, container_type, buy_amount, contract_id, tenantId });
+
       // Validate required fields
       if (!origin_code || !destination_code || !container_type || !buy_amount || !currency || !contract_id) {
         return reply.status(400).send({
@@ -3086,7 +3089,7 @@ async function createHttpServer() {
           is_preferred: is_preferred || false,
           valid_from: valid_from || new Date().toISOString().split('T')[0],
           valid_to: valid_to || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          tenant_id: (request as any).tenant_id
+          tenant_id: tenantId
         })
         .select(`
           id,
@@ -3107,7 +3110,15 @@ async function createHttpServer() {
         `)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [RATE CREATE] Database error:', error);
+        throw error;
+      }
+
+      console.log('✅ [RATE CREATE] Success:', data);
+
+      // Log audit
+      await logAudit(supabase, tenantId, 'ocean_freight_rate', String(data.id), 'CREATE', undefined, undefined, undefined, data);
 
       return reply.send({
         success: true,
@@ -3115,6 +3126,7 @@ async function createHttpServer() {
       });
 
     } catch (error) {
+      console.error('❌ [RATE CREATE] Exception:', error);
       return reply.status(500).send({
         success: false,
         error: error instanceof Error ? error.message : String(error)
@@ -3134,8 +3146,21 @@ async function createHttpServer() {
         tt_days, 
         is_preferred, 
         valid_from, 
-        valid_to 
+        valid_to,
+        container_type,
+        via_port_code
       } = request.body as any;
+
+      const tenantId = (request as any).tenant_id;
+      console.log('📝 [RATE UPDATE] Request:', { rateId, tenantId, updates: request.body });
+
+      // Get old values for audit
+      const { data: oldData } = await supabase
+        .from('ocean_freight_rate')
+        .select('*')
+        .eq('id', rateId)
+        .eq('tenant_id', tenantId)
+        .single();
 
       const updates: any = {};
 
@@ -3176,18 +3201,43 @@ async function createHttpServer() {
         updates.pod_id = destinationData.id;
       }
 
+      // Handle via_port_code
+      if (via_port_code !== undefined) {
+        if (via_port_code) {
+          const { data: viaPortData, error: viaPortError } = await supabase
+            .from('locations')
+            .select('id')
+            .eq('unlocode', via_port_code)
+            .eq('is_active', true)
+            .single();
+
+          if (viaPortError || !viaPortData) {
+            return reply.status(404).send({
+              success: false,
+              error: `Via port location not found: ${via_port_code}`
+            });
+          }
+          updates.via_port_id = viaPortData.id;
+        } else {
+          updates.via_port_id = null; // Clear via port
+        }
+      }
+
       if (buy_amount !== undefined) updates.buy_amount = buy_amount;
       if (currency !== undefined) updates.currency = currency;
       if (tt_days !== undefined) updates.tt_days = tt_days;
       if (is_preferred !== undefined) updates.is_preferred = is_preferred;
       if (valid_from !== undefined) updates.valid_from = valid_from;
       if (valid_to !== undefined) updates.valid_to = valid_to;
+      if (container_type !== undefined) updates.container_type = container_type;
+
+      console.log('📤 [RATE UPDATE] Updates to apply:', updates);
 
       const { data, error } = await supabase
         .from('ocean_freight_rate')
         .update(updates)
         .eq('id', rateId)
-        .eq('tenant_id', (request as any).tenant_id)
+        .eq('tenant_id', tenantId)
         .select(`
           id,
           contract_id,
@@ -3207,14 +3257,23 @@ async function createHttpServer() {
         `)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [RATE UPDATE] Database error:', error);
+        throw error;
+      }
 
       if (!data) {
+        console.log('⚠️ [RATE UPDATE] Rate not found');
         return reply.status(404).send({
           success: false,
           error: `Ocean freight rate not found: ${rateId}`
         });
       }
+
+      console.log('✅ [RATE UPDATE] Success:', data);
+
+      // Log audit
+      await logAudit(supabase, tenantId, 'ocean_freight_rate', String(rateId), 'UPDATE', undefined, undefined, oldData, data);
 
       return reply.send({
         success: true,
@@ -3222,6 +3281,7 @@ async function createHttpServer() {
       });
 
     } catch (error) {
+      console.error('❌ [RATE UPDATE] Exception:', error);
       return reply.status(500).send({
         success: false,
         error: error instanceof Error ? error.message : String(error)
@@ -3233,34 +3293,56 @@ async function createHttpServer() {
   fastify.delete('/api/ocean-freight-rates/:rateId', async (request, reply) => {
     try {
       const { rateId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
 
-      // Soft delete by setting is_active to false
-      const { data, error } = await supabase
+      console.log('🗑️ [RATE DELETE] Request:', { rateId, tenantId });
+
+      // Get the rate for audit before deleting
+      const { data: rateData } = await supabase
         .from('ocean_freight_rate')
-        .update({
-          is_active: false,
-          updated_by: 'api_user',
-          updated_at: new Date().toISOString()
-        })
+        .select('*')
         .eq('id', rateId)
-        .select('id, is_active')
+        .eq('tenant_id', tenantId)
         .single();
 
-      if (error) throw error;
-
-      if (!data) {
+      if (!rateData) {
+        console.log('⚠️ [RATE DELETE] Rate not found');
         return reply.status(404).send({
           success: false,
           error: `Ocean freight rate not found: ${rateId}`
         });
       }
 
+      // Soft delete using archived_at/archived_by (not is_active which doesn't exist!)
+      const { data, error } = await supabase
+        .from('ocean_freight_rate')
+        .update({
+          archived_at: new Date().toISOString(),
+          archived_by: 'api_user'
+        })
+        .eq('id', rateId)
+        .eq('tenant_id', tenantId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ [RATE DELETE] Database error:', error);
+        throw error;
+      }
+
+      console.log('✅ [RATE DELETE] Success:', data);
+
+      // Log audit
+      await logAudit(supabase, tenantId, 'ocean_freight_rate', String(rateId), 'DELETE', undefined, undefined, rateData, undefined);
+
       return reply.send({
         success: true,
-        message: `Ocean freight rate ${rateId} deleted successfully`
+        message: `Ocean freight rate ${rateId} deleted successfully`,
+        data: data
       });
 
     } catch (error) {
+      console.error('❌ [RATE DELETE] Exception:', error);
       return reply.status(500).send({
         success: false,
         error: error instanceof Error ? error.message : String(error)
