@@ -223,14 +223,16 @@ export default class RmsModalForm extends LightningElement {
     }
     
     getRequiredFields() {
-        const required = {
-            vendors: ['name', 'type'],
-            contracts: ['vendor_id', 'valid_from', 'valid_to'],
-            rates: ['contract_id', 'pol_code', 'pod_code', 'container_type', 'buy_amount', 'currency', 'valid_from', 'valid_to'],
-            surcharges: ['vendor_id', 'contract_id', 'charge_code', 'amount', 'currency', 'valid_from', 'valid_to'],
-            marginRules: ['level', 'mark_kind', 'mark_value', 'priority', 'valid_from', 'valid_to']
-        };
-        return required[this.entityType] || [];
+        const fieldConfigs = this.getFieldConfigs();
+        const requiredFields = [];
+        
+        for (const fieldName in fieldConfigs) {
+            if (fieldConfigs[fieldName].required) {
+                requiredFields.push(fieldName);
+            }
+        }
+        
+        return requiredFields;
     }
     
     handleClose() {
@@ -285,11 +287,17 @@ export default class RmsModalForm extends LightningElement {
                 maxLength: config.maxLength,
                 min: config.min,
                 step: config.step,
+                readOnly: config.readOnly || false,
+                relatedEntity: config.relatedEntity || null,
                 isTextField: fieldType === 'text',
                 isNumberField: fieldType === 'number',
                 isDateField: fieldType === 'date',
                 isCheckboxField: fieldType === 'checkbox',
-                isPicklistField: fieldType === 'picklist'
+                isPicklistField: fieldType === 'picklist',
+                isMultiSelectField: fieldType === 'multiselect',
+                isTextareaField: fieldType === 'textarea',
+                isLookupField: fieldType === 'lookup',
+                isPortLookupField: fieldType === 'portlookup'
             };
         });
     }
@@ -299,6 +307,7 @@ export default class RmsModalForm extends LightningElement {
             vendors: VENDOR_FIELDS,
             contracts: CONTRACT_FIELDS,
             rates: RATE_FIELDS,
+            oceanFreight: RATE_FIELDS, // Ocean Freight uses same fields as rates
             surcharges: SURCHARGE_FIELDS,
             marginRules: MARGIN_RULE_FIELDS
         };

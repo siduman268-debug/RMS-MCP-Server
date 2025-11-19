@@ -123,8 +123,65 @@
                                     value={field.value}
                                     options={field.options}
                                     required={field.required}
+                                    disabled={field.readOnly}
                                     onchange={handleInputChange}>
                                 </lightning-combobox>
+                            </template>
+                            
+                            <template if:true={field.isMultiSelectField}>
+                                <lightning-dual-listbox 
+                                    name={field.name}
+                                    label={field.label}
+                                    source-label="Available"
+                                    selected-label="Selected"
+                                    options={field.options}
+                                    value={field.value}
+                                    required={field.required}
+                                    onchange={handleInputChange}>
+                                </lightning-dual-listbox>
+                            </template>
+                            
+                            <template if:true={field.isTextareaField}>
+                                <lightning-textarea 
+                                    name={field.name}
+                                    label={field.label}
+                                    value={field.value}
+                                    placeholder={field.placeholder}
+                                    max-length={field.maxLength}
+                                    required={field.required}
+                                    onchange={handleInputChange}>
+                                </lightning-textarea>
+                            </template>
+                            
+                            <template if:true={field.isLookupField}>
+                                <lightning-input 
+                                    type="number" 
+                                    name={field.name}
+                                    label={field.label}
+                                    value={field.value}
+                                    required={field.required}
+                                    onchange={handleInputChange}
+                                    placeholder="Enter ID">
+                                </lightning-input>
+                                <p class="slds-text-body_small slds-m-top_xx-small">
+                                    Lookup: {field.relatedEntity}
+                                </p>
+                            </template>
+                            
+                            <template if:true={field.isPortLookupField}>
+                                <lightning-input 
+                                    type="text" 
+                                    name={field.name}
+                                    label={field.label}
+                                    value={field.value}
+                                    placeholder={field.placeholder}
+                                    max-length={field.maxLength}
+                                    required={field.required}
+                                    onchange={handleInputChange}>
+                                </lightning-input>
+                                <p class="slds-text-body_small slds-m-top_xx-small">
+                                    Enter UN/LOCODE (e.g., INNSA, NLRTM)
+                                </p>
                             </template>
                         </div>
                     </template>
