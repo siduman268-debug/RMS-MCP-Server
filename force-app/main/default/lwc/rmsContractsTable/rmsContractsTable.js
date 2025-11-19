@@ -34,33 +34,60 @@ export default class RmsContractsTable extends LightningElement {
     @track filterStatus = '';
     
     handleCreate() {
-        this.dispatchEvent(new CustomEvent('create'));
+        this.dispatchEvent(new CustomEvent('create', {
+            bubbles: true,
+            composed: true,
+            detail: { entityType: 'contracts' }
+        }));
     }
     
     handleEdit(event) {
         this.dispatchEvent(new CustomEvent('edit', {
-            detail: { recordId: event.currentTarget.dataset.id }
+            bubbles: true,
+            composed: true,
+            detail: { 
+                recordId: event.currentTarget.dataset.id,
+                entityType: 'contracts'
+            }
         }));
     }
     
     handleView(event) {
         this.dispatchEvent(new CustomEvent('view', {
-            detail: { recordId: event.currentTarget.dataset.id }
+            bubbles: true,
+            composed: true,
+            detail: { 
+                recordId: event.currentTarget.dataset.id,
+                entityType: 'contracts'
+            }
         }));
     }
     
     handleDelete(event) {
         this.dispatchEvent(new CustomEvent('delete', {
-            detail: { recordId: event.currentTarget.dataset.id }
+            bubbles: true,
+            composed: true,
+            detail: { 
+                recordId: event.currentTarget.dataset.id,
+                entityType: 'contracts'
+            }
         }));
     }
     
     handleUpload() {
-        this.dispatchEvent(new CustomEvent('upload'));
+        this.dispatchEvent(new CustomEvent('upload', {
+            bubbles: true,
+            composed: true,
+            detail: { entityType: 'contracts' }
+        }));
     }
     
     handleExport() {
-        this.dispatchEvent(new CustomEvent('export'));
+        this.dispatchEvent(new CustomEvent('export', {
+            bubbles: true,
+            composed: true,
+            detail: { entityType: 'contracts' }
+        }));
     }
     
     handleSelectAll(event) {
