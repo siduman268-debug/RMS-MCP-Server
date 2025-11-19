@@ -129,22 +129,39 @@ export const MARK_KIND_OPTIONS = [
 export const VENDOR_FIELDS = {
     name: { label: 'Name', type: 'text', required: true, maxLength: 255 },
     alias: { label: 'Alias', type: 'text', required: false, maxLength: 255 },
-    type: { label: 'Type', type: 'picklist', required: true, options: VENDOR_TYPES },
-    is_active: { label: 'Active', type: 'checkbox', required: false, defaultValue: true }
+    vendor_type: { label: 'Type', type: 'picklist', required: true, options: VENDOR_TYPES },
+    mode: { label: 'Mode', type: 'multiselect', required: false, options: [
+        { label: 'Ocean', value: 'OCEAN' },
+        { label: 'Air', value: 'AIR' },
+        { label: 'Rail', value: 'RAIL' },
+        { label: 'Truck', value: 'TRUCK' }
+    ]},
+    external_ref: { label: 'External Reference', type: 'text', required: false, maxLength: 255 }
 };
 
 export const CONTRACT_FIELDS = {
-    vendor_id: { label: 'Vendor ID', type: 'number', required: true },
-    contract_number: { label: 'Contract Number', type: 'text', required: false, maxLength: 100 },
-    valid_from: { label: 'Valid From', type: 'date', required: true },
-    valid_to: { label: 'Valid To', type: 'date', required: true },
-    is_active: { label: 'Active', type: 'checkbox', required: false, defaultValue: true }
+    vendor_id: { label: 'Vendor', type: 'lookup', required: true, relatedEntity: 'vendors' },
+    name: { label: 'Contract Name', type: 'text', required: false, maxLength: 255 },
+    contract_number: { label: 'Contract Number', type: 'text', required: false, maxLength: 100, readOnly: true },
+    mode: { label: 'Mode', type: 'picklist', required: true, options: [
+        { label: 'Ocean', value: 'OCEAN' },
+        { label: 'Air', value: 'AIR' },
+        { label: 'Rail', value: 'RAIL' },
+        { label: 'Truck', value: 'TRUCK' }
+    ]},
+    is_spot: { label: 'Spot Contract', type: 'checkbox', required: false, defaultValue: false },
+    effective_from: { label: 'Effective From', type: 'date', required: true },
+    effective_to: { label: 'Effective To', type: 'date', required: true },
+    currency: { label: 'Currency', type: 'picklist', required: true, options: CURRENCY_CODES, defaultValue: 'USD' },
+    source_ref: { label: 'Source Reference', type: 'text', required: false, maxLength: 255 },
+    terms: { label: 'Terms', type: 'textarea', required: false }
 };
 
 export const RATE_FIELDS = {
-    contract_id: { label: 'Contract ID', type: 'number', required: true },
-    origin_code: { label: 'Origin Code', type: 'text', required: true, maxLength: 10, placeholder: 'e.g., INNSA' },
-    destination_code: { label: 'Destination Code', type: 'text', required: true, maxLength: 10, placeholder: 'e.g., NLRTM' },
+    contract_id: { label: 'Contract', type: 'lookup', required: true, relatedEntity: 'contracts' },
+    origin_code: { label: 'Origin', type: 'portlookup', required: true, maxLength: 10, placeholder: 'e.g., INNSA' },
+    destination_code: { label: 'Destination', type: 'portlookup', required: true, maxLength: 10, placeholder: 'e.g., NLRTM' },
+    via_port_code: { label: 'Via Port (optional)', type: 'portlookup', required: false, maxLength: 10 },
     container_type: { label: 'Container Type', type: 'picklist', required: true, options: CONTAINER_TYPES },
     buy_amount: { label: 'Buy Amount', type: 'number', required: true, min: 0, step: 0.01 },
     currency: { label: 'Currency', type: 'picklist', required: true, options: CURRENCY_CODES, defaultValue: 'USD' },
@@ -155,31 +172,42 @@ export const RATE_FIELDS = {
 };
 
 export const SURCHARGE_FIELDS = {
-    vendor_id: { label: 'Vendor ID', type: 'number', required: true },
-    contract_id: { label: 'Contract ID', type: 'number', required: true },
+    vendor_id: { label: 'Vendor', type: 'lookup', required: true, relatedEntity: 'vendors' },
+    contract_id: { label: 'Contract (optional)', type: 'lookup', required: false, relatedEntity: 'contracts' },
     charge_code: { label: 'Charge Code', type: 'picklist', required: true, options: CHARGE_CODES },
     amount: { label: 'Amount', type: 'number', required: true, min: 0, step: 0.01 },
-    currency: { label: 'Currency', type: 'picklist', required: true, options: CURRENCY_CODES, defaultValue: 'USD' },
-    uom: { label: 'Unit of Measure', type: 'picklist', required: true, options: UOM_OPTIONS, defaultValue: 'per_cntr' },
-    calc_method: { label: 'Calculation Method', type: 'picklist', required: true, options: CALC_METHOD_OPTIONS, defaultValue: 'flat' },
-    applies_scope: { label: 'Applies Scope', type: 'picklist', required: true, options: APPLIES_SCOPE_OPTIONS, defaultValue: 'freight' },
-    pol_code: { label: 'POL Code (optional)', type: 'text', required: false, maxLength: 10 },
-    pod_code: { label: 'POD Code (optional)', type: 'text', required: false, maxLength: 10 },
+    currency: { label: 'Currency', type: 'picklist', required: false, options: CURRENCY_CODES, defaultValue: 'USD' },
+    uom: { label: 'Unit of Measure', type: 'picklist', required: false, options: UOM_OPTIONS, defaultValue: 'per_cntr' },
+    applies_scope: { label: 'Applies Scope', type: 'picklist', required: true, options: APPLIES_SCOPE_OPTIONS },
+    pol_code: { label: 'Origin Port (optional)', type: 'portlookup', required: false, maxLength: 10 },
+    pod_code: { label: 'Destination Port (optional)', type: 'portlookup', required: false, maxLength: 10 },
     container_type: { label: 'Container Type (optional)', type: 'picklist', required: false, options: [{ label: 'All', value: '' }, ...CONTAINER_TYPES] },
     valid_from: { label: 'Valid From', type: 'date', required: true },
-    valid_to: { label: 'Valid To', type: 'date', required: true },
-    is_active: { label: 'Active', type: 'checkbox', required: false, defaultValue: true }
+    valid_to: { label: 'Valid To', type: 'date', required: true }
 };
 
 export const MARGIN_RULE_FIELDS = {
-    level: { label: 'Level', type: 'picklist', required: true, options: MARGIN_RULE_LEVELS },
-    pol_code: { label: 'POL Code (for port_pair)', type: 'text', required: false, maxLength: 10 },
-    pod_code: { label: 'POD Code (for port_pair)', type: 'text', required: false, maxLength: 10 },
-    mark_kind: { label: 'Mark Kind', type: 'picklist', required: true, options: MARK_KIND_OPTIONS },
-    mark_value: { label: 'Mark Value', type: 'number', required: true, min: 0, step: 0.0001 },
-    priority: { label: 'Priority', type: 'number', required: true, min: 1, defaultValue: 100 },
-    valid_from: { label: 'Valid From', type: 'date', required: true },
-    valid_to: { label: 'Valid To', type: 'date', required: true }
+    level: { label: 'Rule Level', type: 'picklist', required: true, options: MARGIN_RULE_LEVELS },
+    pol_code: { label: 'Origin Port (for port_pair)', type: 'portlookup', required: false, maxLength: 10 },
+    pod_code: { label: 'Destination Port (for port_pair)', type: 'portlookup', required: false, maxLength: 10 },
+    tz_o: { label: 'Origin Trade Zone (for trade_zone)', type: 'text', required: false, maxLength: 50 },
+    tz_d: { label: 'Destination Trade Zone (for trade_zone)', type: 'text', required: false, maxLength: 50 },
+    mode: { label: 'Mode (optional)', type: 'picklist', required: false, options: [
+        { label: 'Ocean', value: 'OCEAN' },
+        { label: 'Air', value: 'AIR' },
+        { label: 'Rail', value: 'RAIL' },
+        { label: 'Truck', value: 'TRUCK' }
+    ]},
+    container_type: { label: 'Container Type (optional)', type: 'picklist', required: false, options: [{ label: 'All', value: '' }, ...CONTAINER_TYPES] },
+    component_type: { label: 'Component (optional)', type: 'picklist', required: false, options: [
+        { label: 'Base Freight', value: 'base_freight' },
+        { label: 'Total', value: 'total' }
+    ]},
+    mark_kind: { label: 'Markup Type', type: 'picklist', required: true, options: MARK_KIND_OPTIONS },
+    mark_value: { label: 'Markup Value', type: 'number', required: true, min: 0, step: 0.01 },
+    priority: { label: 'Priority', type: 'number', required: false, min: 1, defaultValue: 100 },
+    valid_from: { label: 'Valid From', type: 'date', required: false },
+    valid_to: { label: 'Valid To', type: 'date', required: false }
 };
 
 // ==========================================
