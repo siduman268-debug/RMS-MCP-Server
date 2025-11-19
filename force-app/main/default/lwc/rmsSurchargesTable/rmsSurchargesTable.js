@@ -108,10 +108,12 @@ export default class RmsSurchargesTable extends LightningElement {
     get appliesScopeOptions() {
         return [
             { label: 'All Scopes', value: '' },
-            { label: 'POL', value: 'pol' },
-            { label: 'POD', value: 'pod' },
-            { label: 'POL-POD', value: 'pol_pod' },
-            { label: 'Global', value: 'global' }
+            { label: 'Origin (POL Services)', value: 'origin' },
+            { label: 'Port (POL Port Charges)', value: 'port' },
+            { label: 'Freight (Ocean Leg)', value: 'freight' },
+            { label: 'Destination (POD Services)', value: 'dest' },
+            { label: 'Door (POD Door Delivery)', value: 'door' },
+            { label: 'Other', value: 'other' }
         ];
     }
     
