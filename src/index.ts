@@ -4659,7 +4659,7 @@ async function createHttpServer() {
           vendor:vendor_id (
             name
           ),
-          contract:contract_id (
+          rate_contract:contract_id (
             name,
             contract_number
           ),

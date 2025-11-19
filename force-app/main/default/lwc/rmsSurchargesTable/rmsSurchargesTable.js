@@ -131,7 +131,7 @@ export default class RmsSurchargesTable extends LightningElement {
             const vendorName = record.vendor?.name || '—';
             
             // Get contract info from joined data
-            const contractName = record.contract?.name || record.contract?.contract_number || '—';
+            const contractName = record.rate_contract?.name || record.rate_contract?.contract_number || '—';
             
             // Get location names from joined data
             const polDisplay = record.pol_location ? 
