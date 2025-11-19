@@ -3809,14 +3809,55 @@ async function createHttpServer() {
   fastify.delete('/api/vendors/:vendorId', async (request, reply) => {
     try {
       const { vendorId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
 
-      const { error } = await supabase
+      console.log('🗑️ [VENDOR DELETE] Request:', { vendorId, tenantId });
+
+      // Check if vendor has dependencies
+      const { data: contracts, error: contractCheckError } = await supabase
+        .from('rate_contract')
+        .select('id')
+        .eq('vendor_id', vendorId)
+        .limit(1);
+
+      if (contractCheckError) {
+        console.error('❌ [VENDOR DELETE] Error checking contracts:', contractCheckError);
+        throw contractCheckError;
+      }
+
+      if (contracts && contracts.length > 0) {
+        console.log('⚠️ [VENDOR DELETE] Vendor has contracts, cannot delete');
+        return reply.status(400).send({
+          success: false,
+          error: 'Cannot delete vendor with existing contracts. Please delete or reassign contracts first.'
+        });
+      }
+
+      // Perform the delete
+      const { error, data } = await supabase
         .from('vendor')
         .delete()
         .eq('id', vendorId)
-        .eq('tenant_id', (request as any).tenant_id);
+        .eq('tenant_id', tenantId)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [VENDOR DELETE] Database error:', error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        console.log('⚠️ [VENDOR DELETE] No vendor found with given ID and tenant');
+        return reply.status(404).send({
+          success: false,
+          error: 'Vendor not found or access denied'
+        });
+      }
+
+      console.log('✅ [VENDOR DELETE] Success:', data);
+
+      // Log audit
+      await logAudit(supabase, tenantId, 'vendor', String(vendorId), 'DELETE', undefined, undefined, data[0], null);
 
       return reply.send({
         success: true,
@@ -3824,10 +3865,21 @@ async function createHttpServer() {
       });
 
     } catch (error) {
-      console.error('Error deleting vendor:', error);
+      console.error('❌ [VENDOR DELETE] Exception:', error);
+      
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        errorMessage = JSON.stringify(error);
+      } else {
+        errorMessage = String(error);
+      }
+      
       return reply.status(500).send({
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: errorMessage,
+        details: error
       });
     }
   });
