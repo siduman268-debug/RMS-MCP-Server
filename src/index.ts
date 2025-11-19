@@ -3554,7 +3554,8 @@ async function createHttpServer() {
             is_spot
           )
         `)
-        .eq('tenant_id', (request as any).tenant_id);
+        .eq('tenant_id', (request as any).tenant_id)
+        .is('archived_at', null); // Exclude soft-deleted records
 
       // Apply filters
       if (container_type) {
