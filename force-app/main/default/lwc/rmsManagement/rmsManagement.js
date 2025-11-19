@@ -72,11 +72,14 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     
     async loadVendors() {
         try {
+            console.log('loadVendors called, fetching from API...');
             const data = await listVendors({ 
                 vendorType: this.vendorFilters.vendorType, 
                 isActive: this.vendorFilters.isActive 
             });
-            this.vendors = data || [];
+            // Force new array reference for reactivity
+            this.vendors = [...(data || [])];
+            console.log('loadVendors completed, vendor count:', this.vendors.length);
         } catch (error) {
             console.error('Error loading vendors:', error);
             this.showErrorToast('Error loading vendors', error.body?.message || error.message);

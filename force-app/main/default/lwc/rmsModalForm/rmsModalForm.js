@@ -27,23 +27,21 @@ export default class RmsModalForm extends LightningElement {
     @track loading = false;
     @track fileContent = null;
     @track csvPreview = [];
+    _lastRecordId = null;
     
     connectedCallback() {
+        console.log('rmsModalForm connectedCallback', { mode: this.mode, entityType: this.entityType, record: this.record });
         this.initializeFormData();
     }
     
     renderedCallback() {
-        // Handle prop updates (especially when mode or record changes)
-        if (this.mode === 'edit' || this.mode === 'view') {
-            if (this.record && Object.keys(this.record).length > 0) {
-                // Force update formData when record changes
-                const recordKeys = Object.keys(this.record);
-                const formKeys = Object.keys(this.formData || {});
-                if (recordKeys.length !== formKeys.length || 
-                    recordKeys.some(key => this.record[key] !== this.formData[key])) {
-                    this.formData = { ...this.record };
-                    console.log('rmsModalForm: Updated formData from record', this.formData);
-                }
+        // Only reinitialize if record ID changed (for edit/view)
+        if ((this.mode === 'edit' || this.mode === 'view') && this.record) {
+            const currentRecordId = this.record.id;
+            if (currentRecordId && currentRecordId !== this._lastRecordId) {
+                console.log('rmsModalForm: Record changed, reinitializing', currentRecordId);
+                this._lastRecordId = currentRecordId;
+                this.initializeFormData();
             }
         }
     }
@@ -78,12 +76,28 @@ export default class RmsModalForm extends LightningElement {
     
     handleInputChange(event) {
         const field = event.target.name || event.target.dataset.field;
-        const value = event.target.type === 'checkbox' ? event.target.checked : 
-                     event.target.type === 'number' ? parseFloat(event.target.value) || null :
-                     event.target.value;
+        let value;
         
-        this.formData[field] = value;
-        this.formData = { ...this.formData }; // Trigger reactivity
+        // Handle different input types
+        if (event.target.type === 'checkbox') {
+            value = event.target.checked;
+        } else if (event.target.type === 'number') {
+            value = parseFloat(event.target.value) || null;
+        } else if (event.detail && event.detail.value !== undefined) {
+            // For lightning components (combobox, dual-listbox)
+            value = event.detail.value;
+        } else {
+            value = event.target.value;
+        }
+        
+        console.log('rmsModalForm: Field changed', { field, value, oldValue: this.formData[field] });
+        
+        this.formData = {
+            ...this.formData,
+            [field]: value
+        };
+        
+        console.log('rmsModalForm: Updated formData', this.formData);
     }
     
     handleFileUpload(event) {
