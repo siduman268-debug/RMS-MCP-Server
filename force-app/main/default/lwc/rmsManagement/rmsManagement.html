@@ -66,19 +66,15 @@
                 </lightning-tab>
                 
                 <lightning-tab label="Ocean Freight" value="oceanFreight" data-key="oceanFreight">
-                    <template if:true={loading}>
-                        <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
-                    </template>
-                    <template if:false={loading}>
-                        <c-rms-ocean-freight
-                            oncreate={handleCreate}
-                            onedit={handleEdit}
-                            onview={handleView}
-                            ondelete={handleDelete}
-                            onmarkpreferred={handleMarkPreferred}
-                            ondataload={handleDataLoad}>
-                        </c-rms-ocean-freight>
-                    </template>
+                    <!-- Ocean Freight manages its own loading state, don't destroy component on parent loading -->
+                    <c-rms-ocean-freight
+                        oncreate={handleCreate}
+                        onedit={handleEdit}
+                        onview={handleView}
+                        ondelete={handleDelete}
+                        onmarkpreferred={handleMarkPreferred}
+                        ondataload={handleDataLoad}>
+                    </c-rms-ocean-freight>
                 </lightning-tab>
                 
                 <lightning-tab label="Surcharges" value="surcharges" data-key="surcharges">

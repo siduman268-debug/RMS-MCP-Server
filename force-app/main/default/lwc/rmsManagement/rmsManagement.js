@@ -322,9 +322,11 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     }
     
     handleCloseModal() {
+        console.log('handleCloseModal called', { activeTab: this.activeTab, modalEntityType: this.modalEntityType });
         this.showModal = false;
         this.currentRecord = {};
         this.modalMode = '';
+        // Don't change activeTab or trigger any refresh
     }
     
     handleSave(event) {
