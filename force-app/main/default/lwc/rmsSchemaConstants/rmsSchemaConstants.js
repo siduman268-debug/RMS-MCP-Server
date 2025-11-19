@@ -195,10 +195,10 @@ export const MARGIN_RULE_FIELDS = {
     tz_o: { label: 'Origin Trade Zone (for trade_zone)', type: 'text', required: false, maxLength: 50 },
     tz_d: { label: 'Destination Trade Zone (for trade_zone)', type: 'text', required: false, maxLength: 50 },
     mode: { label: 'Mode (optional)', type: 'picklist', required: false, options: [
-        { label: 'OCEAN', value: 'OCEAN' },
-        { label: 'AIR', value: 'AIR' },
-        { label: 'RAIL', value: 'RAIL' },
-        { label: 'TRUCK', value: 'TRUCK' }
+        { label: 'Ocean', value: 'ocean' },
+        { label: 'Air', value: 'air' },
+        { label: 'Rail', value: 'rail' },
+        { label: 'Road', value: 'road' }
     ]},
     container_type: { label: 'Container Type (optional)', type: 'picklist', required: false, options: [{ label: 'All', value: '' }, ...CONTAINER_TYPES] },
     component_type: { label: 'Component (optional)', type: 'picklist', required: false, options: [
