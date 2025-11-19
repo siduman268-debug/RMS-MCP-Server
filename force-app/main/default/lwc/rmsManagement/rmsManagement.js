@@ -373,6 +373,9 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
                 } else if (data.mode && typeof data.mode === 'string') {
                     // Convert comma-separated string to array
                     data.mode = data.mode.split(',').map(m => m.trim());
+                } else if (!data.mode) {
+                    // Default to empty array if no mode
+                    data.mode = [];
                 }
                 
                 console.log('Vendor data after transformation:', data);
@@ -382,7 +385,12 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
                     this.showSuccessToast('Vendor created', `${data.name || 'Vendor'} has been created successfully.`);
                 } else if (mode === 'edit') {
                     const vendorId = data.id;
-                    delete data.id; // Remove id from updates
+                    // Remove fields that shouldn't be updated
+                    delete data.id;
+                    delete data.tenant_id;
+                    delete data.Logo_URL;
+                    
+                    console.log('Updating vendor with data:', data);
                     result = await updateVendor({ vendorId: vendorId, updates: data });
                     this.showSuccessToast('Vendor updated', `${data.name || 'Vendor'} has been updated successfully.`);
                 }
@@ -609,6 +617,9 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             // Handle different entity types
             if (this.activeTab === 'vendors') {
                 result = await deleteVendor({ vendorId: recordId });
+                if (result === false) {
+                    throw new Error('Delete operation returned false - vendor may not exist or access denied');
+                }
                 this.showSuccessToast('Vendor deleted', `${record.name || 'Vendor'} has been deleted successfully.`);
             } else if (this.activeTab === 'contracts') {
                 result = await deleteContract({ contractId: recordId });

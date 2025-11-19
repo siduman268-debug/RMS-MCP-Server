@@ -151,7 +151,15 @@ public class RMSVendorService {
             }
             
             HttpResponse res = RMSApiUtil.makeDeleteRequest('/api/vendors/' + vendorId);
-            return res.getStatusCode() >= 200 && res.getStatusCode() < 300;
+            Integer statusCode = res.getStatusCode();
+            
+            if (statusCode >= 200 && statusCode < 300) {
+                return true;
+            } else {
+                // Parse error response
+                String responseBody = res.getBody();
+                throw new AuraHandledException('API returned status ' + statusCode + ': ' + responseBody);
+            }
         } catch (Exception e) {
             throw new AuraHandledException('Error deleting vendor: ' + e.getMessage());
         }
