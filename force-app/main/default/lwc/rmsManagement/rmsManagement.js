@@ -28,7 +28,8 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     @track activeTab = 'vendors';
     @track vendors = [];
     @track contracts = [];
-    @track rates = [];
+    @track rates = []; // For Rate Lookup tab (aggregated rates from MV)
+    @track oceanFreightRates = []; // For Ocean Freight tab (base table rates)
     @track surcharges = [];
     @track marginRules = [];
     
@@ -446,7 +447,18 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
         this.showModal = false;
         this.currentRecord = {};
         this.modalMode = '';
-        this.refreshCurrentTab();
+        // Use stored modalEntityType instead of activeTab for refresh
+        this.refreshTab(this.modalEntityType);
+    }
+    
+    handleDataLoad(event) {
+        // Handle data loaded from child components (e.g., Ocean Freight)
+        const { data, entityType } = event.detail;
+        console.log('Data loaded from child:', entityType, data?.length);
+        
+        if (entityType === 'oceanFreight') {
+            this.oceanFreightRates = [...(data || [])];
+        }
     }
     
     handleDelete(event) {
@@ -574,9 +586,9 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             case 'contracts':
                 return this.contracts;
             case 'rates':
-                return this.rates;
+                return this.rates; // Rate Lookup (MV data)
             case 'oceanFreight':
-                return this.rates; // Uses same data source
+                return this.oceanFreightRates; // Ocean Freight (base table data)
             case 'surcharges':
                 return this.surcharges;
             case 'marginRules':
@@ -676,10 +688,10 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
         }
     }
     
-    async refreshCurrentTab() {
-        console.log('refreshCurrentTab called for:', this.activeTab);
-        // Actually reload data from server
-        switch (this.activeTab) {
+    async refreshTab(entityType) {
+        // Refresh specific tab by entity type (not activeTab)
+        console.log('refreshTab called for:', entityType);
+        switch (entityType) {
             case 'vendors':
                 await this.loadVendors();
                 break;
@@ -703,7 +715,13 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
                 await this.loadMarginRules();
                 break;
         }
-        console.log('refreshCurrentTab completed');
+        console.log('refreshTab completed for:', entityType);
+    }
+    
+    async refreshCurrentTab() {
+        // Refresh based on current active tab
+        console.log('refreshCurrentTab called for:', this.activeTab);
+        await this.refreshTab(this.activeTab);
     }
     
     exportToCSV(data, filename) {

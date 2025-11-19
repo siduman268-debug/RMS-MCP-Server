@@ -321,6 +321,16 @@ export default class RmsOceanFreight extends LightningElement {
             console.log('Ocean Freight Rates loaded:', data?.length || 0, 'records');
             this.rates = data || [];
             
+            // Dispatch data to parent for view/edit/delete operations
+            this.dispatchEvent(new CustomEvent('dataload', {
+                detail: { 
+                    data: this.rates,
+                    entityType: 'oceanFreight'
+                },
+                bubbles: true,
+                composed: true
+            }));
+            
             if (this.rates.length > 0) {
                 this.showSuccessToast('Success', `Loaded ${this.rates.length} ocean freight rate(s)`);
             } else {
