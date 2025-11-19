@@ -191,6 +191,7 @@ export function getFieldConfig(entityType, fieldName) {
         vendors: VENDOR_FIELDS,
         contracts: CONTRACT_FIELDS,
         rates: RATE_FIELDS,
+        oceanFreight: RATE_FIELDS, // Ocean Freight uses same fields as rates
         surcharges: SURCHARGE_FIELDS,
         marginRules: MARGIN_RULE_FIELDS
     };
@@ -207,10 +208,24 @@ export function getRequiredFields(entityType) {
         vendors: VENDOR_FIELDS,
         contracts: CONTRACT_FIELDS,
         rates: RATE_FIELDS,
+        oceanFreight: RATE_FIELDS, // Ocean Freight uses same fields as rates
         surcharges: SURCHARGE_FIELDS,
         marginRules: MARGIN_RULE_FIELDS
     };
     const fields = fieldConfigs[entityType] || {};
     return Object.keys(fields).filter(key => fields[key].required);
+}
+
+// Get all fields for an entity type
+export function getAllFields(entityType) {
+    const fieldConfigs = {
+        vendors: VENDOR_FIELDS,
+        contracts: CONTRACT_FIELDS,
+        rates: RATE_FIELDS,
+        oceanFreight: RATE_FIELDS,
+        surcharges: SURCHARGE_FIELDS,
+        marginRules: MARGIN_RULE_FIELDS
+    };
+    return fieldConfigs[entityType] || {};
 }
 

@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS rms_audit_log (
   changed_fields JSONB,
   old_values JSONB,
   new_values JSONB,
-  timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   source TEXT DEFAULT 'SALESFORCE_LWC',
   ip_address INET,
   user_agent TEXT
@@ -46,7 +46,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_table_record
   ON rms_audit_log(table_name, record_id);
 
 CREATE INDEX IF NOT EXISTS idx_audit_timestamp 
-  ON rms_audit_log(timestamp DESC);
+  ON rms_audit_log(created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_audit_user 
   ON rms_audit_log(user_id) 
@@ -57,7 +57,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_action
 
 -- Create composite index for common filter combinations
 CREATE INDEX IF NOT EXISTS idx_audit_tenant_table_timestamp 
-  ON rms_audit_log(tenant_id, table_name, timestamp DESC);
+  ON rms_audit_log(tenant_id, table_name, created_at DESC);
 
 -- ==================================================================
 -- HELPER FUNCTION: Get audit history for a specific record
@@ -74,7 +74,7 @@ RETURNS TABLE (
   changed_fields JSONB,
   old_values JSONB,
   new_values JSONB,
-  timestamp TIMESTAMP WITH TIME ZONE
+  created_at TIMESTAMP WITH TIME ZONE
 ) AS $$
 BEGIN
   RETURN QUERY
@@ -85,12 +85,12 @@ BEGIN
     a.changed_fields,
     a.old_values,
     a.new_values,
-    a.timestamp
+    a.created_at
   FROM rms_audit_log a
   WHERE a.table_name = p_table_name
     AND a.record_id = p_record_id
     AND (p_tenant_id IS NULL OR a.tenant_id = p_tenant_id)
-  ORDER BY a.timestamp DESC;
+  ORDER BY a.created_at DESC;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -110,7 +110,7 @@ RETURNS TABLE (
   record_id TEXT,
   action TEXT,
   user_email TEXT,
-  timestamp TIMESTAMP WITH TIME ZONE
+  created_at TIMESTAMP WITH TIME ZONE
 ) AS $$
 BEGIN
   RETURN QUERY
@@ -120,11 +120,11 @@ BEGIN
     a.record_id,
     a.action,
     a.user_email,
-    a.timestamp
+    a.created_at
   FROM rms_audit_log a
   WHERE a.tenant_id = p_tenant_id
     AND (p_table_name IS NULL OR a.table_name = p_table_name)
-  ORDER BY a.timestamp DESC
+  ORDER BY a.created_at DESC
   LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql;
@@ -144,19 +144,19 @@ COMMENT ON FUNCTION get_recent_changes IS 'Get recent changes for a tenant, opti
 -- Get all changes by a specific user
 -- SELECT * FROM rms_audit_log 
 -- WHERE user_email = 'user@example.com' 
--- ORDER BY timestamp DESC 
+-- ORDER BY created_at DESC 
 -- LIMIT 100;
 
 -- Get all deletions
 -- SELECT * FROM rms_audit_log 
 -- WHERE action = 'DELETE' 
--- ORDER BY timestamp DESC;
+-- ORDER BY created_at DESC;
 
 -- Get changes for ocean_freight_rate table in last 24 hours
 -- SELECT * FROM rms_audit_log 
 -- WHERE table_name = 'ocean_freight_rate' 
---   AND timestamp > NOW() - INTERVAL '24 hours'
--- ORDER BY timestamp DESC;
+--   AND created_at > NOW() - INTERVAL '24 hours'
+-- ORDER BY created_at DESC;
 
 -- ==================================================================
 -- VERIFICATION QUERIES

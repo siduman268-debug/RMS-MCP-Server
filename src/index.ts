@@ -2006,7 +2006,7 @@ async function logAudit(
       old_values: oldValues ? JSON.stringify(oldValues) : null,
       new_values: newValues ? JSON.stringify(newValues) : null,
       source: source,
-      timestamp: new Date().toISOString()
+      created_at: new Date().toISOString()
     };
 
     const { error } = await supabase
