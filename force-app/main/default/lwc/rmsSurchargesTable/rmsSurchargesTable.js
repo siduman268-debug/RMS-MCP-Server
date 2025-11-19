@@ -127,8 +127,8 @@ export default class RmsSurchargesTable extends LightningElement {
         if (!this.surcharges) return [];
         
         return this.surcharges.map(record => {
-            // Get vendor name from joined data
-            const vendorName = record.vendor?.name || '—';
+            // Vendor FK doesn't exist in DB, so just show vendor_id
+            const vendorName = record.vendor_id || '—';
             
             // Get contract info from joined data
             const contractName = record.rate_contract?.name || record.rate_contract?.contract_number || '—';

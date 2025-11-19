@@ -4652,13 +4652,12 @@ async function createHttpServer() {
 
       console.log('🔍 [SURCHARGE LIST] Query params:', { vendor_id, contract_id, charge_code, container_type, applies_scope, is_active, page, limit });
 
+      // Note: vendor_id doesn't have a foreign key to vendor table, so we can't JOIN
+      // We'll need to fetch vendor names separately or in the frontend
       let query = supabase
         .from('surcharge')
         .select(`
           *,
-          vendor:vendor_id (
-            name
-          ),
           rate_contract:contract_id (
             name,
             contract_number
