@@ -3298,7 +3298,85 @@ async function createHttpServer() {
     }
   });
 
+  // List Aggregated Rates (from mv_freight_sell_prices materialized view)
+  // This endpoint is used by the "Rate Lookup" tab for searching rates with margins and surcharges
+  fastify.get('/api/rates', async (request, reply) => {
+    try {
+      const { 
+        pol_code, 
+        pod_code, 
+        origin,
+        destination,
+        vendor_name,
+        container_type, 
+        is_preferred, 
+        page = '1',
+        limit = '50'
+      } = request.query as any;
+
+      let query = supabase
+        .from('mv_freight_sell_prices')
+        .select('*');
+
+      // Apply filters using materialized view fields
+      if (container_type) {
+        query = query.eq('container_type', container_type);
+      }
+
+      if (is_preferred !== undefined) {
+        query = query.eq('is_preferred', is_preferred === 'true');
+      }
+
+      // Prefer origin/destination (v4 API fields), fallback to pol_code/pod_code
+      if (origin) {
+        query = query.eq('origin_code', origin);
+      } else if (pol_code) {
+        query = query.eq('pol_code', pol_code);
+      }
+
+      if (destination) {
+        query = query.eq('destination_code', destination);
+      } else if (pod_code) {
+        query = query.eq('pod_code', pod_code);
+      }
+
+      if (vendor_name) {
+        query = query.eq('carrier', vendor_name);
+      }
+
+      // Order by rate_id
+      query = query.order('rate_id', { ascending: false });
+
+      // Apply pagination
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const offset = (pageNum - 1) * limitNum;
+      query = query.range(offset, offset + limitNum - 1);
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data || [],
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          count: data?.length || 0
+        }
+      });
+
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // List Ocean Freight Rates (from ocean_freight_rate table directly)
+  // This endpoint is used by the "Ocean Freight" tab for managing base ocean freight rates
   fastify.get('/api/ocean-freight-rates', async (request, reply) => {
     try {
       const { 

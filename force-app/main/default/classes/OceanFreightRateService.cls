@@ -146,7 +146,55 @@ public class OceanFreightRateService {
     // ==========================================
     
     /**
-     * @description List ocean freight rates for LWC
+     * @description List aggregated rates with margins and surcharges (from materialized view)
+     * Used by "Rate Lookup" tab
+     * @param filtersJson JSON string of filter parameters
+     * @return List<Map<String, Object>> List of aggregated rates as maps
+     */
+    @AuraEnabled(cacheable=true)
+    public static List<Map<String, Object>> listAggregatedRatesForLWC(String filtersJson) {
+        try {
+            Map<String, Object> filters = filtersJson != null ? 
+                (Map<String, Object>) JSON.deserializeUntyped(filtersJson) : 
+                new Map<String, Object>();
+            
+            String endpoint = '/api/rates';
+            
+            if (filters != null && !filters.isEmpty()) {
+                List<String> params = new List<String>();
+                for (String key : filters.keySet()) {
+                    if (filters.get(key) != null) {
+                        params.add(key + '=' + EncodingUtil.urlEncode(String.valueOf(filters.get(key)), 'UTF-8'));
+                    }
+                }
+                if (!params.isEmpty()) {
+                    endpoint += '?' + String.join(params, '&');
+                }
+            }
+            
+            HttpResponse res = RMSApiUtil.makeApiCall(endpoint, 'GET', null);
+            Map<String, Object> response = RMSApiUtil.parseResponse(res);
+            
+            List<Map<String, Object>> rates = new List<Map<String, Object>>();
+            List<Object> dataList = (List<Object>) response.get('data');
+            
+            if (dataList != null) {
+                for (Object item : dataList) {
+                    Map<String, Object> rate = (Map<String, Object>) item;
+                    // Apply field-level permissions if needed
+                    rates.add(rate);
+                }
+            }
+            
+            return rates;
+        } catch (Exception e) {
+            throw new AuraHandledException('Error listing aggregated rates: ' + e.getMessage());
+        }
+    }
+    
+    /**
+     * @description List ocean freight rates for LWC (base table, no margins/surcharges)
+     * Used by "Ocean Freight" tab
      * @param filtersJson JSON string of filter parameters
      * @return List<Map<String, Object>> List of rates as maps
      */

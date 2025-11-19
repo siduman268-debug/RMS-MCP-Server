@@ -3,7 +3,7 @@ import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { NavigationMixin } from 'lightning/navigation';
 import listVendors from '@salesforce/apex/RMSVendorService.listVendors';
 import listContracts from '@salesforce/apex/RMSContractService.listContracts';
-import listRates from '@salesforce/apex/OceanFreightRateService.listRatesForLWC';
+import listAggregatedRates from '@salesforce/apex/OceanFreightRateService.listAggregatedRatesForLWC';
 import getRateForLWC from '@salesforce/apex/OceanFreightRateService.getRateForLWC';
 import createRateForLWC from '@salesforce/apex/OceanFreightRateService.createRateForLWC';
 import updateRateForLWC from '@salesforce/apex/OceanFreightRateService.updateRateForLWC';
@@ -86,14 +86,14 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     async loadRates() {
         try {
             this.loading = true;
-            console.log('Loading rates with filters:', this.rateFilters);
+            console.log('Loading aggregated rates (from MV) with filters:', this.rateFilters);
             const filtersJson = JSON.stringify(this.rateFilters || {});
-            const data = await listRates({ filtersJson: filtersJson });
-            console.log('Rates loaded:', data?.length || 0, 'records');
+            const data = await listAggregatedRates({ filtersJson: filtersJson });
+            console.log('Aggregated rates loaded:', data?.length || 0, 'records');
             this.rates = data || [];
             this.loading = false;
         } catch (error) {
-            console.error('Error loading rates:', error);
+            console.error('Error loading aggregated rates:', error);
             console.error('Error details:', JSON.stringify(error, null, 2));
             this.rates = [];
             this.loading = false;
