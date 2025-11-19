@@ -143,10 +143,10 @@ export const CONTRACT_FIELDS = {
     name: { label: 'Contract Name', type: 'text', required: true, maxLength: 255 },
     contract_number: { label: 'Contract Number', type: 'text', required: false, maxLength: 100, readOnly: true },
     mode: { label: 'Mode', type: 'picklist', required: true, options: [
-        { label: 'OCEAN', value: 'OCEAN' },
-        { label: 'AIR', value: 'AIR' },
-        { label: 'RAIL', value: 'RAIL' },
-        { label: 'TRUCK', value: 'TRUCK' }
+        { label: 'Ocean', value: 'ocean' },
+        { label: 'Air', value: 'air' },
+        { label: 'Rail', value: 'rail' },
+        { label: 'Road', value: 'road' }
     ]},
     is_spot: { label: 'Spot Contract', type: 'checkbox', required: false, defaultValue: true },
     effective_from: { label: 'Effective From', type: 'date', required: true },

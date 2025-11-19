@@ -4031,25 +4031,42 @@ async function createHttpServer() {
         });
       }
 
+      const tenantId = (request as any).tenant_id;
+      
+      console.log('📥 [CONTRACT CREATE] Request body:', JSON.stringify(request.body, null, 2));
+      console.log('📥 [CONTRACT CREATE] Tenant ID:', tenantId);
+      
+      const contractPayload = {
+        vendor_id,
+        name: name || null,
+        mode,
+        is_spot: is_spot !== undefined ? is_spot : true,
+        effective_from,
+        effective_to,
+        currency,
+        source_ref: source_ref || null,
+        terms: terms || {},
+        tenant_id: tenantId
+      };
+      
+      console.log('📤 [CONTRACT CREATE] Payload to database:', JSON.stringify(contractPayload, null, 2));
+
       // Create the contract
       const { data, error } = await supabase
         .from('rate_contract')
-        .insert({
-          vendor_id,
-          name: name || null,
-          mode,
-          is_spot: is_spot || false,
-          effective_from,
-          effective_to,
-          currency,
-          source_ref: source_ref || null,
-          terms: terms || {},
-          tenant_id: (request as any).tenant_id
-        })
+        .insert(contractPayload)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [CONTRACT CREATE] Database error:', error);
+        throw error;
+      }
+
+      console.log('✅ [CONTRACT CREATE] Success:', data);
+
+      // Log audit
+      await logAudit(supabase, tenantId, 'rate_contract', String(data.id), 'CREATE', undefined, undefined, null, data);
 
       return reply.send({
         success: true,
@@ -4057,10 +4074,21 @@ async function createHttpServer() {
       });
 
     } catch (error) {
-      console.error('Error creating contract:', error);
+      console.error('❌ [CONTRACT CREATE] Exception:', error);
+      
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        errorMessage = JSON.stringify(error);
+      } else {
+        errorMessage = String(error);
+      }
+      
       return reply.status(500).send({
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: errorMessage,
+        details: error
       });
     }
   });
@@ -4070,6 +4098,17 @@ async function createHttpServer() {
     try {
       const { contractId } = request.params as any;
       const updates = request.body as any;
+      const tenantId = (request as any).tenant_id;
+
+      console.log('📝 [CONTRACT UPDATE] Request:', { contractId, tenantId, updates });
+
+      // Get old values for audit
+      const { data: oldData } = await supabase
+        .from('rate_contract')
+        .select('*')
+        .eq('id', contractId)
+        .eq('tenant_id', tenantId)
+        .single();
 
       // Remove fields that shouldn't be updated
       delete updates.id;
@@ -4077,22 +4116,33 @@ async function createHttpServer() {
       delete updates.created_at;
       delete updates.contract_number; // Auto-generated field
 
+      console.log('📤 [CONTRACT UPDATE] Updates to apply:', updates);
+
       const { data, error } = await supabase
         .from('rate_contract')
         .update(updates)
         .eq('id', contractId)
-        .eq('tenant_id', (request as any).tenant_id)
+        .eq('tenant_id', tenantId)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [CONTRACT UPDATE] Database error:', error);
+        throw error;
+      }
 
       if (!data) {
+        console.log('⚠️ [CONTRACT UPDATE] Contract not found');
         return reply.status(404).send({
           success: false,
           error: `Contract not found: ${contractId}`
         });
       }
+
+      console.log('✅ [CONTRACT UPDATE] Success:', data);
+
+      // Log audit
+      await logAudit(supabase, tenantId, 'rate_contract', String(contractId), 'UPDATE', undefined, undefined, oldData, data);
 
       return reply.send({
         success: true,
@@ -4100,10 +4150,21 @@ async function createHttpServer() {
       });
 
     } catch (error) {
-      console.error('Error updating contract:', error);
+      console.error('❌ [CONTRACT UPDATE] Exception:', error);
+      
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        errorMessage = JSON.stringify(error);
+      } else {
+        errorMessage = String(error);
+      }
+      
       return reply.status(500).send({
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: errorMessage,
+        details: error
       });
     }
   });
@@ -4112,14 +4173,75 @@ async function createHttpServer() {
   fastify.delete('/api/contracts/:contractId', async (request, reply) => {
     try {
       const { contractId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
 
-      const { error } = await supabase
+      console.log('🗑️ [CONTRACT DELETE] Request:', { contractId, tenantId });
+
+      // Check if contract has dependencies
+      const { data: rates, error: rateCheckError } = await supabase
+        .from('ocean_freight_rate')
+        .select('id')
+        .eq('contract_id', contractId)
+        .limit(1);
+
+      if (rateCheckError) {
+        console.error('❌ [CONTRACT DELETE] Error checking rates:', rateCheckError);
+        throw rateCheckError;
+      }
+
+      if (rates && rates.length > 0) {
+        console.log('⚠️ [CONTRACT DELETE] Contract has rates, cannot delete');
+        return reply.status(400).send({
+          success: false,
+          error: 'Cannot delete contract with existing rates. Please delete or reassign rates first.'
+        });
+      }
+
+      // Check surcharges
+      const { data: surcharges, error: surchargeCheckError } = await supabase
+        .from('surcharge')
+        .select('id')
+        .eq('contract_id', contractId)
+        .limit(1);
+
+      if (surchargeCheckError) {
+        console.error('❌ [CONTRACT DELETE] Error checking surcharges:', surchargeCheckError);
+        throw surchargeCheckError;
+      }
+
+      if (surcharges && surcharges.length > 0) {
+        console.log('⚠️ [CONTRACT DELETE] Contract has surcharges, cannot delete');
+        return reply.status(400).send({
+          success: false,
+          error: 'Cannot delete contract with existing surcharges. Please delete or reassign surcharges first.'
+        });
+      }
+
+      // Perform the delete
+      const { error, data } = await supabase
         .from('rate_contract')
         .delete()
         .eq('id', contractId)
-        .eq('tenant_id', (request as any).tenant_id);
+        .eq('tenant_id', tenantId)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [CONTRACT DELETE] Database error:', error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        console.log('⚠️ [CONTRACT DELETE] No contract found with given ID and tenant');
+        return reply.status(404).send({
+          success: false,
+          error: 'Contract not found or access denied'
+        });
+      }
+
+      console.log('✅ [CONTRACT DELETE] Success:', data);
+
+      // Log audit
+      await logAudit(supabase, tenantId, 'rate_contract', String(contractId), 'DELETE', undefined, undefined, data[0], null);
 
       return reply.send({
         success: true,
@@ -4127,10 +4249,21 @@ async function createHttpServer() {
       });
 
     } catch (error) {
-      console.error('Error deleting contract:', error);
+      console.error('❌ [CONTRACT DELETE] Exception:', error);
+      
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        errorMessage = JSON.stringify(error);
+      } else {
+        errorMessage = String(error);
+      }
+      
       return reply.status(500).send({
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: errorMessage,
+        details: error
       });
     }
   });
