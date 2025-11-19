@@ -208,8 +208,8 @@ export const MARGIN_RULE_FIELDS = {
     mark_kind: { label: 'Markup Type', type: 'picklist', required: true, options: MARK_KIND_OPTIONS },
     mark_value: { label: 'Markup Value', type: 'number', required: true, min: 0, step: 0.0001 },
     priority: { label: 'Priority', type: 'number', required: true, min: 1, defaultValue: 100 },
-    valid_from: { label: 'Valid From', type: 'date', required: true, defaultValue: 'CURRENT_DATE' },
-    valid_to: { label: 'Valid To', type: 'date', required: true, defaultValue: '2099-12-31' }
+    valid_from: { label: 'Valid From', type: 'date', required: true },
+    valid_to: { label: 'Valid To', type: 'date', required: true }
 };
 
 // ==========================================
