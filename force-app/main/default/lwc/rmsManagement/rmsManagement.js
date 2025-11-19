@@ -451,8 +451,17 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     handleDelete(event) {
         // Handle both direct button clicks and events from child components
         const recordId = event.detail?.recordId || event.currentTarget?.dataset?.id;
+        const entityType = event.detail?.entityType || this.activeTab;
+        
+        console.log('handleDelete called', { recordId, entityType, activeTab: this.activeTab });
+        
         if (recordId) {
-            this.recordToDelete = this.getRecordById(recordId);
+            this.recordToDelete = this.getRecordById(recordId, entityType);
+            if (!this.recordToDelete || Object.keys(this.recordToDelete).length === 0) {
+                console.error('Record not found for deletion', { recordId, entityType });
+                this.showErrorToast('Error', 'Record not found');
+                return;
+            }
             this.showDeleteConfirm = true;
         }
     }
