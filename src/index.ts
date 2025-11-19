@@ -3820,6 +3820,9 @@ async function createHttpServer() {
 
       console.log('✅ [VENDOR CREATE] Success:', data);
 
+      // Audit logging
+      await logAudit(supabase, (request as any).tenant_id, 'vendor', String(data.id), 'CREATE', undefined, undefined, undefined, data);
+
       return reply.send({
         success: true,
         data: data
@@ -3851,6 +3854,15 @@ async function createHttpServer() {
     try {
       const { vendorId } = request.params as any;
       const updates = request.body as any;
+      const tenantId = (request as any).tenant_id;
+
+      // Get old data first for audit
+      const { data: oldData } = await supabase
+        .from('vendor')
+        .select('*')
+        .eq('id', vendorId)
+        .eq('tenant_id', tenantId)
+        .single();
 
       // Remove fields that shouldn't be updated
       delete updates.id;
@@ -3861,7 +3873,7 @@ async function createHttpServer() {
         .from('vendor')
         .update(updates)
         .eq('id', vendorId)
-        .eq('tenant_id', (request as any).tenant_id)
+        .eq('tenant_id', tenantId)
         .select()
         .single();
 
@@ -3873,6 +3885,9 @@ async function createHttpServer() {
           error: `Vendor not found: ${vendorId}`
         });
       }
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'vendor', String(vendorId), 'UPDATE', undefined, undefined, oldData, data);
 
       return reply.send({
         success: true,
@@ -4497,6 +4512,10 @@ async function createHttpServer() {
       }
 
       console.log('✅ [SURCHARGE CREATE] Surcharge created successfully:', data);
+      
+      // Audit logging
+      await logAudit(supabase, (request as any).tenant_id, 'surcharge', String(data.id), 'CREATE', undefined, undefined, undefined, data);
+      
       return reply.send({
         success: true,
         data: data
@@ -4515,6 +4534,7 @@ async function createHttpServer() {
   fastify.put('/api/surcharges/:surchargeId', async (request, reply) => {
     try {
       const { surchargeId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
       const { 
         amount,
         currency,
@@ -4522,6 +4542,14 @@ async function createHttpServer() {
         valid_from,
         valid_to
       } = request.body as any;
+
+      // Get old data first for audit
+      const { data: oldData } = await supabase
+        .from('surcharge')
+        .select('*')
+        .eq('id', surchargeId)
+        .eq('tenant_id', tenantId)
+        .single();
 
       const updates: any = {};
 
@@ -4535,7 +4563,7 @@ async function createHttpServer() {
         .from('surcharge')
         .update(updates)
         .eq('id', surchargeId)
-        .eq('tenant_id', request.headers['x-tenant-id'] || 'default_tenant')
+        .eq('tenant_id', tenantId)
         .select('*')
         .single();
 
@@ -4547,6 +4575,9 @@ async function createHttpServer() {
           error: `Surcharge not found: ${surchargeId}`
         });
       }
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'surcharge', String(surchargeId), 'UPDATE', undefined, undefined, oldData, data);
 
       return reply.send({
         success: true,
@@ -4565,6 +4596,15 @@ async function createHttpServer() {
   fastify.delete('/api/surcharges/:surchargeId', async (request, reply) => {
     try {
       const { surchargeId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
+
+      // Get old data first for audit
+      const { data: oldData } = await supabase
+        .from('surcharge')
+        .select('*')
+        .eq('id', surchargeId)
+        .eq('tenant_id', tenantId)
+        .single();
 
       // Soft delete by setting is_active to false
       const { data, error } = await supabase
@@ -4573,7 +4613,7 @@ async function createHttpServer() {
           is_active: false
         })
         .eq('id', surchargeId)
-        .eq('tenant_id', (request as any).tenant_id)
+        .eq('tenant_id', tenantId)
         .select('id, is_active')
         .single();
 
@@ -4585,6 +4625,9 @@ async function createHttpServer() {
           error: `Surcharge not found: ${surchargeId}`
         });
       }
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'surcharge', String(surchargeId), 'DELETE', undefined, undefined, oldData, null);
 
       return reply.send({
         success: true,
@@ -4928,6 +4971,9 @@ async function createHttpServer() {
 
       console.log('✅ [MARGIN RULE CREATE] Margin rule created successfully:', data);
       
+      // Audit logging
+      await logAudit(supabase, (request as any).tenant_id, 'margin_rule_v2', String(data.id), 'CREATE', undefined, undefined, undefined, data);
+      
       return reply.send({
         success: true,
         data: data
@@ -4946,12 +4992,21 @@ async function createHttpServer() {
   fastify.put('/api/margin-rules/:ruleId', async (request, reply) => {
     try {
       const { ruleId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
       const { 
         mark_value,
         valid_from,
         valid_to,
         priority
       } = request.body as any;
+
+      // Get old data first for audit
+      const { data: oldData } = await supabase
+        .from('margin_rule_v2')
+        .select('*')
+        .eq('id', ruleId)
+        .eq('tenant_id', tenantId)
+        .single();
 
       const updates: any = {};
 
@@ -4964,7 +5019,7 @@ async function createHttpServer() {
         .from('margin_rule_v2')
         .update(updates)
         .eq('id', ruleId)
-        .eq('tenant_id', (request as any).tenant_id)
+        .eq('tenant_id', tenantId)
         .select(`
           id,
           level,
@@ -4992,6 +5047,9 @@ async function createHttpServer() {
           error: 'Margin rule not found'
         });
       }
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'margin_rule_v2', String(ruleId), 'UPDATE', undefined, undefined, oldData, data);
 
       return reply.send({
         success: true,
@@ -5176,14 +5234,26 @@ async function createHttpServer() {
   fastify.delete('/api/margin-rules/:ruleId', async (request, reply) => {
     try {
       const { ruleId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
+
+      // Get old data first for audit
+      const { data: oldData } = await supabase
+        .from('margin_rule_v2')
+        .select('*')
+        .eq('id', ruleId)
+        .eq('tenant_id', tenantId)
+        .single();
 
       const { error } = await supabase
         .from('margin_rule_v2')
         .delete()
         .eq('id', ruleId)
-        .eq('tenant_id', (request as any).tenant_id);
+        .eq('tenant_id', tenantId);
 
       if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'margin_rule_v2', String(ruleId), 'DELETE', undefined, undefined, oldData, null);
 
       return reply.send({
         success: true,
