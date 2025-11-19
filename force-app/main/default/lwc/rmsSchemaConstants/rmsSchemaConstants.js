@@ -77,11 +77,11 @@ export const CHARGE_CODES = [
 // APPLIES SCOPE (Surcharges)
 // ==========================================
 export const APPLIES_SCOPE_OPTIONS = [
-    { label: 'Origin', value: 'origin' },
-    { label: 'Port', value: 'port' },
-    { label: 'Freight', value: 'freight' },
-    { label: 'Destination', value: 'dest' },
-    { label: 'Door', value: 'door' },
+    { label: 'Origin (POL Services)', value: 'origin' },
+    { label: 'Port (POL Port Charges)', value: 'port' },
+    { label: 'Freight (Ocean Leg)', value: 'freight' },
+    { label: 'Destination (POD Services)', value: 'dest' },
+    { label: 'Door (POD Door Delivery)', value: 'door' },
     { label: 'Other', value: 'other' }
 ];
 
@@ -174,14 +174,16 @@ export const SURCHARGE_FIELDS = {
     vendor_id: { label: 'Vendor', type: 'lookup', required: true, relatedEntity: 'vendors' },
     contract_id: { label: 'Contract', type: 'lookup', required: true, relatedEntity: 'contracts' },
     charge_code: { label: 'Charge Code', type: 'picklist', required: true, options: CHARGE_CODES },
-    applies_scope: { label: 'Applies Scope', type: 'picklist', required: true, options: APPLIES_SCOPE_OPTIONS },
+    applies_scope: { label: 'Applies At', type: 'picklist', required: true, options: APPLIES_SCOPE_OPTIONS },
+    pol_code: { label: 'POL (if origin/port or route-specific)', type: 'portlookup', required: false, maxLength: 10 },
+    pod_code: { label: 'POD (if dest/door or route-specific)', type: 'portlookup', required: false, maxLength: 10 },
     uom: { label: 'Unit of Measure', type: 'picklist', required: true, options: UOM_OPTIONS, defaultValue: 'per_cntr' },
     amount: { label: 'Amount', type: 'number', required: true, min: 0, step: 0.01 },
     currency: { label: 'Currency', type: 'picklist', required: true, options: CURRENCY_CODES, defaultValue: 'USD' },
     calc_method: { label: 'Calculation Method', type: 'picklist', required: true, options: CALC_METHOD_OPTIONS, defaultValue: 'flat' },
-    pol_code: { label: 'POL (optional)', type: 'portlookup', required: false, maxLength: 10 },
-    pod_code: { label: 'POD (optional)', type: 'portlookup', required: false, maxLength: 10 },
     container_type: { label: 'Container Type (optional)', type: 'picklist', required: false, options: [{ label: 'All', value: '' }, ...CONTAINER_TYPES] },
+    vendor_charge_code: { label: 'Vendor Charge Code', type: 'text', required: false, maxLength: 50 },
+    vendor_charge_name: { label: 'Vendor Charge Name', type: 'text', required: false, maxLength: 255 },
     valid_from: { label: 'Valid From', type: 'date', required: false },
     valid_to: { label: 'Valid To', type: 'date', required: false }
 };
