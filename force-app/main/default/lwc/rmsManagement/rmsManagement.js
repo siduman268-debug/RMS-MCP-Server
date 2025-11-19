@@ -35,6 +35,7 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     @track showModal = false;
     @track modalTitle = '';
     @track modalMode = ''; // 'create', 'edit', 'view', 'upload'
+    @track modalEntityType = 'vendors'; // Separate from activeTab for modal
     @track currentRecord = {};
     @track loading = false;
     
@@ -155,19 +156,11 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
         // Get entity type from event detail if provided (from child component)
         const entityType = event?.detail?.entityType || this.activeTab;
         
-        // Temporarily set activeTab to ensure correct form is shown
-        const originalTab = this.activeTab;
-        if (entityType && entityType !== this.activeTab) {
-            this.activeTab = entityType;
-        }
-        
+        this.modalEntityType = entityType;
         this.currentRecord = {};
         this.modalMode = 'create';
-        this.modalTitle = `Create New ${this.getEntityLabel()}`;
+        this.modalTitle = `Create New ${this.getEntityLabel(entityType)}`;
         this.showModal = true;
-        
-        // Restore original tab after modal opens
-        this.activeTab = originalTab;
     }
     
     handleEdit(event) {
@@ -202,11 +195,8 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             
             console.log('handleEdit called', { recordId, entityType, activeTab: this.activeTab, eventDetail: event?.detail });
             
-            // Temporarily set activeTab to ensure correct data retrieval
-            const originalTab = this.activeTab;
-            if (entityType && entityType !== this.activeTab) {
-                this.activeTab = entityType;
-            }
+            // Set modal entity type
+            this.modalEntityType = entityType;
             
             // For rates and oceanFreight, fetch full record for editing
             if (entityType === 'rates' || entityType === 'oceanFreight') {
@@ -230,10 +220,9 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
                     if (rate && Object.keys(rate).length > 0) {
                         this.currentRecord = rate;
                         this.modalMode = 'edit';
-                        this.modalTitle = entityType === 'oceanFreight' ? `Edit Ocean Freight Rate` : `Edit ${this.getEntityLabel()}`;
+                        this.modalTitle = entityType === 'oceanFreight' ? `Edit Ocean Freight Rate` : `Edit ${this.getEntityLabel(entityType)}`;
                         this.showModal = true;
                         this.loading = false;
-                        this.activeTab = originalTab;
                     } else {
                         throw new Error('Rate data is empty');
                     }
@@ -245,22 +234,20 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
                         console.log('Using cached record as fallback');
                         this.currentRecord = cachedRecord;
                         this.modalMode = 'edit';
-                        this.modalTitle = entityType === 'oceanFreight' ? `Edit Ocean Freight Rate` : `Edit ${this.getEntityLabel()}`;
+                        this.modalTitle = entityType === 'oceanFreight' ? `Edit Ocean Freight Rate` : `Edit ${this.getEntityLabel(entityType)}`;
                         this.showModal = true;
                         this.showErrorToast('Warning', 'Could not load full record details. Using cached data. ' + (error.body?.message || error.message || ''));
                     } else {
                         this.showErrorToast('Error', 'Failed to load rate: ' + (error.body?.message || error.message || 'Unknown error'));
                     }
                     this.loading = false;
-                    this.activeTab = originalTab;
                 });
             } else {
                 // For other entities, use cached data
                 this.currentRecord = this.getRecordById(recordId);
                 this.modalMode = 'edit';
-                this.modalTitle = `Edit ${this.getEntityLabel()}`;
+                this.modalTitle = `Edit ${this.getEntityLabel(entityType)}`;
                 this.showModal = true;
-                this.activeTab = originalTab;
             }
         } catch (error) {
             console.error('Error in handleEdit:', error);
@@ -301,11 +288,8 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             
             console.log('handleView called', { recordId, entityType, activeTab: this.activeTab, eventDetail: event?.detail });
             
-            // Temporarily set activeTab to ensure correct data retrieval
-            const originalTab = this.activeTab;
-            if (entityType && entityType !== this.activeTab) {
-                this.activeTab = entityType;
-            }
+            // Set modal entity type
+            this.modalEntityType = entityType;
             
             // For rates and oceanFreight, use cached data from table (view doesn't need full record)
             if (entityType === 'rates' || entityType === 'oceanFreight') {
@@ -314,14 +298,12 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
                 this.modalMode = 'view';
                 this.modalTitle = `View Ocean Freight Rate`;
                 this.showModal = true;
-                this.activeTab = originalTab;
             } else {
                 // For other entities, use cached data
                 this.currentRecord = this.getRecordById(recordId);
                 this.modalMode = 'view';
-                this.modalTitle = `View ${this.getEntityLabel()}`;
+                this.modalTitle = `View ${this.getEntityLabel(entityType)}`;
                 this.showModal = true;
-                this.activeTab = originalTab;
             }
         } catch (error) {
             console.error('Error in handleView:', error);
