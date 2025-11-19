@@ -201,7 +201,7 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             // For rates and oceanFreight, fetch full record for editing
             if (entityType === 'rates' || entityType === 'oceanFreight') {
                 // Try to get from cached data first
-                const cachedRecord = this.getRecordById(recordId);
+                const cachedRecord = this.getRecordById(recordId, entityType);
                 console.log('Cached record for edit:', cachedRecord);
                 
                 // Always fetch from server for edit (need full record with all fields)
@@ -244,7 +244,7 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
                 });
             } else {
                 // For other entities, use cached data
-                this.currentRecord = this.getRecordById(recordId);
+                this.currentRecord = this.getRecordById(recordId, entityType);
                 this.modalMode = 'edit';
                 this.modalTitle = `Edit ${this.getEntityLabel(entityType)}`;
                 this.showModal = true;
@@ -293,14 +293,14 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             
             // For rates and oceanFreight, use cached data from table (view doesn't need full record)
             if (entityType === 'rates' || entityType === 'oceanFreight') {
-                const cachedRecord = this.getRecordById(recordId);
+                const cachedRecord = this.getRecordById(recordId, entityType);
                 this.currentRecord = cachedRecord || {};
                 this.modalMode = 'view';
                 this.modalTitle = `View Ocean Freight Rate`;
                 this.showModal = true;
             } else {
                 // For other entities, use cached data
-                this.currentRecord = this.getRecordById(recordId);
+                this.currentRecord = this.getRecordById(recordId, entityType);
                 this.modalMode = 'view';
                 this.modalTitle = `View ${this.getEntityLabel(entityType)}`;
                 this.showModal = true;
@@ -523,9 +523,9 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     }
     
     // Helper methods
-    getRecordById(recordId) {
-        const data = this.getCurrentData();
-        console.log('getRecordById searching for:', recordId, 'in', data?.length, 'records');
+    getRecordById(recordId, entityType = null) {
+        const data = this.getCurrentData(entityType);
+        console.log('getRecordById searching for:', recordId, 'in', data?.length, 'records', 'entityType:', entityType || this.activeTab);
         
         // Convert recordId to string and number for comparison
         const recordIdStr = String(recordId);
@@ -554,8 +554,9 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
         return found || {};
     }
     
-    getCurrentData() {
-        switch (this.activeTab) {
+    getCurrentData(entityType = null) {
+        const type = entityType || this.activeTab;
+        switch (type) {
             case 'vendors':
                 return this.vendors;
             case 'contracts':
