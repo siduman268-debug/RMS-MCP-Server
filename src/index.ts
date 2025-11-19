@@ -4747,6 +4747,65 @@ async function createHttpServer() {
   });
 
   // ==========================================
+  // CHARGE CODES LOOKUP API (Read-only from charge_master)
+  // ==========================================
+
+  // List Charge Codes from charge_master
+  fastify.get('/api/charge-codes', async (request, reply) => {
+    try {
+      const { 
+        search,
+        is_active = 'true',
+        limit = '50'
+      } = request.query as any;
+
+      console.log('🔍 [CHARGE CODES] Fetching charge codes from charge_master');
+      
+      let query = supabase
+        .from('charge_master')
+        .select('id, charge_code, charge_name, charge_category, description, default_calc_method, default_uom, is_active');
+
+      // Filter by active status
+      if (is_active === 'true') {
+        query = query.eq('is_active', true);
+      }
+
+      // Search by charge code or name
+      if (search) {
+        const searchPattern = `%${search}%`;
+        query = query.or(`charge_code.ilike.${searchPattern},charge_name.ilike.${searchPattern}`);
+      }
+
+      // Order by charge code
+      query = query.order('charge_code', { ascending: true });
+
+      // Apply limit
+      const limitNum = parseInt(limit) || 50;
+      query = query.limit(limitNum);
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('❌ [CHARGE CODES] Database error:', error);
+        throw error;
+      }
+
+      console.log(`✅ [CHARGE CODES] Found ${data?.length || 0} charge codes`);
+
+      return reply.send({
+        success: true,
+        data: data || []
+      });
+    } catch (error: any) {
+      console.error('❌ [CHARGE CODES] Error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch charge codes'
+      });
+    }
+  });
+
+  // ==========================================
   // MARGIN RULE CRUD APIs
   // ==========================================
 
