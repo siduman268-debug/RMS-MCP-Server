@@ -183,6 +183,22 @@
                                     Enter UN/LOCODE (e.g., INNSA, NLRTM)
                                 </p>
                             </template>
+                            
+                            <template if:true={field.isChargeLookupField}>
+                                <lightning-input 
+                                    type="text" 
+                                    name={field.name}
+                                    label={field.label}
+                                    value={field.value}
+                                    placeholder="Search charge code..."
+                                    max-length={field.maxLength}
+                                    required={field.required}
+                                    onchange={handleInputChange}>
+                                </lightning-input>
+                                <p class="slds-text-body_small slds-m-top_xx-small">
+                                    Enter charge code (e.g., THC_ORIGIN, BAF, CAF)
+                                </p>
+                            </template>
                         </div>
                     </template>
                 </div>

@@ -320,7 +320,8 @@ export default class RmsModalForm extends LightningElement {
                 isMultiSelectField: fieldType === 'multiselect',
                 isTextareaField: fieldType === 'textarea',
                 isLookupField: fieldType === 'lookup',
-                isPortLookupField: fieldType === 'portlookup'
+                isPortLookupField: fieldType === 'portlookup',
+                isChargeLookupField: fieldType === 'chargelookup'
             };
         });
     }

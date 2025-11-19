@@ -173,7 +173,7 @@ export const RATE_FIELDS = {
 export const SURCHARGE_FIELDS = {
     vendor_id: { label: 'Vendor', type: 'lookup', required: true, relatedEntity: 'vendors' },
     contract_id: { label: 'Contract', type: 'lookup', required: true, relatedEntity: 'contracts' },
-    charge_code: { label: 'Charge Code', type: 'picklist', required: true, options: CHARGE_CODES },
+    charge_code: { label: 'Charge Code', type: 'chargelookup', required: true, maxLength: 50 },
     applies_scope: { label: 'Applies At', type: 'picklist', required: true, options: APPLIES_SCOPE_OPTIONS },
     pol_code: { label: 'POL (if origin/port or route-specific)', type: 'portlookup', required: false, maxLength: 10 },
     pod_code: { label: 'POD (if dest/door or route-specific)', type: 'portlookup', required: false, maxLength: 10 },
