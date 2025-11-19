@@ -42,6 +42,7 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     @track selectedRecords = [];
     @track showDeleteConfirm = false;
     @track recordToDelete = null;
+    @track recordToDeleteType = null; // Store entity type separately
     
     // Filters
     @track vendorFilters = { vendorType: null, isActive: true };
@@ -457,6 +458,8 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
         
         if (recordId) {
             this.recordToDelete = this.getRecordById(recordId, entityType);
+            this.recordToDeleteType = entityType; // Store entity type
+            
             if (!this.recordToDelete || Object.keys(this.recordToDelete).length === 0) {
                 console.error('Record not found for deletion', { recordId, entityType });
                 this.showErrorToast('Error', 'Record not found');
@@ -599,7 +602,8 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     async deleteRecord(record) {
         this.loading = true;
         try {
-            console.log('deleteRecord called', { record, activeTab: this.activeTab });
+            const entityType = this.recordToDeleteType || this.activeTab; // Use stored entity type
+            console.log('deleteRecord called', { record, entityType, activeTab: this.activeTab });
             
             const recordId = record.id || record.rate_id || record.vendor_id || record.contract_id;
             if (!recordId) {
@@ -607,29 +611,32 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             }
             
             let result;
-            const entityLabel = this.getEntityLabel();
+            const entityLabel = this.getEntityLabel(entityType);
             
-            // Handle different entity types
-            if (this.activeTab === 'vendors') {
+            // Handle different entity types using the stored entityType
+            if (entityType === 'vendors') {
                 result = await deleteVendor({ vendorId: recordId });
                 if (result === false) {
                     throw new Error('Delete operation returned false - vendor may not exist or access denied');
                 }
                 this.showSuccessToast('Vendor deleted', `${record.name || 'Vendor'} has been deleted successfully.`);
-            } else if (this.activeTab === 'contracts') {
+            } else if (entityType === 'contracts') {
                 result = await deleteContract({ contractId: recordId });
+                if (result === false) {
+                    throw new Error('Delete operation returned false - contract may not exist or access denied');
+                }
                 this.showSuccessToast('Contract deleted', 'Contract has been deleted successfully.');
-            } else if (this.activeTab === 'rates' || this.activeTab === 'oceanFreight') {
+            } else if (entityType === 'rates' || entityType === 'oceanFreight') {
                 result = await deleteRate({ rateId: recordId });
                 this.showSuccessToast('Rate deleted', 'Ocean freight rate has been deleted successfully.');
-            } else if (this.activeTab === 'surcharges') {
+            } else if (entityType === 'surcharges') {
                 result = await deleteSurcharge({ surchargeId: recordId });
                 this.showSuccessToast('Surcharge deleted', 'Surcharge has been deleted successfully.');
-            } else if (this.activeTab === 'marginRules') {
+            } else if (entityType === 'marginRules') {
                 result = await deleteMarginRule({ ruleId: recordId });
                 this.showSuccessToast('Margin rule deleted', 'Margin rule has been deleted successfully.');
             } else {
-                throw new Error(`Delete not supported for entity type: ${this.activeTab}`);
+                throw new Error(`Delete not supported for entity type: ${entityType}`);
             }
             
             console.log('Delete result:', result);
@@ -642,6 +649,7 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             this.showErrorToast('Error deleting record', error.body?.message || error.message || 'Failed to delete record');
         } finally {
             this.loading = false;
+            this.recordToDeleteType = null; // Clear stored type
         }
     }
     
