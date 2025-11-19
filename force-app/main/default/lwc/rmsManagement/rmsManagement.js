@@ -247,6 +247,7 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             } else {
                 // For other entities, use cached data
                 this.currentRecord = this.getRecordById(recordId, entityType);
+                console.log('Edit - currentRecord set:', this.currentRecord);
                 this.modalMode = 'edit';
                 this.modalTitle = `Edit ${this.getEntityLabel(entityType)}`;
                 this.showModal = true;
@@ -303,6 +304,7 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             } else {
                 // For other entities, use cached data
                 this.currentRecord = this.getRecordById(recordId, entityType);
+                console.log('View - currentRecord set:', this.currentRecord);
                 this.modalMode = 'view';
                 this.modalTitle = `View ${this.getEntityLabel(entityType)}`;
                 this.showModal = true;

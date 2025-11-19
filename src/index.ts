@@ -4654,7 +4654,24 @@ async function createHttpServer() {
 
       let query = supabase
         .from('surcharge')
-        .select('*')
+        .select(`
+          *,
+          vendor:vendor_id (
+            name
+          ),
+          contract:contract_id (
+            name,
+            contract_number
+          ),
+          pol_location:pol_id (
+            unlocode,
+            location_name
+          ),
+          pod_location:pod_id (
+            unlocode,
+            location_name
+          )
+        `)
         .eq('tenant_id', (request as any).tenant_id);
 
       console.log('🔍 [SURCHARGE LIST] Base query created');

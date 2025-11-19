@@ -127,6 +127,20 @@ export default class RmsSurchargesTable extends LightningElement {
         if (!this.surcharges) return [];
         
         return this.surcharges.map(record => {
+            // Get vendor name from joined data
+            const vendorName = record.vendor?.name || '—';
+            
+            // Get contract info from joined data
+            const contractName = record.contract?.name || record.contract?.contract_number || '—';
+            
+            // Get location names from joined data
+            const polDisplay = record.pol_location ? 
+                `${record.pol_location.location_name} (${record.pol_location.unlocode})` : 
+                '—';
+            const podDisplay = record.pod_location ? 
+                `${record.pod_location.location_name} (${record.pod_location.unlocode})` : 
+                '—';
+            
             return {
                 ...record,
                 id: String(record.id),
@@ -134,12 +148,12 @@ export default class RmsSurchargesTable extends LightningElement {
                 displayAmount: record.amount ? `${record.amount}` : '—',
                 displayCurrency: record.currency || 'USD',
                 displayUom: record.uom || '—',
-                displayPol: record.pol_code || '—',
-                displayPod: record.pod_code || '—',
+                displayPol: polDisplay,
+                displayPod: podDisplay,
                 displayContainerType: record.container_type || 'All',
                 displayAppliesScope: this.formatAppliesScope(record.applies_scope),
-                displayVendor: record.vendor_name || '—',
-                displayContract: record.contract_number || record.contract_id || '—'
+                displayVendor: vendorName,
+                displayContract: contractName
             };
         });
     }
