@@ -73,9 +73,10 @@ public with sharing class RMSApiUtil {
         req.setMethod(method);
         req.setHeader('Authorization', 'Bearer ' + token);
         req.setHeader('x-tenant-id', tenantId);
-        req.setHeader('Content-Type', 'application/json');
         
+        // Only set Content-Type header if there's a body
         if (String.isNotBlank(body)) {
+            req.setHeader('Content-Type', 'application/json');
             req.setBody(body);
         }
         
