@@ -2,14 +2,27 @@ import { LightningElement, track } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { NavigationMixin } from 'lightning/navigation';
 import listVendors from '@salesforce/apex/RMSVendorService.listVendors';
+import createVendor from '@salesforce/apex/RMSVendorService.createVendor';
+import updateVendor from '@salesforce/apex/RMSVendorService.updateVendor';
+import deleteVendor from '@salesforce/apex/RMSVendorService.deleteVendor';
 import listContracts from '@salesforce/apex/RMSContractService.listContracts';
+import createContract from '@salesforce/apex/RMSContractService.createContract';
+import updateContract from '@salesforce/apex/RMSContractService.updateContract';
+import deleteContract from '@salesforce/apex/RMSContractService.deleteContract';
 import listAggregatedRates from '@salesforce/apex/OceanFreightRateService.listAggregatedRatesForLWC';
 import getRateForLWC from '@salesforce/apex/OceanFreightRateService.getRateForLWC';
 import createRateForLWC from '@salesforce/apex/OceanFreightRateService.createRateForLWC';
 import updateRateForLWC from '@salesforce/apex/OceanFreightRateService.updateRateForLWC';
+import deleteRate from '@salesforce/apex/OceanFreightRateService.deleteRateForLWC';
 import markRateAsPreferred from '@salesforce/apex/OceanFreightRateService.markRateAsPreferred';
 import listSurcharges from '@salesforce/apex/SurchargeService.listSurchargesForLWC';
+import createSurcharge from '@salesforce/apex/RMSSurchargeService.createSurcharge';
+import updateSurcharge from '@salesforce/apex/RMSSurchargeService.updateSurcharge';
+import deleteSurcharge from '@salesforce/apex/RMSSurchargeService.deleteSurcharge';
 import listMarginRules from '@salesforce/apex/MarginRuleService.listRulesForLWC';
+import createMarginRule from '@salesforce/apex/RMSMarginRuleService.createMarginRule';
+import updateMarginRule from '@salesforce/apex/RMSMarginRuleService.updateMarginRule';
+import deleteMarginRule from '@salesforce/apex/RMSMarginRuleService.deleteMarginRule';
 
 export default class RmsManagement extends NavigationMixin(LightningElement) {
     @track activeTab = 'vendors';
@@ -347,23 +360,77 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     async saveRecord(entityType, mode, data) {
         this.loading = true;
         try {
-            if (entityType === 'rates' || entityType === 'oceanFreight') {
+            console.log('saveRecord called', { entityType, mode, data });
+            
+            let result;
+            const entityLabel = this.getEntityLabel(entityType);
+            
+            // Handle different entity types
+            if (entityType === 'vendors') {
                 if (mode === 'create') {
-                    const createResult = await createRateForLWC({ rateData: data });
+                    result = await createVendor({ vendorData: data });
+                    this.showSuccessToast('Vendor created', `${data.name || 'Vendor'} has been created successfully.`);
+                } else if (mode === 'edit') {
+                    const vendorId = data.id;
+                    delete data.id; // Remove id from updates
+                    result = await updateVendor({ vendorId: vendorId, updates: data });
+                    this.showSuccessToast('Vendor updated', `${data.name || 'Vendor'} has been updated successfully.`);
+                }
+            } else if (entityType === 'contracts') {
+                if (mode === 'create') {
+                    result = await createContract({ contractData: data });
+                    this.showSuccessToast('Contract created', 'Contract has been created successfully.');
+                } else if (mode === 'edit') {
+                    const contractId = data.id;
+                    delete data.id;
+                    result = await updateContract({ contractId: contractId, updates: data });
+                    this.showSuccessToast('Contract updated', 'Contract has been updated successfully.');
+                }
+            } else if (entityType === 'rates' || entityType === 'oceanFreight') {
+                if (mode === 'create') {
+                    result = await createRateForLWC({ rateData: data });
                     this.showSuccessToast('Rate created', 'Ocean freight rate has been created successfully.');
                 } else if (mode === 'edit') {
-                    const updateResult = await updateRateForLWC({ rateId: data.id, updates: data });
+                    const rateId = data.id || data.rate_id;
+                    delete data.id;
+                    delete data.rate_id;
+                    result = await updateRateForLWC({ rateId: rateId, updates: data });
                     this.showSuccessToast('Rate updated', 'Ocean freight rate has been updated successfully.');
                 }
+            } else if (entityType === 'surcharges') {
+                if (mode === 'create') {
+                    result = await createSurcharge({ surchargeData: data });
+                    this.showSuccessToast('Surcharge created', 'Surcharge has been created successfully.');
+                } else if (mode === 'edit') {
+                    const surchargeId = data.id;
+                    delete data.id;
+                    result = await updateSurcharge({ surchargeId: surchargeId, updates: data });
+                    this.showSuccessToast('Surcharge updated', 'Surcharge has been updated successfully.');
+                }
+            } else if (entityType === 'marginRules') {
+                if (mode === 'create') {
+                    result = await createMarginRule({ ruleData: data });
+                    this.showSuccessToast('Margin rule created', 'Margin rule has been created successfully.');
+                } else if (mode === 'edit') {
+                    const ruleId = data.id;
+                    delete data.id;
+                    result = await updateMarginRule({ ruleId: ruleId, updates: data });
+                    this.showSuccessToast('Margin rule updated', 'Margin rule has been updated successfully.');
+                }
+            } else {
+                throw new Error(`Unsupported entity type: ${entityType}`);
             }
-            // TODO: Add handlers for other entity types (vendors, contracts, surcharges, marginRules)
+            
+            console.log('Save result:', result);
             
             // Close modal and refresh data
             this.showModal = false;
             this.currentRecord = {};
             this.modalMode = '';
-            this.refreshCurrentTab();
+            await this.refreshCurrentTab();
+            
         } catch (error) {
+            console.error('Error saving record:', error);
             this.showErrorToast('Error saving', error.body?.message || error.message || 'Failed to save record');
         } finally {
             this.loading = false;
@@ -482,7 +549,8 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
         }
     }
     
-    getEntityLabel() {
+    getEntityLabel(entityType) {
+        const type = entityType || this.activeTab;
         const labels = {
             'vendors': 'Vendor',
             'contracts': 'Contract',
@@ -491,18 +559,50 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             'surcharges': 'Surcharge',
             'marginRules': 'Margin Rule'
         };
-        return labels[this.activeTab] || 'Record';
+        return labels[type] || 'Record';
     }
     
     async deleteRecord(record) {
         this.loading = true;
         try {
-            // Delete logic will be implemented based on entity type
-            this.showSuccessToast('Record deleted', 'The record has been successfully deleted.');
+            console.log('deleteRecord called', { record, activeTab: this.activeTab });
+            
+            const recordId = record.id || record.rate_id || record.vendor_id || record.contract_id;
+            if (!recordId) {
+                throw new Error('Record ID is missing');
+            }
+            
+            let result;
+            const entityLabel = this.getEntityLabel();
+            
+            // Handle different entity types
+            if (this.activeTab === 'vendors') {
+                result = await deleteVendor({ vendorId: recordId });
+                this.showSuccessToast('Vendor deleted', `${record.name || 'Vendor'} has been deleted successfully.`);
+            } else if (this.activeTab === 'contracts') {
+                result = await deleteContract({ contractId: recordId });
+                this.showSuccessToast('Contract deleted', 'Contract has been deleted successfully.');
+            } else if (this.activeTab === 'rates' || this.activeTab === 'oceanFreight') {
+                result = await deleteRate({ rateId: recordId });
+                this.showSuccessToast('Rate deleted', 'Ocean freight rate has been deleted successfully.');
+            } else if (this.activeTab === 'surcharges') {
+                result = await deleteSurcharge({ surchargeId: recordId });
+                this.showSuccessToast('Surcharge deleted', 'Surcharge has been deleted successfully.');
+            } else if (this.activeTab === 'marginRules') {
+                result = await deleteMarginRule({ ruleId: recordId });
+                this.showSuccessToast('Margin rule deleted', 'Margin rule has been deleted successfully.');
+            } else {
+                throw new Error(`Delete not supported for entity type: ${this.activeTab}`);
+            }
+            
+            console.log('Delete result:', result);
+            
             // Refresh data
-            this.refreshCurrentTab();
+            await this.refreshCurrentTab();
+            
         } catch (error) {
-            this.showErrorToast('Error deleting record', error.body?.message || error.message);
+            console.error('Error deleting record:', error);
+            this.showErrorToast('Error deleting record', error.body?.message || error.message || 'Failed to delete record');
         } finally {
             this.loading = false;
         }
