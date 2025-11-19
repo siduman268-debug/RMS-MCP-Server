@@ -367,6 +367,16 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             
             // Handle different entity types
             if (entityType === 'vendors') {
+                // Transform mode from array to proper format if needed
+                if (data.mode && Array.isArray(data.mode)) {
+                    // Mode is already an array, keep it
+                } else if (data.mode && typeof data.mode === 'string') {
+                    // Convert comma-separated string to array
+                    data.mode = data.mode.split(',').map(m => m.trim());
+                }
+                
+                console.log('Vendor data after transformation:', data);
+                
                 if (mode === 'create') {
                     result = await createVendor({ vendorData: data });
                     this.showSuccessToast('Vendor created', `${data.name || 'Vendor'} has been created successfully.`);

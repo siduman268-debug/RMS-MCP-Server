@@ -3691,6 +3691,9 @@ async function createHttpServer() {
   // Create Vendor
   fastify.post('/api/vendors', async (request, reply) => {
     try {
+      console.log('📥 [VENDOR CREATE] Request body:', JSON.stringify(request.body, null, 2));
+      console.log('📥 [VENDOR CREATE] Tenant ID:', (request as any).tenant_id);
+      
       const { 
         name,
         alias,
@@ -3701,27 +3704,40 @@ async function createHttpServer() {
 
       // Validate required fields
       if (!name || !vendor_type) {
+        console.error('❌ [VENDOR CREATE] Missing required fields:', { name, vendor_type });
         return reply.status(400).send({
           success: false,
           error: 'Missing required fields: name, vendor_type'
         });
       }
 
+      // Ensure mode is an array
+      const modeArray = Array.isArray(mode) ? mode : (mode ? [mode] : []);
+      
+      const vendorPayload = {
+        name,
+        alias: alias || null,
+        vendor_type,
+        mode: modeArray,
+        external_ref: external_ref || null,
+        tenant_id: (request as any).tenant_id
+      };
+      
+      console.log('📤 [VENDOR CREATE] Payload to database:', JSON.stringify(vendorPayload, null, 2));
+
       // Create the vendor
       const { data, error } = await supabase
         .from('vendor')
-        .insert({
-          name,
-          alias: alias || null,
-          vendor_type,
-          mode: mode || [],
-          external_ref: external_ref || null,
-          tenant_id: (request as any).tenant_id
-        })
+        .insert(vendorPayload)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [VENDOR CREATE] Database error:', error);
+        throw error;
+      }
+
+      console.log('✅ [VENDOR CREATE] Success:', data);
 
       return reply.send({
         success: true,
@@ -3729,7 +3745,7 @@ async function createHttpServer() {
       });
 
     } catch (error) {
-      console.error('Error creating vendor:', error);
+      console.error('❌ [VENDOR CREATE] Exception:', error);
       return reply.status(500).send({
         success: false,
         error: error instanceof Error ? error.message : String(error)
