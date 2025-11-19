@@ -532,12 +532,33 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     // Helper methods
     getRecordById(recordId) {
         const data = this.getCurrentData();
-        // Check multiple possible ID field names (id, rate_id, RMS_ID__c)
-        return data.find(record => 
-            (record.id === recordId) || 
-            (record.rate_id === recordId) || 
-            (record.RMS_ID__c === recordId)
-        ) || {};
+        console.log('getRecordById searching for:', recordId, 'in', data?.length, 'records');
+        
+        // Convert recordId to string and number for comparison
+        const recordIdStr = String(recordId);
+        const recordIdNum = Number(recordId);
+        
+        // Check multiple possible ID field names and types
+        const found = data.find(record => {
+            const id = record.id;
+            const idStr = String(id);
+            const idNum = Number(id);
+            
+            return (
+                (id === recordId) || 
+                (id === recordIdStr) ||
+                (id === recordIdNum) ||
+                (idStr === recordIdStr) ||
+                (idNum === recordIdNum) ||
+                (record.rate_id === recordId) || 
+                (record.RMS_ID__c === recordId) ||
+                (record.vendor_id === recordId) ||
+                (record.contract_id === recordId)
+            );
+        });
+        
+        console.log('getRecordById found:', found);
+        return found || {};
     }
     
     getCurrentData() {
@@ -641,32 +662,34 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
         }
     }
     
-    refreshCurrentTab() {
-        // Force refresh by updating filters or reloading data
+    async refreshCurrentTab() {
+        console.log('refreshCurrentTab called for:', this.activeTab);
+        // Actually reload data from server
         switch (this.activeTab) {
             case 'vendors':
-                this.vendorFilters = { ...this.vendorFilters };
+                await this.loadVendors();
                 break;
             case 'contracts':
-                this.contractFilters = { ...this.contractFilters };
+                await this.loadContracts();
                 break;
             case 'rates':
-                this.rateFilters = { ...this.rateFilters };
+                await this.loadRates();
                 break;
             case 'oceanFreight':
                 // Trigger refresh in ocean freight component
                 const oceanFreightComponent = this.template.querySelector('c-rms-ocean-freight');
                 if (oceanFreightComponent) {
-                    oceanFreightComponent.loadRates();
+                    await oceanFreightComponent.loadRates();
                 }
                 break;
             case 'surcharges':
-                this.surchargeFilters = { ...this.surchargeFilters };
+                await this.loadSurcharges();
                 break;
             case 'marginRules':
-                this.marginRuleFilters = { ...this.marginRuleFilters };
+                await this.loadMarginRules();
                 break;
         }
+        console.log('refreshCurrentTab completed');
     }
     
     exportToCSV(data, filename) {
