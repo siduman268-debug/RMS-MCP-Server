@@ -1,192 +1,206 @@
-# Work Summary - November 18, 2025
+# RMS CRUD Implementation - Work Summary
+**Date**: November 19, 2025
 
 ## ✅ Completed Today
 
-### 1. **Tab Naming Clarity**
-- Renamed "Ocean Freight Rates" → **"Rate Lookup"**
-- Clear distinction: "Rate Lookup" for searching aggregated rates, "Ocean Freight" for managing ocean freight records
+### Phase 1: Foundation (100% Complete)
 
-### 2. **Margin Rules - Display & Filtering**
-- ✅ Fixed port pair display: Now shows actual port names "Nhava Sheva (INNSA) → Rotterdam (NLRTM)"
-- ✅ Fixed trade zone display: Shows "ISC-W → GULF" format
-- ✅ Fixed scope filter: Now correctly filters by Global/Trade Zone/Port Pair
-- ✅ API enrichment: Added JOIN to locations table to fetch port names
-- ✅ Naming alignment: Using `origin`/`destination` instead of `pol`/`pod` (per migration strategy)
+#### 1.1 Audit Infrastructure ✅
+- **Created `rms_audit_log` table** in Supabase
+  - Fields: `id`, `tenant_id`, `table_name`, `record_id`, `action`, `user_id`, `user_email`, `changed_fields`, `old_values`, `new_values`, `created_at`, `source`
+  - Indexes: `tenant_id`, `table_name+record_id`, `action`, `user_id`, `created_at`
+  - Helper functions: `get_audit_history()`, `get_recent_changes()`
+- **Fixed column name**: Renamed `timestamp` to `created_at` (PostgreSQL reserved keyword fix)
+- **Created migration script**: `migrate_audit_table_timestamp.sql`
+- **Added `logAudit()` helper function** in `src/index.ts`
+  - Async function to log all CRUD operations
+  - Captures old/new values, changed fields, user context
+  - Source tracking (SALESFORCE_LWC, MCP_TOOL, N8N_WORKFLOW)
 
-### 3. **Ocean Freight Tab - Architecture Refactor**
-- ✅ Changed from querying `mv_freight_sell_prices` (materialized view) → `ocean_freight_rate` (base table)
-- ✅ Added direct JOINs to `locations` and `rate_contract` tables
-- ✅ Real-time data (no materialized view staleness)
-- ✅ Added `vendor_id` filter support (fetches all contracts for vendor)
-- ✅ Added `contract_id` filter support
-- ✅ Direct access to `buy_amount` field from table
+#### 1.2 Schema Constants Update ✅
+- **Updated `rmsSchemaConstants.js`** to match database schema:
+  - **VENDOR_FIELDS**:
+    - Fixed: `type` → `vendor_type`
+    - Added: `mode` (multiselect), `external_ref`
+  - **CONTRACT_FIELDS**:
+    - Added: `name`, `mode`, `is_spot`, `effective_from`, `effective_to`, `currency`, `source_ref`, `terms`
+    - Fixed: `valid_from/valid_to` → `effective_from/effective_to`
+    - Made `contract_number` read-only (auto-generated)
+  - **RATE_FIELDS**:
+    - Changed `pol_code/pod_code` → `origin_code/destination_code`
+    - Added `via_port_code`
+    - Changed types: `contract_id` → lookup, origin/destination → portlookup
+  - **SURCHARGE_FIELDS**:
+    - Changed: `vendor_id`, `contract_id` → lookup
+    - Changed: `pol_code/pod_code` → portlookup
+    - Removed: `calc_method`, `is_active` (not in DB)
+  - **MARGIN_RULE_FIELDS**:
+    - Added: `tz_o`, `tz_d`, `mode`, `component_type`
+    - Changed: `pol_code/pod_code` → portlookup
+    - Made `valid_from/valid_to` optional
 
-### 4. **API Enhancements**
-- ✅ `/api/margin-rules` - Now enriches with port names (origin_code, origin_name, destination_code, destination_name)
-- ✅ `/api/ocean-freight-rates` - Refactored to query base table with filters for vendor_id and contract_id
-
-### 5. **Migration Strategy Compliance**
-- ✅ Aligned all code with `DATABASE_MIGRATION_STRATEGY.md`
-- ✅ Using `origin`/`destination` for pricing/cargo location
-- ✅ Reserving `pol`/`pod` for routing perspective only
-- ✅ Added comments in code explaining the strategy
-
----
-
-## 🔴 Known Issues to Fix Tomorrow
-
-### 1. **Ocean Freight Tab - Action Buttons Not Working**
-- **Create** button - not working
-- **Edit** button - not working
-- **Delete** button - not working
-- **Mark Preferred** button - not working
-
-**Root Cause Analysis Needed:**
-- Check if modal is opening correctly
-- Check if record ID is being passed properly
-- Check if Apex methods are being called
-- Check if API endpoints are responding correctly
-- Review event handlers in `rmsOceanFreight.js`
-- Review parent component `rmsManagement.js` event handling
-
-### 2. **Buy Amount Still Not Displaying**
-- API changes deployed to Salesforce ✅
-- API changes NOT yet deployed to VM ❌
-- **Action Required:** Rebuild and redeploy API on VM
+#### 1.3 Modal Form Enhancements ✅
+- **Added new field type support** in `rmsModalForm`:
+  - `multiselect` → `lightning-dual-listbox`
+  - `textarea` → `lightning-textarea`
+  - `lookup` → `lightning-input` (number) with entity hint
+  - `portlookup` → `lightning-input` (text) with UN/LOCODE hint
+- **Dynamic required fields**: Now reads from schema constants instead of hard-coded
+- **Read-only support**: Added `disabled` attribute for auto-generated fields
+- **Updated `getFieldConfigs()`**: Added `oceanFreight` alias to `RATE_FIELDS`
 
 ---
 
-## 📋 Action Items for Tomorrow
+## 🚀 Deployments Completed
 
-### Priority 1: Fix Ocean Freight Action Buttons
-1. Debug Create button
-   - Check modal opening
-   - Check form schema loading
-   - Check Apex `createRateForLWC` method
-   - Check API POST `/api/ocean-freight-rates`
+### Salesforce
+- ✅ `rmsSchemaConstants` - Updated field definitions
+- ✅ `rmsModalForm` - Enhanced field type support
+- ✅ `RMSVendorService.cls` - Verified (no changes needed)
 
-2. Debug Edit button
-   - Check record ID extraction
-   - Check Apex `getRateForLWC` method
-   - Check modal data loading
-   - Check API GET `/api/ocean-freight-rates/:rateId`
-   - Check API PUT `/api/ocean-freight-rates/:rateId`
+### Database
+- ✅ `rms_audit_log` table created
+- ✅ Column renamed: `timestamp` → `created_at`
+- ✅ Helper functions created
 
-3. Debug Delete button
-   - Check confirmation dialog
-   - Check Apex delete method
-   - Check API DELETE `/api/ocean-freight-rates/:rateId`
-
-4. Debug Mark Preferred button
-   - Check Apex `markRateAsPreferred` method
-   - Check API PUT `/api/ocean-freight-rates/:rateId`
-
-### Priority 2: Deploy API to VM
-- SSH to VM
-- `git pull origin master`
-- `npm run build`
-- Restart Docker container
-- Test vendor/contract filters
-- Test buy_amount display
-
-### Priority 3: Update API Documentation
-- Document all CRUD endpoints for:
-  - Vendors
-  - Contracts
-  - Ocean Freight Rates
-  - Surcharges
-  - Margin Rules
+### API
+- ✅ `logAudit()` function added to `src/index.ts`
 
 ---
 
-## 🧠 Investigation Notes for Tomorrow
+## 📝 Git Commits
 
-### Possible Causes for Action Button Issues:
-
-1. **Event Propagation Issues**
-   - Events not bubbling up from `rmsOceanFreight` to `rmsManagement`
-   - Missing `bubbles: true, composed: true` in CustomEvents
-   - Event listeners not registered properly
-
-2. **Entity Type Mismatch**
-   - `rmsManagement` expecting `entityType: 'rates'` but receiving `entityType: 'oceanFreight'`
-   - Schema constants mismatch between components
-   - Modal form not recognizing entity type
-
-3. **Record ID Issues**
-   - Record ID not being extracted from event
-   - `data-id` attribute not set on buttons
-   - ID field name mismatch (`id` vs `rate_id` vs `RMS_ID__c`)
-
-4. **Modal State Issues**
-   - Modal not opening due to conditional rendering
-   - `showModal` flag not being set
-   - Modal component not receiving data
-
-5. **Apex Method Issues**
-   - Methods throwing exceptions
-   - Permissions issues
-   - API endpoint errors
+1. `feat: add audit infrastructure (SQL table + API helper function)`
+2. `fix: rename timestamp to created_at in audit table (reserved keyword fix)`
+3. `fix: update schema constants to match database field names`
+4. `feat: add multiselect, textarea, lookup, and portlookup field support to modal form`
 
 ---
 
-## 📊 Current Tab Structure (Final)
-1. **Vendors** - Manage vendor master data (card-based UI)
-2. **Contracts** - Manage rate contracts (card-based UI)
-3. **Rate Lookup** - Search aggregated rates (table view, read-only) ← Renamed
-4. **Ocean Freight** - Manage ocean freight rates (table view, CRUD) ← Actions broken
-5. **Surcharges** - Manage freight surcharges (table view)
-6. **Margin Rules** - Manage margin calculation rules (card-based UI)
+## 🧪 Testing Status
+
+### Ready for Testing
+- ✅ **Vendors Tab** - Create, Edit, Delete (with multiselect Mode field)
+- ⏳ **Contracts Tab** - Pending testing
+- ⏳ **Ocean Freight Tab** - Pending testing
+- ⏳ **Surcharges Tab** - Pending testing
+- ⏳ **Margin Rules Tab** - Pending testing
+
+### Test Checklist (Vendors)
+- [ ] Create new vendor (test multiselect for Mode)
+- [ ] Edit existing vendor
+- [ ] Delete vendor
+- [ ] Verify field validation
+- [ ] Verify tenant isolation
+- [ ] Verify permission checks
 
 ---
 
-## 🎯 Success Criteria for Tomorrow
-- [ ] Create button opens modal and creates new ocean freight rate
-- [ ] Edit button opens modal with existing data and saves changes
-- [ ] Delete button confirms and deletes rate
-- [ ] Mark Preferred button toggles preferred status
-- [ ] Buy Amount displays correctly after VM deployment
-- [ ] Vendor filter works
-- [ ] Contract filter works
-- [ ] API documentation updated with all CRUD endpoints
+## 🎯 Next Steps (Phase 2-8)
+
+### Phase 2: Vendors Tab (In Progress)
+- ✅ Updated schema constants
+- ✅ Enhanced modal form
+- ✅ Deployed changes
+- ⏳ **USER TESTING REQUIRED**
+
+### Phase 3: Contracts Tab (Pending)
+- [ ] Test Create contract (with vendor lookup)
+- [ ] Test Edit contract
+- [ ] Test Delete contract
+- [ ] Verify contract_number auto-generation
+- [ ] Verify vendor logo display
+
+### Phase 4: Ocean Freight Tab (Pending)
+- [ ] Test Create rate (with contract/port lookups)
+- [ ] Test Edit rate
+- [ ] Test Delete rate
+- [ ] Verify buy_amount display
+- [ ] Verify vendor/contract filters
+
+### Phase 5: Surcharges Tab (Pending)
+- [ ] Test Create surcharge
+- [ ] Test Edit surcharge
+- [ ] Test Delete surcharge
+- [ ] Verify location filters
+- [ ] Verify applies_scope filter
+
+### Phase 6: Margin Rules Tab (Pending)
+- [ ] Test Create margin rule
+- [ ] Test Edit margin rule
+- [ ] Test Delete margin rule
+- [ ] Verify port-pair display
+- [ ] Verify scope filter
+
+### Phase 7: Audit Integration (Pending)
+- [ ] Integrate `logAudit()` into all CREATE operations
+- [ ] Integrate `logAudit()` into all UPDATE operations
+- [ ] Integrate `logAudit()` into all DELETE operations
+- [ ] Create Apex `RMSAuditService.cls`
+- [ ] Create `/api/audit` endpoint
+- [ ] Test audit log retrieval
+
+### Phase 8: End-to-End Testing (Pending)
+- [ ] Test all tabs sequentially
+- [ ] Test bulk upload (CSV)
+- [ ] Test export functionality
+- [ ] Verify audit trail
+- [ ] Performance testing
+- [ ] User acceptance testing
 
 ---
 
-## 📝 Files Modified Today
-- `src/index.ts` - API refactoring
-- `force-app/main/default/lwc/rmsOceanFreight/rmsOceanFreight.js` - Filtering and display
-- `force-app/main/default/lwc/rmsMarginRulesCards/rmsMarginRulesCards.js` - Display and filtering
-- `force-app/main/default/lwc/rmsManagement/rmsManagement.html` - Tab rename
+## ⚠️ Known Issues / Blockers
+
+### None Currently
+All Phase 1 work completed successfully.
 
 ---
 
-## 🔧 Technical Decisions Made
-1. **Use base table instead of materialized view** for Ocean Freight tab
-   - Reason: Real-time data, proper field access, correct filtering
-   - Impact: MV now only used for "Rate Lookup" tab (aggregated rates with surcharges/margins)
+## 📊 Progress Summary
 
-2. **Align with migration strategy** for origin/destination naming
-   - Reason: Consistency with pricing migration, future-proofing
-   - Impact: All new code uses `origin`/`destination` instead of `pol`/`pod`
-
-3. **Enrich API responses** with related data
-   - Reason: Reduce frontend complexity, better performance
-   - Impact: API does JOINs and returns flattened data structures
-
----
-
-## 📚 Documentation Updates Needed
-- [ ] Update `API_DOCUMENTATION_V4.md` with all CRUD endpoints
-- [ ] Document vendor/contract filtering behavior
-- [ ] Document origin/destination vs pol/pod naming convention
-- [ ] Document Ocean Freight tab architecture
+| Phase | Status | Progress |
+|-------|--------|----------|
+| Phase 1: Foundation | ✅ Complete | 100% |
+| Phase 2: Vendors | 🟡 Testing | 90% |
+| Phase 3: Contracts | ⏳ Pending | 0% |
+| Phase 4: Ocean Freight | ⏳ Pending | 0% |
+| Phase 5: Surcharges | ⏳ Pending | 0% |
+| Phase 6: Margin Rules | ⏳ Pending | 0% |
+| Phase 7: Audit Integration | ⏳ Pending | 0% |
+| Phase 8: E2E Testing | ⏳ Pending | 0% |
+| **Overall** | 🟡 In Progress | **25%** |
 
 ---
 
-## ✨ Wins Today
-- Clean separation between Rate Lookup (aggregated) and Ocean Freight (base table)
-- Margin Rules now show meaningful port names
-- Scope filter fixed
-- Architecture aligned with migration strategy
-- Code is cleaner and more maintainable
+## 🔗 Related Documentation
 
+- `RMS_CRUD_ACTION_PLAN.md` - Detailed action plan
+- `API_DOCUMENTATION_V4.md` - API endpoints reference
+- `create_rms_audit_table.sql` - Audit table schema
+- `migrate_audit_table_timestamp.sql` - Column rename migration
+- `deploy-crud-updates.ps1` - Deployment script
+
+---
+
+## 👤 User Actions Required
+
+1. **Test Vendors Tab** in Salesforce:
+   - Open RMS Management app
+   - Go to Vendors tab
+   - Click "Create Vendor"
+   - Fill in Name, Type, and select multiple Modes
+   - Save and verify
+   - Test Edit and Delete
+
+2. **Provide Feedback** on:
+   - Modal form layout
+   - Field validation messages
+   - Multi-select UX for Mode field
+   - Any errors or issues encountered
+
+3. **Approve to Continue** to Phase 3 (Contracts) once Vendors testing is complete.
+
+---
+
+*Last Updated: 2025-11-19 (Phase 1 Complete)*
