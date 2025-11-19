@@ -3746,9 +3746,21 @@ async function createHttpServer() {
 
     } catch (error) {
       console.error('❌ [VENDOR CREATE] Exception:', error);
+      
+      // Better error serialization
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        errorMessage = JSON.stringify(error);
+      } else {
+        errorMessage = String(error);
+      }
+      
       return reply.status(500).send({
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: errorMessage,
+        details: error // Include full error object for debugging
       });
     }
   });
