@@ -128,7 +128,6 @@ export const MARK_KIND_OPTIONS = [
 
 export const VENDOR_FIELDS = {
     name: { label: 'Name', type: 'text', required: true, maxLength: 255 },
-    alias: { label: 'Alias', type: 'text', required: false, maxLength: 255 },
     vendor_type: { label: 'Type', type: 'picklist', required: true, options: VENDOR_TYPES },
     mode: { label: 'Mode', type: 'multiselect', required: false, options: [
         { label: 'Ocean', value: 'OCEAN' },

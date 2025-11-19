@@ -3696,7 +3696,6 @@ async function createHttpServer() {
       
       const { 
         name,
-        alias,
         vendor_type,
         mode,
         external_ref
@@ -3716,7 +3715,6 @@ async function createHttpServer() {
       
       const vendorPayload = {
         name,
-        alias: alias || null,
         vendor_type,
         mode: modeArray,
         external_ref: external_ref || null,
