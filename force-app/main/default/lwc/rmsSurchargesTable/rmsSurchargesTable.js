@@ -282,6 +282,7 @@ export default class RmsSurchargesTable extends LightningElement {
         this.filterAppliesScope = event.detail.value;
     }
     
+    @api
     async handleFetchSurcharges() {
         this.loading = true;
         try {

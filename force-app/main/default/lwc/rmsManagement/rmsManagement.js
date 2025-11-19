@@ -715,7 +715,13 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
                 }
                 break;
             case 'surcharges':
-                await this.loadSurcharges();
+                // Trigger refresh in surcharges table component
+                const surchargesComponent = this.template.querySelector('c-rms-surcharges-table');
+                if (surchargesComponent && typeof surchargesComponent.handleFetchSurcharges === 'function') {
+                    await surchargesComponent.handleFetchSurcharges();
+                } else {
+                    await this.loadSurcharges();
+                }
                 break;
             case 'marginRules':
                 await this.loadMarginRules();
