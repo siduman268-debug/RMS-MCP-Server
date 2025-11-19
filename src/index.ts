@@ -1976,6 +1976,54 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // Authentication middleware is now directly in createHttpServer function
 
 // ============================================
+// AUDIT LOGGING HELPER
+// ============================================
+async function logAudit(
+  supabase: any,
+  tenantId: string,
+  tableName: string,
+  recordId: string,
+  action: 'CREATE' | 'UPDATE' | 'DELETE',
+  userId?: string,
+  userEmail?: string,
+  oldValues?: any,
+  newValues?: any,
+  source: string = 'SALESFORCE_LWC'
+) {
+  try {
+    const changedFields = action === 'UPDATE' && oldValues && newValues
+      ? Object.keys(newValues).filter(key => JSON.stringify(oldValues[key]) !== JSON.stringify(newValues[key]))
+      : null;
+
+    const auditEntry = {
+      tenant_id: tenantId,
+      table_name: tableName,
+      record_id: String(recordId),
+      action: action,
+      user_id: userId || null,
+      user_email: userEmail || null,
+      changed_fields: changedFields ? JSON.stringify(changedFields) : null,
+      old_values: oldValues ? JSON.stringify(oldValues) : null,
+      new_values: newValues ? JSON.stringify(newValues) : null,
+      source: source,
+      timestamp: new Date().toISOString()
+    };
+
+    const { error } = await supabase
+      .from('rms_audit_log')
+      .insert(auditEntry);
+
+    if (error) {
+      console.error('Audit logging error:', error);
+      // Don't throw - audit failure shouldn't break the operation
+    }
+  } catch (err) {
+    console.error('Audit logging exception:', err);
+    // Swallow audit errors
+  }
+}
+
+// ============================================
 // HTTP API SERVER (for n8n integration)
 // ============================================
 
