@@ -312,7 +312,9 @@ export default class RmsSurchargesTable extends LightningElement {
     // Action handlers
     handleCreate() {
         this.dispatchEvent(new CustomEvent('create', { 
-            detail: { entityType: 'surcharges' } 
+            detail: { entityType: 'surcharges' },
+            bubbles: true,
+            composed: true
         }));
     }
     
@@ -344,11 +346,19 @@ export default class RmsSurchargesTable extends LightningElement {
     }
     
     handleUpload() {
-        this.dispatchEvent(new CustomEvent('upload'));
+        this.dispatchEvent(new CustomEvent('upload', {
+            detail: { entityType: 'surcharges' },
+            bubbles: true,
+            composed: true
+        }));
     }
     
     handleExport() {
-        this.dispatchEvent(new CustomEvent('export'));
+        this.dispatchEvent(new CustomEvent('export', {
+            detail: { entityType: 'surcharges' },
+            bubbles: true,
+            composed: true
+        }));
     }
     
     showToast(title, message, variant) {
