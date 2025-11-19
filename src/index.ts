@@ -4115,6 +4115,10 @@ async function createHttpServer() {
       delete updates.tenant_id;
       delete updates.created_at;
       delete updates.contract_number; // Auto-generated field
+      delete updates.vendor_name; // Join field, not in table
+      delete updates.vendor_code; // Join field, not in table
+      delete updates.Logo_URL; // Join field, not in table
+      delete updates.updated_at; // Auto-managed timestamp
 
       console.log('📤 [CONTRACT UPDATE] Updates to apply:', updates);
 
