@@ -226,8 +226,8 @@ CREATE TABLE lcl_shipment_item (
     -- Quantity
     pieces INTEGER NOT NULL DEFAULT 1 CHECK (pieces > 0),
     
-    -- Total calculations
-    total_volume_cbm NUMERIC(10,3) GENERATED ALWAYS AS (volume_cbm * pieces) STORED,
+    -- Total calculations (calculated directly from base dimensions, not from generated columns)
+    total_volume_cbm NUMERIC(10,3) GENERATED ALWAYS AS ((length_cm * width_cm * height_cm / 1000000) * pieces) STORED,
     total_weight_kg NUMERIC(10,2) GENERATED ALWAYS AS (gross_weight_kg * pieces) STORED,
     total_chargeable_weight_kg NUMERIC(10,2) GENERATED ALWAYS AS (
         GREATEST(gross_weight_kg, (length_cm * width_cm * height_cm / 1000000) * 1000) * pieces
