@@ -316,9 +316,6 @@ BEGIN
         WHEN 'PER_CBM' THEN
             v_freight_cost := v_chargeable_volume_cbm * v_rate.rate_per_cbm;
             v_basis := 'CBM';
-        WHEN 'PER_CFT' THEN
-            v_freight_cost := (v_chargeable_volume_cbm * 35.3147) * v_rate.rate_per_cft;
-            v_basis := 'CFT';
         WHEN 'PER_TON' THEN
             v_freight_cost := (v_chargeable_weight_kg / 1000) * v_rate.rate_per_ton;
             v_basis := 'TON';
@@ -328,7 +325,7 @@ BEGIN
         ELSE
             RETURN jsonb_build_object(
                 'success', false,
-                'error', 'Invalid rate basis'
+                'error', 'Invalid rate basis: ' || v_rate.rate_basis
             );
     END CASE;
     
@@ -346,7 +343,6 @@ BEGIN
         'actual_weight_kg', p_weight_kg,
         'rate_applied', CASE 
             WHEN v_rate.rate_basis = 'PER_CBM' THEN v_rate.rate_per_cbm
-            WHEN v_rate.rate_basis = 'PER_CFT' THEN v_rate.rate_per_cft
             WHEN v_rate.rate_basis = 'PER_TON' THEN v_rate.rate_per_ton
             WHEN v_rate.rate_basis = 'PER_KG' THEN v_rate.rate_per_kg
         END,
