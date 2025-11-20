@@ -394,13 +394,16 @@ INSERT INTO lcl_ocean_freight_rate (
 
 -- Sample LCL surcharges (using existing charge codes from charge_master)
 INSERT INTO lcl_surcharge (
-    vendor_id, charge_code, applies_scope, rate_basis, amount, currency, tenant_id
+    vendor_id, charge_code, applies_scope, rate_basis, amount, percentage, currency, tenant_id
 ) VALUES
-(1, 'THC_ORIGIN', 'origin', 'PER_CBM', 15.00, 'USD', '00000000-0000-0000-0000-000000000001'),
-(1, 'THC_DEST', 'dest', 'PER_CBM', 18.00, 'USD', '00000000-0000-0000-0000-000000000001'),
-(1, 'DOC_FEE', 'other', 'PER_SHIPMENT', 25.00, 'USD', '00000000-0000-0000-0000-000000000001'),
-(1, 'BAF', 'freight', 'PERCENTAGE', 10.00, 'USD', '00000000-0000-0000-0000-000000000001'),
-(2, 'CAF', 'freight', 'PERCENTAGE', 5.00, 'EUR', '00000000-0000-0000-0000-000000000001');
+-- Flat amount charges
+(1, 'THC_ORIGIN', 'origin', 'PER_CBM', 15.00, NULL, 'USD', '00000000-0000-0000-0000-000000000001'),
+(1, 'THC_DEST', 'dest', 'PER_CBM', 18.00, NULL, 'USD', '00000000-0000-0000-0000-000000000001'),
+(1, 'DOC_FEE', 'other', 'PER_SHIPMENT', 25.00, NULL, 'USD', '00000000-0000-0000-0000-000000000001'),
+
+-- Percentage-based charges (percentage column must be populated for PERCENTAGE rate_basis)
+(1, 'BAF', 'freight', 'PERCENTAGE', 0, 10.00, 'USD', '00000000-0000-0000-0000-000000000001'),
+(2, 'CAF', 'freight', 'PERCENTAGE', 0, 5.00, 'EUR', '00000000-0000-0000-0000-000000000001');
 
 -- ============================================================================
 -- 6. VERIFICATION QUERIES
