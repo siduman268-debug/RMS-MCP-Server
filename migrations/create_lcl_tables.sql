@@ -23,14 +23,25 @@ CREATE TABLE lcl_ocean_freight_rate (
     -- Service Type (nice-to-have for differentiation)
     service_type VARCHAR(20) DEFAULT 'CONSOLIDATED' CHECK (service_type IN ('DIRECT', 'CONSOLIDATED')),
     
-    -- Rate Structure (Flexible - vendor defines tiers)
-    rate_basis VARCHAR(20) NOT NULL CHECK (rate_basis IN ('PER_CBM', 'PER_TON', 'PER_KG', 'PER_CFT')),
+    -- Pricing Model
+    pricing_model VARCHAR(20) NOT NULL DEFAULT 'FLAT_RATE' CHECK (pricing_model IN ('FLAT_RATE', 'SLAB_BASED')),
+    -- FLAT_RATE: Same rate per CBM regardless of volume (e.g., $50/CBM for any volume)
+    -- SLAB_BASED: Different rates for volume ranges (e.g., 0-3 CBM = $60, 3-5 CBM = $52, etc.)
     
-    -- Volume-Based Rates (Tiered Pricing - per vendor)
-    min_volume_cbm NUMERIC(10,3) DEFAULT 0.0,    -- Minimum volume for this rate tier
-    max_volume_cbm NUMERIC(10,3),                 -- Maximum volume for this rate tier (NULL = unlimited)
+    -- Rate Structure (Flexible - vendor defines tiers)
+    rate_basis VARCHAR(20) NOT NULL CHECK (rate_basis IN ('PER_CBM', 'PER_TON', 'PER_KG')),
+    
+    -- Volume-Based Rates
+    -- For FLAT_RATE: min=0, max=NULL, single rate applies to all volumes
+    -- For SLAB_BASED: multiple rows with different slabs (0-3, 3-5, 5-8, 8-12, 12+ CBM)
+    min_volume_cbm NUMERIC(10,3) DEFAULT 0.0,    -- Minimum volume for this slab
+    max_volume_cbm NUMERIC(10,3),                 -- Maximum volume for this slab (NULL = unlimited)
     rate_per_cbm NUMERIC(10,2),                   -- Rate per CBM (if rate_basis = PER_CBM)
-    rate_per_cft NUMERIC(10,2),                   -- Rate per CFT (if rate_basis = PER_CFT)
+    
+    -- Weight Limits per Volume Slab (prevents misuse in SLAB_BASED model)
+    max_weight_per_slab_kg NUMERIC(10,2),         -- Maximum allowed weight for this volume slab
+                                                  -- Example: 0-3 CBM slab max 3000 kg, 3-5 CBM slab max 5000 kg
+                                                  -- NULL for FLAT_RATE or unlimited slabs
     
     -- Weight-Based Rates
     min_weight_kg NUMERIC(10,2) DEFAULT 0.0,      -- Minimum weight for this rate tier
@@ -78,7 +89,6 @@ CREATE TABLE lcl_ocean_freight_rate (
     CONSTRAINT chk_lcl_weight_range CHECK (max_weight_kg IS NULL OR max_weight_kg >= min_weight_kg),
     CONSTRAINT chk_lcl_rate_defined CHECK (
         (rate_basis = 'PER_CBM' AND rate_per_cbm IS NOT NULL) OR
-        (rate_basis = 'PER_CFT' AND rate_per_cft IS NOT NULL) OR
         (rate_basis = 'PER_TON' AND rate_per_ton IS NOT NULL) OR
         (rate_basis = 'PER_KG' AND rate_per_kg IS NOT NULL)
     )
@@ -93,6 +103,7 @@ CREATE INDEX idx_lcl_tenant ON lcl_ocean_freight_rate(tenant_id);
 CREATE INDEX idx_lcl_volume_range ON lcl_ocean_freight_rate(min_volume_cbm, max_volume_cbm);
 CREATE INDEX idx_lcl_weight_range ON lcl_ocean_freight_rate(min_weight_kg, max_weight_kg);
 CREATE INDEX idx_lcl_service_type ON lcl_ocean_freight_rate(service_type);
+CREATE INDEX idx_lcl_pricing_model ON lcl_ocean_freight_rate(pricing_model);
 CREATE INDEX idx_lcl_rate_basis ON lcl_ocean_freight_rate(rate_basis);
 CREATE INDEX idx_lcl_active ON lcl_ocean_freight_rate(is_active) WHERE is_active = true;
 
@@ -104,13 +115,15 @@ CREATE POLICY lcl_rate_tenant_isolation ON lcl_ocean_freight_rate
 
 -- Table and column comments
 COMMENT ON TABLE lcl_ocean_freight_rate IS 'LCL ocean freight rates with flexible volume/weight-based tiered pricing per vendor';
-COMMENT ON COLUMN lcl_ocean_freight_rate.rate_basis IS 'Pricing method: PER_CBM (standard), PER_CFT (imperial), PER_TON, PER_KG';
+COMMENT ON COLUMN lcl_ocean_freight_rate.rate_basis IS 'Pricing method: PER_CBM (standard), PER_TON, PER_KG';
 COMMENT ON COLUMN lcl_ocean_freight_rate.service_type IS 'DIRECT (dedicated, faster) or CONSOLIDATED (shared, cheaper)';
+COMMENT ON COLUMN lcl_ocean_freight_rate.pricing_model IS 'FLAT_RATE (same rate for all volumes) or SLAB_BASED (different rates per volume range)';
 COMMENT ON COLUMN lcl_ocean_freight_rate.apply_volumetric_weight IS 'If true, chargeable weight = MAX(actual_weight, volume_cbm * volumetric_factor)';
 COMMENT ON COLUMN lcl_ocean_freight_rate.volumetric_factor IS 'CBM to KG conversion factor (default 1000 for ocean, 167 for air)';
 COMMENT ON COLUMN lcl_ocean_freight_rate.minimum_charge IS 'Absolute minimum charge regardless of volume/weight';
-COMMENT ON COLUMN lcl_ocean_freight_rate.min_volume_cbm IS 'Start of volume tier (e.g., 0-1 CBM, 1-5 CBM, 5-10 CBM)';
-COMMENT ON COLUMN lcl_ocean_freight_rate.max_volume_cbm IS 'End of volume tier (NULL = unlimited/10+ CBM)';
+COMMENT ON COLUMN lcl_ocean_freight_rate.min_volume_cbm IS 'Start of volume slab. FLAT_RATE: 0, SLAB_BASED: 0-3, 3-5, 5-8, 8-12 CBM';
+COMMENT ON COLUMN lcl_ocean_freight_rate.max_volume_cbm IS 'End of volume slab. FLAT_RATE: NULL (all volumes), SLAB_BASED: 3, 5, 8, 12, NULL (12+)';
+COMMENT ON COLUMN lcl_ocean_freight_rate.max_weight_per_slab_kg IS 'Maximum weight allowed for this volume slab to prevent misuse (e.g., 0-3 CBM max 3000 kg). NULL for FLAT_RATE';
 
 -- ============================================================================
 -- 2. LCL SURCHARGE TABLE
@@ -135,7 +148,7 @@ CREATE TABLE lcl_surcharge (
     destination_code VARCHAR(10),
     
     -- Rate Structure for LCL
-    rate_basis VARCHAR(20) NOT NULL CHECK (rate_basis IN ('PER_CBM', 'PER_CFT', 'PER_TON', 'PER_KG', 'PER_SHIPMENT', 'FLAT', 'PERCENTAGE')),
+    rate_basis VARCHAR(20) NOT NULL CHECK (rate_basis IN ('PER_CBM', 'PER_TON', 'PER_KG', 'PER_SHIPMENT', 'FLAT', 'PERCENTAGE')),
     amount NUMERIC(10,2) NOT NULL DEFAULT 0,      -- Base amount per unit
     min_charge NUMERIC(10,2),                     -- Minimum charge
     max_charge NUMERIC(10,2),                     -- Maximum charge
@@ -180,7 +193,7 @@ CREATE POLICY lcl_surcharge_tenant_isolation ON lcl_surcharge
 
 -- Comments
 COMMENT ON TABLE lcl_surcharge IS 'LCL-specific surcharges with flexible rate basis (per CBM, per shipment, etc.)';
-COMMENT ON COLUMN lcl_surcharge.rate_basis IS 'PER_CBM, PER_CFT, PER_TON, PER_KG, PER_SHIPMENT (flat per shipment), PERCENTAGE (of freight)';
+COMMENT ON COLUMN lcl_surcharge.rate_basis IS 'PER_CBM, PER_TON, PER_KG, PER_SHIPMENT (flat per shipment), PERCENTAGE (of freight)';
 
 -- ============================================================================
 -- 3. LCL SHIPMENT ITEM TABLE (for quote/enquiry tracking)
@@ -197,7 +210,6 @@ CREATE TABLE lcl_shipment_item (
     
     -- Volume (auto-calculated)
     volume_cbm NUMERIC(10,3) GENERATED ALWAYS AS (length_cm * width_cm * height_cm / 1000000) STORED,
-    volume_cft NUMERIC(10,3) GENERATED ALWAYS AS (length_cm * width_cm * height_cm / 28316.846592) STORED,
     
     -- Weight
     gross_weight_kg NUMERIC(10,2) NOT NULL CHECK (gross_weight_kg > 0),
@@ -216,7 +228,6 @@ CREATE TABLE lcl_shipment_item (
     
     -- Total calculations
     total_volume_cbm NUMERIC(10,3) GENERATED ALWAYS AS (volume_cbm * pieces) STORED,
-    total_volume_cft NUMERIC(10,3) GENERATED ALWAYS AS (volume_cft * pieces) STORED,
     total_weight_kg NUMERIC(10,2) GENERATED ALWAYS AS (gross_weight_kg * pieces) STORED,
     total_chargeable_weight_kg NUMERIC(10,2) GENERATED ALWAYS AS (
         GREATEST(gross_weight_kg, (length_cm * width_cm * height_cm / 1000000) * 1000) * pieces
@@ -256,7 +267,7 @@ COMMENT ON TABLE lcl_shipment_item IS 'Individual items in LCL shipments with au
 COMMENT ON COLUMN lcl_shipment_item.volumetric_weight_kg IS 'Auto-calculated: volume_cbm × 1000 (standard ocean freight factor)';
 COMMENT ON COLUMN lcl_shipment_item.chargeable_weight_kg IS 'Auto-calculated: MAX(actual_weight, volumetric_weight) - used for pricing';
 COMMENT ON COLUMN lcl_shipment_item.volume_cbm IS 'Auto-calculated from dimensions: L × W × H / 1,000,000';
-COMMENT ON COLUMN lcl_shipment_item.volume_cft IS 'Auto-calculated from dimensions: L × W × H / 28,316.846592';
+COMMENT ON COLUMN lcl_shipment_item.is_stackable IS 'Can this package be stacked? Critical for container planning and pricing';
 
 -- ============================================================================
 -- 4. HELPER FUNCTION: Calculate LCL Freight Cost
@@ -351,25 +362,34 @@ COMMENT ON FUNCTION calculate_lcl_freight_cost IS 'Calculate LCL freight cost wi
 -- 5. INSERT SAMPLE DATA FOR TESTING
 -- ============================================================================
 
--- Sample LCL rates from various vendors with different tiers
+-- Sample LCL rates showing BOTH pricing models
 INSERT INTO lcl_ocean_freight_rate (
-    vendor_id, origin_code, destination_code, service_type, rate_basis,
-    min_volume_cbm, max_volume_cbm, rate_per_cbm, minimum_charge,
+    vendor_id, origin_code, destination_code, service_type, pricing_model, rate_basis,
+    min_volume_cbm, max_volume_cbm, rate_per_cbm, max_weight_per_slab_kg, minimum_charge,
     currency, tt_days, valid_from, valid_to, tenant_id
 ) VALUES
--- Maersk: Tiered pricing for INNSA-NLRTM
-(1, 'INNSA', 'NLRTM', 'CONSOLIDATED', 'PER_CBM', 0.0, 1.0, 60.00, 80.00, 'USD', 28, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
-(1, 'INNSA', 'NLRTM', 'CONSOLIDATED', 'PER_CBM', 1.0, 5.0, 50.00, NULL, 'USD', 28, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
-(1, 'INNSA', 'NLRTM', 'CONSOLIDATED', 'PER_CBM', 5.0, 10.0, 45.00, NULL, 'USD', 28, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
-(1, 'INNSA', 'NLRTM', 'CONSOLIDATED', 'PER_CBM', 10.0, NULL, 40.00, NULL, 'USD', 28, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
+-- Example 1: SLAB_BASED pricing (Maersk INNSA-NLRTM)
+-- Standard slabs: 0-3, 3-5, 5-8, 8-12, 12+ CBM with weight limits
+(1, 'INNSA', 'NLRTM', 'CONSOLIDATED', 'SLAB_BASED', 'PER_CBM', 0.0, 3.0, 60.00, 3000, 80.00, 'USD', 28, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
+(1, 'INNSA', 'NLRTM', 'CONSOLIDATED', 'SLAB_BASED', 'PER_CBM', 3.0, 5.0, 52.00, 5000, NULL, 'USD', 28, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
+(1, 'INNSA', 'NLRTM', 'CONSOLIDATED', 'SLAB_BASED', 'PER_CBM', 5.0, 8.0, 48.00, 8000, NULL, 'USD', 28, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
+(1, 'INNSA', 'NLRTM', 'CONSOLIDATED', 'SLAB_BASED', 'PER_CBM', 8.0, 12.0, 45.00, 12000, NULL, 'USD', 28, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
+(1, 'INNSA', 'NLRTM', 'CONSOLIDATED', 'SLAB_BASED', 'PER_CBM', 12.0, NULL, 40.00, NULL, NULL, 'USD', 28, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
 
--- MSC: Different tier structure for INMUN-DEHAM
-(2, 'INMUN', 'DEHAM', 'CONSOLIDATED', 'PER_CBM', 0.0, 2.0, 55.00, 100.00, 'EUR', 25, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
-(2, 'INMUN', 'DEHAM', 'CONSOLIDATED', 'PER_CBM', 2.0, 8.0, 48.00, NULL, 'EUR', 25, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
-(2, 'INMUN', 'DEHAM', 'CONSOLIDATED', 'PER_CBM', 8.0, NULL, 42.00, NULL, 'EUR', 25, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
+-- Example 2: SLAB_BASED pricing (MSC INMUN-DEHAM)
+(2, 'INMUN', 'DEHAM', 'CONSOLIDATED', 'SLAB_BASED', 'PER_CBM', 0.0, 3.0, 58.00, 3000, 100.00, 'EUR', 25, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
+(2, 'INMUN', 'DEHAM', 'CONSOLIDATED', 'SLAB_BASED', 'PER_CBM', 3.0, 5.0, 50.00, 5000, NULL, 'EUR', 25, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
+(2, 'INMUN', 'DEHAM', 'CONSOLIDATED', 'SLAB_BASED', 'PER_CBM', 5.0, 8.0, 46.00, 8000, NULL, 'EUR', 25, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
+(2, 'INMUN', 'DEHAM', 'CONSOLIDATED', 'SLAB_BASED', 'PER_CBM', 8.0, 12.0, 43.00, 12000, NULL, 'EUR', 25, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
+(2, 'INMUN', 'DEHAM', 'CONSOLIDATED', 'SLAB_BASED', 'PER_CBM', 12.0, NULL, 40.00, NULL, NULL, 'EUR', 25, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
 
--- CMA CGM: Direct LCL service (premium, faster)
-(3, 'INNSA', 'NLRTM', 'DIRECT', 'PER_CBM', 0.0, NULL, 80.00, 150.00, 'USD', 20, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001');
+-- Example 3: FLAT_RATE pricing (CMA CGM INNSA-NLRTM Direct)
+-- Single rate for all volumes: $80/CBM regardless of volume
+(3, 'INNSA', 'NLRTM', 'DIRECT', 'FLAT_RATE', 'PER_CBM', 0.0, NULL, 80.00, NULL, 150.00, 'USD', 20, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001'),
+
+-- Example 4: FLAT_RATE pricing (Hapag-Lloyd INMUN-USNYC)
+-- Simple flat rate: €65/CBM for any volume
+(4, 'INMUN', 'USNYC', 'CONSOLIDATED', 'FLAT_RATE', 'PER_CBM', 0.0, NULL, 65.00, NULL, 120.00, 'EUR', 30, '2025-01-01', '2025-12-31', '00000000-0000-0000-0000-000000000001');
 
 -- Sample LCL surcharges
 INSERT INTO lcl_surcharge (
