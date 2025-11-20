@@ -154,26 +154,26 @@
                                     <span class={record.isActiveClass}>{record.isActiveLabel}</span>
                                 </td>
                                 <td data-label="Actions">
-                                    <lightning-button-group>
-                                        <lightning-button
-                                            label="View"
-                                            data-id={record.id}
-                                            onclick={handleView}
-                                            variant="neutral">
-                                        </lightning-button>
-                                        <lightning-button
-                                            label="Edit"
-                                            data-id={record.id}
-                                            onclick={handleEdit}
-                                            variant="neutral">
-                                        </lightning-button>
-                                        <lightning-button
-                                            label="Delete"
-                                            data-id={record.id}
-                                            onclick={handleDelete}
-                                            variant="destructive">
-                                        </lightning-button>
-                                    </lightning-button-group>
+                                    <lightning-button
+                                        label="View"
+                                        data-id={record.id}
+                                        onclick={handleView}
+                                        variant="neutral">
+                                    </lightning-button>
+                                    <lightning-button
+                                        label="Edit"
+                                        data-id={record.id}
+                                        onclick={handleEdit}
+                                        variant="neutral"
+                                        class="slds-m-left_x-small">
+                                    </lightning-button>
+                                    <lightning-button
+                                        label="Delete"
+                                        data-id={record.id}
+                                        onclick={handleDelete}
+                                        variant="destructive"
+                                        class="slds-m-left_x-small">
+                                    </lightning-button>
                                 </td>
                             </tr>
                         </template>
