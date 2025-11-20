@@ -2,54 +2,132 @@
 
 ## 🚨 CRITICAL BUSINESS REQUIREMENT
 
-**Carriers can offer THREE types of rates for inland origins:**
+**Carriers can offer THREE types of rates for BOTH inland origins (IHE) AND inland destinations (IHI):**
 
 ### Type 1: All-Inclusive Rate (Door-to-Door Bundled)
 ```
-Ocean Freight Rate: INSON (Sonipat) → NLRTM (Rotterdam)
-├─ origin_code: INSON
-├─ destination_code: NLRTM
-├─ pol_id: INMUN (Mundra)
-├─ pod_id: NLRTM
-├─ buy_amount: $1,500 (IHE + Ocean bundled)
+Ocean Freight Rate: INSON (Sonipat) → DEHAM (Hamburg Inland)
+├─ origin_code: INSON (inland origin)
+├─ destination_code: DEHAM (inland destination)
+├─ pol_id: INMUN (Mundra - vessel loading)
+├─ pod_id: DEHAM_PORT (Hamburg Port - vessel discharge)
+├─ buy_amount: $1,800 (IHE + Ocean + IHI bundled)
 ├─ includes_ihe: TRUE
-└─ Carrier handles everything, single price
+├─ includes_ihi: TRUE
+└─ Carrier handles everything, single all-inclusive price
 ```
 
-### Type 2: Inland Origin Pricing + Separate IHE (Hybrid Model)
+**For Origin Only (IHE):**
 ```
-Ocean Freight Rate: INSON (Sonipat) → NLRTM (Rotterdam)
+Ocean Freight Rate: INSON (Sonipat) → NLRTM (Rotterdam Port)
+├─ origin_code: INSON (inland origin)
+├─ destination_code: NLRTM (port destination)
+├─ includes_ihe: TRUE
+├─ includes_ihi: FALSE (destination is a port)
+└─ buy_amount: $1,500 (IHE + Ocean bundled)
+```
+
+**For Destination Only (IHI):**
+```
+Ocean Freight Rate: INMUN (Mundra Port) → DEHAM (Hamburg Inland)
+├─ origin_code: INMUN (port origin)
+├─ destination_code: DEHAM (inland destination)
+├─ includes_ihe: FALSE (origin is a port)
+├─ includes_ihi: TRUE
+└─ buy_amount: $1,300 (Ocean + IHI bundled)
+```
+
+### Type 2: Inland Location Pricing + Separate Haulage (Hybrid Model)
+```
+Ocean Freight Rate: INSON (Sonipat) → DEHAM (Hamburg Inland)
 ├─ origin_code: INSON (inland origin as pricing point)
-├─ destination_code: NLRTM
+├─ destination_code: DEHAM (inland destination as pricing point)
 ├─ pol_id: INMUN (Mundra - actual vessel loading)
-├─ pod_id: NLRTM
-├─ buy_amount: $1,200 (ocean only, priced from inland)
+├─ pod_id: DEHAM_PORT (Hamburg Port - actual vessel discharge)
+├─ buy_amount: $1,400 (ocean only, priced from/to inland)
 ├─ includes_ihe: FALSE
+├─ includes_ihi: FALSE
 +
 IHE Rate: INSON → INMUN
 ├─ rate_per_container: ₹18,000 ($216.87)
 └─ Billed separately
++
+IHI Rate: DEHAM_PORT → DEHAM
+├─ rate_per_container: €300 ($320)
+└─ Billed separately
+
+Total: $216.87 + $1,400 + $320 = $1,936.87
+```
+
+**For Origin Only:**
+```
+Ocean: INSON → NLRTM (Rotterdam Port)
+├─ origin_code: INSON (inland pricing point)
+├─ destination_code: NLRTM (port)
+├─ includes_ihe: FALSE
++
+IHE: INSON → INMUN ($216.87)
 
 Total: $1,200 + $216.87 = $1,416.87
 ```
-**Key Point**: Ocean rate uses INSON as origin for pricing/commercial purposes, but POL is still INMUN for routing.
 
-### Type 3: Gateway Port Pricing + Separate IHE (Traditional Model)
+**For Destination Only:**
 ```
-IHE Rate: INSON (Sonipat) → INMUN (Mundra Port)
+Ocean: INMUN → DEHAM (Hamburg Inland)
+├─ origin_code: INMUN (port)
+├─ destination_code: DEHAM (inland pricing point)
+├─ includes_ihi: FALSE
++
+IHI: DEHAM_PORT → DEHAM ($320)
+
+Total: $1,300 + $320 = $1,620
+```
+
+**Key Point**: Ocean rate uses inland locations for pricing/commercial purposes, but POL/POD show actual vessel ports for routing.
+
+### Type 3: Gateway Port Pricing + Separate Haulage (Traditional Model)
+```
+IHE Rate: INSON → INMUN (Mundra Port)
 ├─ rate_per_container: ₹18,000 ($216.87)
 +
-Ocean Freight Rate: INMUN (Mundra) → NLRTM (Rotterdam)
+Ocean Freight Rate: INMUN → DEHAM_PORT (Hamburg Port)
 ├─ origin_code: INMUN (gateway port as pricing point)
-├─ destination_code: NLRTM
+├─ destination_code: DEHAM_PORT (gateway port as pricing point)
 ├─ pol_id: INMUN
-├─ pod_id: NLRTM
+├─ pod_id: DEHAM_PORT
 ├─ buy_amount: $1,200
-└─ includes_ihe: FALSE
+├─ includes_ihe: FALSE
+├─ includes_ihi: FALSE
++
+IHI Rate: DEHAM_PORT → DEHAM (Hamburg Inland)
+├─ rate_per_container: €300 ($320)
+
+Total: $216.87 + $1,200 + $320 = $1,736.87
+```
+
+**For Origin Only:**
+```
+IHE: INSON → INMUN ($216.87)
++
+Ocean: INMUN → NLRTM (Rotterdam Port)
+├─ origin_code: INMUN (port)
+├─ destination_code: NLRTM (port)
 
 Total: $216.87 + $1,200 = $1,416.87
 ```
-**Key Point**: Ocean rate starts from gateway port (INMUN), customer must add IHE separately.
+
+**For Destination Only:**
+```
+Ocean: INMUN → DEHAM_PORT (Hamburg Port)
+├─ origin_code: INMUN (port)
+├─ destination_code: DEHAM_PORT (port)
++
+IHI: DEHAM_PORT → DEHAM ($320)
+
+Total: $1,300 + $320 = $1,620
+```
+
+**Key Point**: Ocean rate uses gateway ports only, customer must add IHE/IHI separately for any inland locations.
 
 ---
 
@@ -527,42 +605,118 @@ WHERE includes_inland_haulage IS NULL;
 
 ---
 
-## 📊 COMPARISON TABLE - ALL THREE SCENARIOS
+## 📊 COMPARISON TABLE - ALL THREE SCENARIOS (WITH IHI)
 
-| Aspect | Type 1: All-Inclusive | Type 2: Inland Origin + IHE | Type 3: Gateway Port + IHE |
-|--------|----------------------|------------------------------|---------------------------|
-| **origin_code** | INSON (inland) | INSON (inland) | INMUN (port) |
+**Example: INSON (Inland) → DEHAM (Inland)**
+
+| Aspect | Type 1: All-Inclusive | Type 2: Inland Pricing + IHE/IHI | Type 3: Gateway Port + IHE/IHI |
+|--------|----------------------|----------------------------------|-------------------------------|
+| **origin_code** | INSON (inland) | INSON (inland) ⭐ | INMUN (port) |
+| **destination_code** | DEHAM (inland) | DEHAM (inland) ⭐ | DEHAM_PORT (port) |
 | **pol_id** | INMUN (port) | INMUN (port) | INMUN (port) |
-| **pol.unlocode** | INMUN | INMUN | INMUN |
-| **includes_ihe** | TRUE | FALSE | FALSE |
-| **Ocean Rate** | $1,500 (bundled) | $1,200 (separate) | $1,200 (separate) |
-| **IHE Needed?** | ❌ No (included) | ✅ Yes (add $216.87) | ✅ Yes (add $216.87) |
-| **Pricing Point** | From inland | From inland | From port |
+| **pod_id** | DEHAM_PORT (port) | DEHAM_PORT (port) | DEHAM_PORT (port) |
+| **includes_ihe** | TRUE | FALSE ⭐ | FALSE |
+| **includes_ihi** | TRUE | FALSE ⭐ | FALSE |
+| **Ocean Rate** | $1,800 (bundled) | $1,400 (separate) | $1,200 (separate) |
+| **IHE Needed?** | ❌ No | ✅ Yes ($216.87) | ✅ Yes ($216.87) |
+| **IHI Needed?** | ❌ No | ✅ Yes ($320) | ✅ Yes ($320) |
+| **Origin Pricing** | From inland | From inland ⭐ | From port |
+| **Dest Pricing** | To inland | To inland ⭐ | To port |
 | **Commercial Model** | Door-to-door | Hybrid transparency | Traditional |
-| **Customer Sees** | 1 line item | 2 line items | 2 line items |
-| **Total Cost** | $1,500 | $1,416.87 | $1,416.87 |
+| **Customer Sees** | 1 line item | 3 line items ⭐ | 3 line items |
+| **Total Cost** | $1,800 | $1,936.87 | $1,736.87 |
 
-**Critical Detection Logic:**
+⭐ = **Type 2 unique characteristics**
+
+**Note**: Type 2 total is higher because the ocean rate base is $1,400 (inland pricing) vs $1,200 (port pricing), but customer can compare all components.
+
+**Critical Detection Logic (IHE + IHI):**
 
 ```typescript
-// Scenario 1: origin = inland, includes_ihe = TRUE
-if (origin_code !== pol_code && includes_ihe === true) {
-  total = ocean_rate;  // IHE already included
-  show = "All-Inclusive";
+async function calculateTotalRate(rate, customer_origin, customer_destination) {
+  let total = rate.buy_amount;
+  let ihe_cost = 0;
+  let ihi_cost = 0;
+  let breakdown = [];
+  
+  const origin_is_inland = rate.origin_code !== pol_code;
+  const dest_is_inland = rate.destination_code !== pod_code;
+  
+  // ============================================
+  // ORIGIN (IHE) LOGIC
+  // ============================================
+  
+  if (origin_is_inland) {
+    if (rate.includes_ihe === true) {
+      // Type 1: IHE bundled in ocean rate
+      breakdown.push("IHE: Included in rate");
+    } else {
+      // Type 2 or 3: Need to add IHE separately
+      ihe_cost = await calculateIHE(rate.origin_code, pol_code);
+      total += ihe_cost;
+      breakdown.push(`IHE (${rate.origin_code} → ${pol_code}): $${ihe_cost}`);
+    }
+  } else if (customer_origin !== rate.origin_code) {
+    // Type 3: Ocean starts from port, but customer is inland
+    ihe_cost = await calculateIHE(customer_origin, pol_code);
+    total += ihe_cost;
+    breakdown.push(`IHE (${customer_origin} → ${pol_code}): $${ihe_cost}`);
+  }
+  
+  // ============================================
+  // DESTINATION (IHI) LOGIC
+  // ============================================
+  
+  if (dest_is_inland) {
+    if (rate.includes_ihi === true) {
+      // Type 1: IHI bundled in ocean rate
+      breakdown.push("IHI: Included in rate");
+    } else {
+      // Type 2 or 3: Need to add IHI separately
+      ihi_cost = await calculateIHI(pod_code, rate.destination_code);
+      total += ihi_cost;
+      breakdown.push(`IHI (${pod_code} → ${rate.destination_code}): $${ihi_cost}`);
+    }
+  } else if (customer_destination !== rate.destination_code) {
+    // Type 3: Ocean ends at port, but customer destination is inland
+    ihi_cost = await calculateIHI(pod_code, customer_destination);
+    total += ihi_cost;
+    breakdown.push(`IHI (${pod_code} → ${customer_destination}): $${ihi_cost}`);
+  }
+  
+  // ============================================
+  // RETURN COMPLETE BREAKDOWN
+  // ============================================
+  
+  breakdown.push(`Ocean (${rate.origin_code} → ${rate.destination_code}): $${rate.buy_amount}`);
+  
+  return {
+    total,
+    ocean_rate: rate.buy_amount,
+    ihe_cost,
+    ihi_cost,
+    breakdown,
+    rate_type: determineRateType(rate, origin_is_inland, dest_is_inland)
+  };
 }
 
-// Scenario 2: origin = inland, includes_ihe = FALSE
-if (origin_code !== pol_code && includes_ihe === false) {
-  ihe = calculateIHE(origin_code, pol_code);
-  total = ocean_rate + ihe;
-  show = "Inland Origin Pricing + Separate IHE";
-}
-
-// Scenario 3: origin = port, includes_ihe = FALSE
-if (origin_code === pol_code && includes_ihe === false) {
-  ihe = calculateIHE(customer_origin, pol_code);  // From user input
-  total = ocean_rate + ihe;
-  show = "Gateway Port Pricing + Separate IHE";
+function determineRateType(rate, origin_is_inland, dest_is_inland) {
+  if (origin_is_inland && dest_is_inland) {
+    if (rate.includes_ihe && rate.includes_ihi) return "TYPE_1_DOOR_TO_DOOR";
+    if (!rate.includes_ihe && !rate.includes_ihi) return "TYPE_2_INLAND_PRICING";
+  }
+  
+  if (origin_is_inland) {
+    if (rate.includes_ihe) return "TYPE_1_IHE_BUNDLED";
+    return "TYPE_2_OR_3_IHE_SEPARATE";
+  }
+  
+  if (dest_is_inland) {
+    if (rate.includes_ihi) return "TYPE_1_IHI_BUNDLED";
+    return "TYPE_2_OR_3_IHI_SEPARATE";
+  }
+  
+  return "PORT_TO_PORT";
 }
 ```
 
@@ -570,21 +724,30 @@ if (origin_code === pol_code && includes_ihe === false) {
 
 ## 🎯 KEY TAKEAWAYS
 
-### 1. **Three Rate Structures Coexist** ✅
+### 1. **Three Rate Structures Coexist (IHE + IHI)** ✅
 ```
-Type 1: origin = INSON, POL = INMUN, includes_ihe = TRUE
-  → IHE already bundled in ocean rate price
-  → Customer pays $1,500 (all-in)
+Type 1: Door-to-Door All-Inclusive
+  origin = INSON (inland), destination = DEHAM (inland)
+  POL = INMUN, POD = DEHAM_PORT
+  includes_ihe = TRUE, includes_ihi = TRUE
+  → IHE + Ocean + IHI all bundled in ocean rate price
+  → Customer pays $1,800 (all-in, 1 line item)
 
-Type 2: origin = INSON, POL = INMUN, includes_ihe = FALSE
-  → Ocean priced from inland, IHE billed separately
-  → Customer pays $1,200 (ocean) + $216.87 (IHE) = $1,416.87
-  → Commercial strategy: Show inland pricing but itemize IHE
+Type 2: Inland Location Pricing + Separate Haulage
+  origin = INSON (inland), destination = DEHAM (inland)
+  POL = INMUN, POD = DEHAM_PORT
+  includes_ihe = FALSE, includes_ihi = FALSE
+  → Ocean priced from/to inland, but IHE/IHI billed separately
+  → Customer pays $216.87 (IHE) + $1,400 (ocean) + $320 (IHI) = $1,936.87
+  → Commercial strategy: Show inland pricing, itemize haulage for transparency
 
-Type 3: origin = INMUN, POL = INMUN, includes_ihe = FALSE
-  → Ocean priced from gateway port
-  → Customer must add IHE from their actual origin
-  → Customer pays $1,200 (ocean) + $216.87 (IHE) = $1,416.87
+Type 3: Gateway Port Pricing + Separate Haulage
+  origin = INMUN (port), destination = DEHAM_PORT (port)
+  POL = INMUN, POD = DEHAM_PORT
+  includes_ihe = FALSE, includes_ihi = FALSE
+  → Ocean priced port-to-port only
+  → Customer must add IHE/IHI from/to their actual locations
+  → Customer pays $216.87 (IHE) + $1,200 (ocean) + $320 (IHI) = $1,736.87
   → Most traditional/transparent model
 ```
 
