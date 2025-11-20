@@ -2,40 +2,70 @@
 
 ## 🚨 CRITICAL BUSINESS REQUIREMENT
 
-**Carriers can offer TWO types of rates for inland origins:**
+**Carriers can offer THREE types of rates for inland origins:**
 
-### Type 1: All-Inclusive Rate (Carrier Haulage)
+### Type 1: All-Inclusive Rate (Door-to-Door Bundled)
 ```
 Ocean Freight Rate: INSON (Sonipat) → NLRTM (Rotterdam)
-├─ Includes: IHE (inland to port) + Ocean Freight
-├─ Single price from customer's door
-└─ Carrier handles everything
+├─ origin_code: INSON
+├─ destination_code: NLRTM
+├─ pol_id: INMUN (Mundra)
+├─ pod_id: NLRTM
+├─ buy_amount: $1,500 (IHE + Ocean bundled)
+├─ includes_ihe: TRUE
+└─ Carrier handles everything, single price
 ```
 
-### Type 2: Separate Rates (Merchant Haulage or Itemized)
+### Type 2: Inland Origin Pricing + Separate IHE (Hybrid Model)
+```
+Ocean Freight Rate: INSON (Sonipat) → NLRTM (Rotterdam)
+├─ origin_code: INSON (inland origin as pricing point)
+├─ destination_code: NLRTM
+├─ pol_id: INMUN (Mundra - actual vessel loading)
+├─ pod_id: NLRTM
+├─ buy_amount: $1,200 (ocean only, priced from inland)
+├─ includes_ihe: FALSE
++
+IHE Rate: INSON → INMUN
+├─ rate_per_container: ₹18,000 ($216.87)
+└─ Billed separately
+
+Total: $1,200 + $216.87 = $1,416.87
+```
+**Key Point**: Ocean rate uses INSON as origin for pricing/commercial purposes, but POL is still INMUN for routing.
+
+### Type 3: Gateway Port Pricing + Separate IHE (Traditional Model)
 ```
 IHE Rate: INSON (Sonipat) → INMUN (Mundra Port)
+├─ rate_per_container: ₹18,000 ($216.87)
 +
 Ocean Freight Rate: INMUN (Mundra) → NLRTM (Rotterdam)
-├─ Two separate rates
-├─ Customer can see breakdown
-└─ More flexibility
+├─ origin_code: INMUN (gateway port as pricing point)
+├─ destination_code: NLRTM
+├─ pol_id: INMUN
+├─ pod_id: NLRTM
+├─ buy_amount: $1,200
+└─ includes_ihe: FALSE
+
+Total: $216.87 + $1,200 = $1,416.87
 ```
+**Key Point**: Ocean rate starts from gateway port (INMUN), customer must add IHE separately.
 
 ---
 
 ## 📊 REAL-WORLD EXAMPLES
 
-### Scenario A: Maersk Direct Inland Rate
+### Scenario A: All-Inclusive Door-to-Door (Type 1)
 
-**Maersk offers door-to-door service:**
+**Maersk offers bundled door-to-door service:**
 ```
 Rate ID: 245
 origin_code: INSON (Sonipat ICD)
 destination_code: NLRTM (Rotterdam)
-pol_id: points to INMUN (Mundra) - physical loading port
-pod_id: points to NLRTM (Rotterdam)
-buy_amount: $1,500 (includes IHE + Ocean)
+pol_id: UUID → INMUN (Mundra) - physical loading port
+pod_id: UUID → NLRTM (Rotterdam)
+buy_amount: $1,500 (IHE + Ocean bundled)
+includes_ihe: TRUE
 container_type: 40HC
 
 This is an ALL-INCLUSIVE rate!
@@ -46,29 +76,80 @@ This is an ALL-INCLUSIVE rate!
 - ✅ System finds rate: $1,500 (all-in)
 - ✅ No need to add separate IHE
 - ✅ pol_id tells us actual vessel loading port (INMUN)
+- ✅ IHE is bundled in the $1,500
 
-### Scenario B: Separate IHE + Ocean Rate
+### Scenario B: Inland Origin Pricing + Separate IHE (Type 2) - **NEW!**
 
-**Same shipment, different pricing structure:**
+**MSC uses inland location as pricing origin, bills IHE separately:**
+```
+Ocean Freight Rate:
+  rate_id: 246
+  origin_code: INSON (inland as pricing point)
+  destination_code: NLRTM (Rotterdam)
+  pol_id: UUID → INMUN (Mundra - actual vessel loading)
+  pod_id: UUID → NLRTM (Rotterdam)
+  buy_amount: $1,200 (ocean freight only)
+  includes_ihe: FALSE
+  vendor: MSC
+
+IHE Rate:
+  route_id: 12 (HR-INSON-INMUN-RD)
+  from_location_id: UUID → INSON (Sonipat)
+  to_location_id: UUID → INMUN (Mundra)
+  rate_per_container: ₹18,000 ($216.87)
+  vendor: ABC Logistics or MSC
+
+Total: $1,200 + $216.87 = $1,416.87
+```
+
+**What this means:**
+- ✅ Customer searches: INSON → NLRTM
+- ✅ System finds ocean rate with origin = INSON
+- ✅ origin_code ≠ pol.unlocode → Inland origin detected
+- ✅ includes_ihe = FALSE → Need to add separate IHE
+- ✅ System calculates IHE from INSON → INMUN
+- ✅ Total = Ocean + IHE
+
+**Commercial Logic:**
+- Carrier prices ocean freight FROM inland point (competitive positioning)
+- But IHE is billed as separate line item
+- Customer sees transparency in pricing
+
+### Scenario C: Gateway Port Pricing + Separate IHE (Type 3) - Traditional
+
+**CMA CGM prices from gateway port:**
 ```
 IHE Rate:
   route_id: 12 (HR-INSON-INMUN-RD)
   from: INSON (Sonipat)
   to: INMUN (Mundra)
   rate_per_container: ₹18,000 ($216.87)
-  vendor: ABC Logistics
+  vendor: XYZ Logistics
 
 Ocean Freight Rate:
-  rate_id: 246
-  origin_code: INMUN (Mundra)
+  rate_id: 247
+  origin_code: INMUN (gateway port as pricing origin)
   destination_code: NLRTM (Rotterdam)
-  pol_id: INMUN
-  pod_id: NLRTM
+  pol_id: UUID → INMUN
+  pod_id: UUID → NLRTM
   buy_amount: $1,200
-  vendor: Maersk
+  includes_ihe: FALSE
+  vendor: CMA CGM
 
 Total: $216.87 + $1,200 = $1,416.87
 ```
+
+**What this means:**
+- ✅ Customer searches: INSON → NLRTM
+- ✅ System finds NO direct rate for INSON → NLRTM
+- ✅ System finds rate for INMUN → NLRTM
+- ✅ System adds IHE from INSON → INMUN
+- ✅ Total = IHE + Ocean
+
+**Commercial Logic:**
+- Carrier prices ocean freight FROM gateway port only
+- Customer must arrange/buy IHE separately
+- Most transparent pricing model
 
 ---
 
@@ -211,26 +292,40 @@ switch (rate.rate_basis) {
 
 When user searches: INSON → NLRTM
 
-**Show both rate types:**
+**Show all three rate types:**
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ Option 1: Maersk All-Inclusive                         │
+│ Option 1: Maersk All-Inclusive (Door-to-Door)         │
 │ Rate: $1,500 (includes inland haulage)                 │
-│ ├─ IHE: Included                                       │
-│ ├─ Ocean: Included                                     │
+│ ├─ IHE (INSON → INMUN): Included ✅                    │
+│ ├─ Ocean (INMUN → NLRTM): Included ✅                  │
 │ └─ Total: $1,500                                       │
 │ [Select] [Details]                                     │
 └─────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────┐
-│ Option 2: MSC Port-to-Port + Separate Haulage         │
-│ Rate: $1,200 (ocean only)                              │
-│ ├─ IHE: $216.87 (separate)                            │
-│ ├─ Ocean: $1,200                                       │
+│ Option 2: MSC Inland Origin Pricing + Separate IHE    │
+│ Ocean Rate: $1,200 (priced from INSON)                │
+│ ├─ IHE (INSON → INMUN): $216.87 (separate) 📦         │
+│ ├─ Ocean (INSON → NLRTM): $1,200                      │
+│ └─ Total: $1,416.87                                    │
+│ [Select] [Details]                                     │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ Option 3: CMA CGM Gateway Port + Separate Haulage     │
+│ Ocean Rate: $1,200 (from gateway port)                │
+│ ├─ IHE (INSON → INMUN): $216.87 (separate) 📦         │
+│ ├─ Ocean (INMUN → NLRTM): $1,200                      │
 │ └─ Total: $1,416.87                                    │
 │ [Select] [Details]                                     │
 └─────────────────────────────────────────────────────────┘
 ```
+
+**Key Differences:**
+- **Option 1**: origin = INSON, includes_ihe = TRUE
+- **Option 2**: origin = INSON, includes_ihe = FALSE (inland origin pricing)
+- **Option 3**: origin = INMUN, includes_ihe = FALSE (gateway port pricing)
 
 ### Rate Details Modal
 
@@ -432,15 +527,65 @@ WHERE includes_inland_haulage IS NULL;
 
 ---
 
+## 📊 COMPARISON TABLE - ALL THREE SCENARIOS
+
+| Aspect | Type 1: All-Inclusive | Type 2: Inland Origin + IHE | Type 3: Gateway Port + IHE |
+|--------|----------------------|------------------------------|---------------------------|
+| **origin_code** | INSON (inland) | INSON (inland) | INMUN (port) |
+| **pol_id** | INMUN (port) | INMUN (port) | INMUN (port) |
+| **pol.unlocode** | INMUN | INMUN | INMUN |
+| **includes_ihe** | TRUE | FALSE | FALSE |
+| **Ocean Rate** | $1,500 (bundled) | $1,200 (separate) | $1,200 (separate) |
+| **IHE Needed?** | ❌ No (included) | ✅ Yes (add $216.87) | ✅ Yes (add $216.87) |
+| **Pricing Point** | From inland | From inland | From port |
+| **Commercial Model** | Door-to-door | Hybrid transparency | Traditional |
+| **Customer Sees** | 1 line item | 2 line items | 2 line items |
+| **Total Cost** | $1,500 | $1,416.87 | $1,416.87 |
+
+**Critical Detection Logic:**
+
+```typescript
+// Scenario 1: origin = inland, includes_ihe = TRUE
+if (origin_code !== pol_code && includes_ihe === true) {
+  total = ocean_rate;  // IHE already included
+  show = "All-Inclusive";
+}
+
+// Scenario 2: origin = inland, includes_ihe = FALSE
+if (origin_code !== pol_code && includes_ihe === false) {
+  ihe = calculateIHE(origin_code, pol_code);
+  total = ocean_rate + ihe;
+  show = "Inland Origin Pricing + Separate IHE";
+}
+
+// Scenario 3: origin = port, includes_ihe = FALSE
+if (origin_code === pol_code && includes_ihe === false) {
+  ihe = calculateIHE(customer_origin, pol_code);  // From user input
+  total = ocean_rate + ihe;
+  show = "Gateway Port Pricing + Separate IHE";
+}
+```
+
+---
+
 ## 🎯 KEY TAKEAWAYS
 
-### 1. **Two Rate Structures Coexist** ✅
+### 1. **Three Rate Structures Coexist** ✅
 ```
-Structure A: origin = INSON, POL = INMUN, includes_ihe = FALSE
-  → Need separate IHE rate
+Type 1: origin = INSON, POL = INMUN, includes_ihe = TRUE
+  → IHE already bundled in ocean rate price
+  → Customer pays $1,500 (all-in)
 
-Structure B: origin = INSON, POL = INMUN, includes_ihe = TRUE
-  → IHE already bundled in price
+Type 2: origin = INSON, POL = INMUN, includes_ihe = FALSE
+  → Ocean priced from inland, IHE billed separately
+  → Customer pays $1,200 (ocean) + $216.87 (IHE) = $1,416.87
+  → Commercial strategy: Show inland pricing but itemize IHE
+
+Type 3: origin = INMUN, POL = INMUN, includes_ihe = FALSE
+  → Ocean priced from gateway port
+  → Customer must add IHE from their actual origin
+  → Customer pays $1,200 (ocean) + $216.87 (IHE) = $1,416.87
+  → Most traditional/transparent model
 ```
 
 ### 2. **POL Always Shows Routing** ✅
