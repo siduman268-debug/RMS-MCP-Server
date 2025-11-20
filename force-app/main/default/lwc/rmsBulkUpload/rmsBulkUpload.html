@@ -1,0 +1,189 @@
+<template>
+    <lightning-card title="Bulk Upload" icon-name="utility:upload">
+        
+        <!-- Step 1: Select Entity Type -->
+        <div class="slds-card__body slds-card__body_inner">
+            <div class="slds-m-bottom_medium">
+                <lightning-combobox
+                    name="entityType"
+                    label="Select Entity Type"
+                    value={selectedEntity}
+                    placeholder="Choose an entity to upload..."
+                    options={entityOptions}
+                    onchange={handleEntityChange}
+                    required>
+                </lightning-combobox>
+            </div>
+
+            <!-- Step 2: Download Template (shown after entity selected) -->
+            <template if:true={isEntitySelected}>
+                <div class="slds-box slds-box_x-small slds-theme_shade slds-m-bottom_medium">
+                    <div class="slds-grid slds-grid_vertical-align-center">
+                        <div class="slds-col slds-size_3-of-4">
+                            <lightning-icon icon-name="utility:info" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+                            <span class="slds-text-body_small">
+                                Download the CSV template for <strong>{entityLabel}</strong> to ensure correct format.
+                            </span>
+                        </div>
+                        <div class="slds-col slds-size_1-of-4 slds-text-align_right">
+                            <lightning-button
+                                label="Download Template"
+                                icon-name="utility:download"
+                                onclick={handleDownloadTemplate}
+                                variant="brand">
+                            </lightning-button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: File Upload -->
+                <div class="slds-form-element slds-m-bottom_medium">
+                    <label class="slds-form-element__label" for="file-upload">
+                        <abbr class="slds-required" title="required">* </abbr>Upload CSV File
+                    </label>
+                    <div class="slds-form-element__control">
+                        <div class="slds-file-selector slds-file-selector_files">
+                            <div class="slds-file-selector__dropzone">
+                                <input
+                                    type="file"
+                                    class="slds-file-selector__input slds-assistive-text"
+                                    accept=".csv"
+                                    id="file-upload"
+                                    onchange={handleFileUpload}
+                                    aria-label="File Upload" />
+                                <label class="slds-file-selector__body" for="file-upload">
+                                    <span class="slds-file-selector__button slds-button slds-button_neutral">
+                                        <lightning-icon icon-name="utility:upload" size="x-small"></lightning-icon>
+                                        Upload File
+                                    </span>
+                                    <span class="slds-file-selector__text slds-medium-show">or drop file here</span>
+                                </label>
+                            </div>
+                        </div>
+                        <template if:true={fileName}>
+                            <div class="slds-m-top_small">
+                                <div class="slds-pill-container">
+                                    <span class="slds-pill" role="option" tabindex="0" aria-selected="true">
+                                        <lightning-icon icon-name="doctype:csv" size="x-small"></lightning-icon>
+                                        <span class="slds-pill__label slds-m-left_x-small">{fileName}</span>
+                                        <button class="slds-button slds-button_icon slds-pill__remove" title="Remove" onclick={handleClearFile}>
+                                            <lightning-icon icon-name="utility:close" size="x-small" alternative-text="Remove"></lightning-icon>
+                                            <span class="slds-assistive-text">Remove</span>
+                                        </button>
+                                    </span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Step 4: Upload Button -->
+                <div class="slds-m-bottom_medium slds-text-align_center">
+                    <lightning-button
+                        label="Upload & Process"
+                        variant="brand"
+                        icon-name="utility:upload"
+                        disabled={uploadDisabled}
+                        onclick={handleUpload}
+                        class="slds-m-right_small">
+                    </lightning-button>
+                    <lightning-button
+                        label="Clear"
+                        variant="neutral"
+                        onclick={handleClearFile}>
+                    </lightning-button>
+                </div>
+
+                <!-- Loading Spinner -->
+                <template if:true={loading}>
+                    <div class="slds-m-vertical_medium">
+                        <lightning-spinner alternative-text="Processing upload..." size="medium"></lightning-spinner>
+                        <div class="slds-text-align_center slds-m-top_small">
+                            <p class="slds-text-body_regular">Processing your upload... Please wait.</p>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Upload Results -->
+                <template if:true={showResults}>
+                    <div class="slds-box slds-theme_default slds-m-top_medium">
+                        <h3 class="slds-text-heading_small slds-m-bottom_small">Upload Results</h3>
+                        
+                        <div class="slds-grid slds-wrap slds-gutters_small">
+                            <!-- Total Records -->
+                            <div class="slds-col slds-size_1-of-3">
+                                <div class="slds-box slds-box_x-small slds-theme_shade">
+                                    <div class="slds-text-align_center">
+                                        <lightning-icon icon-name="utility:file" size="small"></lightning-icon>
+                                        <div class="slds-text-heading_large slds-m-top_x-small">{uploadResults.total}</div>
+                                        <div class="slds-text-body_small">Total Records</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Successful -->
+                            <div class="slds-col slds-size_1-of-3">
+                                <div class="slds-box slds-box_x-small slds-theme_success">
+                                    <div class="slds-text-align_center">
+                                        <lightning-icon icon-name="utility:success" size="small" variant="inverse"></lightning-icon>
+                                        <div class="slds-text-heading_large slds-m-top_x-small">{uploadResults.successful}</div>
+                                        <div class="slds-text-body_small">Successful</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Failed -->
+                            <div class="slds-col slds-size_1-of-3">
+                                <div class="slds-box slds-box_x-small slds-theme_error">
+                                    <div class="slds-text-align_center">
+                                        <lightning-icon icon-name="utility:error" size="small" variant="inverse"></lightning-icon>
+                                        <div class="slds-text-heading_large slds-m-top_x-small">{uploadResults.failed}</div>
+                                        <div class="slds-text-body_small">Failed</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Error Details (if any) -->
+                        <template if:true={uploadResults.errors.length}>
+                            <div class="slds-m-top_medium">
+                                <h4 class="slds-text-heading_small slds-m-bottom_small">Error Details:</h4>
+                                <div class="slds-box slds-theme_alert-texture slds-theme_error">
+                                    <ul class="slds-list_dotted">
+                                        <template for:each={uploadResults.errors} for:item="error">
+                                            <li key={error}>{error}</li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </template>
+
+            <!-- Instructions (shown when no entity selected) -->
+            <template if:false={isEntitySelected}>
+                <div class="slds-box slds-theme_shade">
+                    <h3 class="slds-text-heading_small slds-m-bottom_small">
+                        <lightning-icon icon-name="utility:info" size="x-small"></lightning-icon>
+                        How to use Bulk Upload
+                    </h3>
+                    <ol class="slds-list_ordered">
+                        <li class="slds-m-bottom_small">Select the entity type you want to upload (Vendors, Contracts, Rates, etc.)</li>
+                        <li class="slds-m-bottom_small">Download the CSV template for that entity</li>
+                        <li class="slds-m-bottom_small">Fill in your data following the template format</li>
+                        <li class="slds-m-bottom_small">Upload the completed CSV file</li>
+                        <li>Review the upload results and fix any errors if needed</li>
+                    </ol>
+                    <div class="slds-m-top_medium">
+                        <p class="slds-text-body_small slds-text-color_weak">
+                            <strong>Note:</strong> All uploads are validated before being saved. 
+                            Invalid records will be rejected with detailed error messages.
+                        </p>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </lightning-card>
+</template>
+
