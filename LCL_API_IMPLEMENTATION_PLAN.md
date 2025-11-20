@@ -314,6 +314,228 @@ POST /api/v4/prepare-lcl-quote
 
 ---
 
+### Phase 4: Upgrade FCL Inland Haulage Pricing Engine (2-3 hours)
+
+#### 4.1 Background: The 3 Inland Haulage Scenarios
+
+Today we added `includes_inland_haulage` JSONB column to `ocean_freight_rate` to handle complex carrier pricing models:
+
+**Schema:**
+```sql
+includes_inland_haulage JSONB DEFAULT NULL
+
+Structure:
+{
+  "ihe_included": boolean,     -- Is Inland Haulage Export included?
+  "ihi_included": boolean,     -- Is Inland Haulage Import included?
+  "pricing_model": string,     -- "all_inclusive" | "inland_origin" | "gateway_port"
+  "ihe_from_location": uuid,   -- If IHE included, from which inland point
+  "ihi_to_location": uuid,     -- If IHI included, to which inland point
+  "notes": string
+}
+```
+
+**The 3 Pricing Models:**
+
+1. **All-Inclusive Door-to-Door** (`all_inclusive`)
+   - Carrier includes IHE in ocean freight rate
+   - Origin = inland point (e.g., INSON)
+   - ⚠️ **DO NOT add separate IHE charge** (would double-charge customer)
+   - Example: Maersk door rate INSON-NLRTM @ $2000/40HC (IHE bundled)
+
+2. **Inland Origin Pricing + Separate IHE** (`inland_origin`)
+   - Ocean rate priced FROM inland point (e.g., INSON)
+   - But carrier bills IHE separately
+   - Example: Ocean INSON-NLRTM @ $1800 + IHE INSON-INNSA @ $200 = $2000
+   - ⚠️ **MUST add IHE charge** even though origin is inland
+
+3. **Gateway Port Pricing + Separate IHE** (`gateway_port`)
+   - Traditional: Ocean rate FROM port (e.g., INNSA)
+   - IHE billed separately
+   - Example: Ocean INNSA-NLRTM @ $1500 + IHE INSON-INNSA @ $200 = $1700
+   - ✅ Current behavior - no changes needed
+
+#### 4.2 Files to Update
+
+**File 1: `src/routes/v4-routes.ts`**
+
+**Endpoints:**
+- `POST /api/v4/search-rates` (FCL)
+- `POST /api/v4/prepare-quote` (FCL)
+
+**Current Logic (Simplified):**
+```typescript
+// Step 1: Fetch ocean freight rate
+const oceanRate = await fetchOceanRate(origin, destination, containerType);
+
+// Step 2: Fetch inland haulage (if origin is inland)
+if (isInlandLocation(origin)) {
+  const ihe = await fetchInlandHaulage(origin, nearestPort);
+  totalCost += ihe;
+}
+
+// Step 3: Return total
+return { oceanFreight: oceanRate, inlandHaulage: ihe, total: totalCost };
+```
+
+**⚠️ PROBLEM:** This always adds IHE for inland origins, even when it's already included in ocean rate!
+
+**New Logic (To Implement):**
+```typescript
+// Step 1: Fetch ocean freight rate
+const oceanRate = await fetchOceanRate(origin, destination, containerType);
+
+// Step 2: Check if inland haulage is bundled
+let ihe = 0;
+let iheNote = '';
+
+if (oceanRate.includes_inland_haulage) {
+  const haulageConfig = oceanRate.includes_inland_haulage;
+  
+  switch (haulageConfig.pricing_model) {
+    case 'all_inclusive':
+      // IHE already in ocean rate - DO NOT add separate charge
+      ihe = 0;
+      iheNote = `IHE included in ocean freight rate from ${origin}`;
+      break;
+      
+    case 'inland_origin':
+      // Ocean rate is from inland, but IHE charged separately
+      const fromLocation = haulageConfig.ihe_from_location;
+      const toLocation = await getNearestPort(origin); // POL
+      ihe = await fetchInlandHaulage(fromLocation, toLocation);
+      iheNote = `IHE billed separately: ${origin} → ${toLocation}`;
+      break;
+      
+    case 'gateway_port':
+      // Traditional: Ocean from port, IHE separate
+      if (isInlandLocation(origin)) {
+        const pol = await getNearestPort(origin);
+        ihe = await fetchInlandHaulage(origin, pol);
+        iheNote = `IHE: ${origin} → ${pol}`;
+      }
+      break;
+  }
+} else {
+  // Legacy behavior: no haulage metadata, assume gateway_port
+  if (isInlandLocation(origin)) {
+    const pol = await getNearestPort(origin);
+    ihe = await fetchInlandHaulage(origin, pol);
+    iheNote = `IHE: ${origin} → ${pol}`;
+  }
+}
+
+// Step 3: Return with clear breakdown
+return {
+  oceanFreight: oceanRate.amount,
+  inlandHaulage: { ihe, note: iheNote },
+  total: oceanRate.amount + ihe
+};
+```
+
+#### 4.3 Implementation Tasks
+
+**Task 1: Update Rate Fetching Logic**
+- Modify `fetchOceanRate()` to include `includes_inland_haulage` column
+- Add to both search-rates and prepare-quote endpoints
+
+**Task 2: Add Pricing Model Detection**
+```typescript
+function detectPricingModel(oceanRate, origin, destination) {
+  // If origin is inland and ocean rate origin matches inland location
+  if (isInlandLocation(origin) && oceanRate.origin_code === origin) {
+    // Check if carrier typically bundles or separates
+    // This may need carrier-specific config or manual tagging
+    return 'inland_origin'; // or 'all_inclusive'
+  } else if (isInlandLocation(origin) && oceanRate.origin_code !== origin) {
+    // Ocean rate is from port, not inland
+    return 'gateway_port';
+  }
+  return 'gateway_port'; // Default
+}
+```
+
+**Task 3: Update Response Schema**
+Add clear indicators in API response:
+```json
+{
+  "freight_breakdown": {
+    "ocean_freight": {
+      "amount": 1800,
+      "origin": "INSON",
+      "destination": "NLRTM",
+      "pricing_model": "inland_origin",
+      "ihe_included": false
+    },
+    "inland_haulage": {
+      "ihe": {
+        "amount": 200,
+        "from": "INSON",
+        "to": "INNSA",
+        "note": "IHE billed separately by carrier"
+      }
+    },
+    "total": 2000
+  }
+}
+```
+
+**Task 4: Update Existing Rates**
+Create migration script to populate `includes_inland_haulage` for existing rates:
+```sql
+-- Identify rates that need tagging
+UPDATE ocean_freight_rate
+SET includes_inland_haulage = jsonb_build_object(
+  'ihe_included', false,
+  'ihi_included', false,
+  'pricing_model', 'gateway_port',
+  'notes', 'Default: traditional port-to-port pricing'
+)
+WHERE includes_inland_haulage IS NULL
+  AND origin_id IN (SELECT id FROM locations WHERE location_type = 'PORT');
+
+-- Tag inland-origin rates (manual review needed)
+-- UPDATE ocean_freight_rate
+-- SET includes_inland_haulage = jsonb_build_object(...)
+-- WHERE origin_id IN (SELECT id FROM locations WHERE location_type = 'INLAND');
+```
+
+**Task 5: Update `simplified_inland_function`**
+- May need to pass `pricing_model` context
+- Ensure it doesn't return IHE cost when `all_inclusive`
+
+**Task 6: Testing**
+Test all 3 scenarios:
+
+| Scenario | Origin | Ocean Rate Origin | IHE in Ocean? | Separate IHE? | Expected Total |
+|----------|--------|-------------------|---------------|---------------|----------------|
+| All-Inclusive | INSON | INSON | ✅ Yes | ❌ No | $2000 (ocean only) |
+| Inland Origin | INSON | INSON | ❌ No | ✅ Yes | $1800 + $200 = $2000 |
+| Gateway Port | INSON | INNSA | ❌ No | ✅ Yes | $1500 + $200 = $1700 |
+
+#### 4.4 Documentation Updates
+
+**Update `HAULAGE_DUAL_RATE_STRUCTURE.md`:**
+- Add API integration examples
+- Document response schema
+- Add testing guide
+
+**Update `API_DOCUMENTATION_V4.md`:**
+- Document `includes_inland_haulage` field
+- Add examples for all 3 pricing models
+- Clarify when IHE is/isn't charged
+
+#### 4.5 Success Criteria
+
+✅ No double-charging for all-inclusive rates  
+✅ Correct IHE added for inland-origin rates  
+✅ Existing gateway-port rates work as before  
+✅ API response clearly shows pricing model  
+✅ All existing tests pass  
+✅ New tests cover all 3 scenarios  
+
+---
+
 ## 🛠️ Technical Considerations
 
 ### Tenant Isolation
@@ -348,8 +570,9 @@ POST /api/v4/prepare-lcl-quote
 1. ✅ 18 CRUD endpoints for 3 LCL tables
 2. ✅ `POST /api/v4/search-lcl-rates` endpoint
 3. ✅ `POST /api/v4/prepare-lcl-quote` endpoint
-4. ✅ Audit logging for all operations
-5. ✅ Error handling and validation
+4. ✅ Upgrade FCL `search-rates` and `prepare-quote` for inland haulage models
+5. ✅ Audit logging for all operations
+6. ✅ Error handling and validation
 
 ### Testing
 1. ✅ Postman/curl tests for all endpoints
@@ -387,25 +610,37 @@ POST /api/v4/prepare-lcl-quote
 |------|--------|-----------|--------|
 | Database Schema | ✅ Complete | 2h | 3h |
 | Pricing Function | ✅ Complete | 1h | 1.5h |
-| CRUD APIs (3 tables) | ⏳ Pending | 4h | - |
-| Search Rates API | ⏳ Pending | 3h | - |
-| Prepare Quote API | ⏳ Pending | 3h | - |
+| LCL CRUD APIs (3 tables) | ⏳ Pending | 4h | - |
+| LCL Search Rates API | ⏳ Pending | 3h | - |
+| LCL Prepare Quote API | ⏳ Pending | 3h | - |
+| FCL Inland Haulage Upgrade | ⏳ Pending | 3h | - |
 | Testing & Documentation | ⏳ Pending | 2h | - |
 
-**Total Estimated**: 10 hours for full LCL API layer
+**Total Estimated**: 13 hours for full implementation (LCL + FCL upgrade)
 
 ---
 
 ## 🎯 Success Criteria
 
+### LCL APIs
 ✅ All LCL CRUD endpoints working  
 ✅ Search rates returns correct slab match  
 ✅ Chargeable weight calculated correctly  
 ✅ Surcharges applied (flat + percentage)  
 ✅ Minimum charge enforced  
 ✅ Quote generation working end-to-end  
+
+### FCL Inland Haulage Upgrade
+✅ No double-charging for all-inclusive rates  
+✅ Correct IHE added for inland-origin rates  
+✅ Gateway-port rates work as before (no regression)  
+✅ API response shows pricing model clearly  
+✅ All 3 scenarios tested and working  
+
+### General
 ✅ Audit logs captured  
 ✅ API documentation updated  
+✅ Migration scripts provided  
 
 ---
 
