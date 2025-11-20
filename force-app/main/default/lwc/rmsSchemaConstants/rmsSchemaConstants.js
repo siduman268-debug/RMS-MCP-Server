@@ -213,6 +213,145 @@ export const MARGIN_RULE_FIELDS = {
 };
 
 // ==========================================
+// HAULAGE - TRANSPORT MODES
+// ==========================================
+export const TRANSPORT_MODES = [
+    { label: 'Road', value: 'ROAD' },
+    { label: 'Rail', value: 'RAIL' },
+    { label: 'Barge', value: 'BARGE' }
+];
+
+// ==========================================
+// HAULAGE - RATE BASIS
+// ==========================================
+export const RATE_BASIS_OPTIONS = [
+    { label: 'Per Container', value: 'PER_CONTAINER' },
+    { label: 'Weight Slab', value: 'WEIGHT_SLAB' },
+    { label: 'Per Kilogram', value: 'PER_KG' },
+    { label: 'Per Ton', value: 'PER_TON' },
+    { label: 'Per CBM', value: 'PER_CBM' },
+    { label: 'Flat Rate', value: 'FLAT' }
+];
+
+// ==========================================
+// HAULAGE - SERVICE FREQUENCY
+// ==========================================
+export const SERVICE_FREQUENCY_OPTIONS = [
+    { label: 'Daily', value: 'Daily' },
+    { label: 'Twice a Week', value: 'Twice a Week' },
+    { label: 'Weekly', value: 'Weekly' },
+    { label: 'Biweekly', value: 'Biweekly' },
+    { label: 'Monthly', value: 'Monthly' },
+    { label: 'On Demand', value: 'On Demand' }
+];
+
+// ==========================================
+// HAULAGE RESPONSIBILITY - TERM CATEGORIES
+// ==========================================
+export const HAULAGE_TERM_CATEGORIES = [
+    { label: 'Incoterm', value: 'INCOTERM' },
+    { label: 'Custom', value: 'CUSTOM' },
+    { label: 'Standard', value: 'STANDARD' }
+];
+
+export const HAULAGE_ARRANGED_BY_OPTIONS = [
+    { label: 'Carrier', value: 'CARRIER' },
+    { label: 'Merchant', value: 'MERCHANT' },
+    { label: 'Forwarder', value: 'FORWARDER' }
+];
+
+export const HAULAGE_PAID_BY_OPTIONS = [
+    { label: 'Carrier', value: 'CARRIER' },
+    { label: 'Merchant', value: 'MERCHANT' },
+    { label: 'Forwarder', value: 'FORWARDER' },
+    { label: 'Consignee', value: 'CONSIGNEE' }
+];
+
+// ==========================================
+// HAULAGE ROUTE FIELDS
+// ==========================================
+export const HAULAGE_ROUTE_FIELDS = {
+    route_code: { label: 'Route Code', type: 'text', required: true, maxLength: 50 },
+    route_name: { label: 'Route Name', type: 'text', required: false, maxLength: 255 },
+    from_location_id: { label: 'From Location', type: 'portlookup', required: true, maxLength: 10 },
+    to_location_id: { label: 'To Location', type: 'portlookup', required: true, maxLength: 10 },
+    total_distance_km: { label: 'Total Distance (KM)', type: 'number', required: false, min: 0, step: 0.01 },
+    avg_transit_days: { label: 'Avg Transit Days', type: 'number', required: false, min: 0 },
+    service_frequency: { label: 'Service Frequency', type: 'picklist', required: false, options: SERVICE_FREQUENCY_OPTIONS },
+    available_modes: { label: 'Available Modes', type: 'multiselect', required: false, options: TRANSPORT_MODES, defaultValue: ['ROAD'] },
+    primary_mode: { label: 'Primary Mode', type: 'picklist', required: false, options: TRANSPORT_MODES, defaultValue: 'ROAD' },
+    is_active: { label: 'Active', type: 'checkbox', required: false, defaultValue: true },
+    notes: { label: 'Notes', type: 'textarea', required: false }
+};
+
+// ==========================================
+// HAULAGE RATE FIELDS
+// ==========================================
+export const HAULAGE_RATE_FIELDS = {
+    vendor_id: { label: 'Vendor', type: 'lookup', required: true, relatedEntity: 'vendors' },
+    contract_id: { label: 'Contract', type: 'lookup', required: false, relatedEntity: 'contracts' },
+    charge_code: { label: 'Charge Code', type: 'chargelookup', required: true, maxLength: 50 },
+    route_id: { label: 'Route', type: 'lookup', required: true, relatedEntity: 'haulageRoutes' },
+    leg_id: { label: 'Leg (optional)', type: 'lookup', required: false, relatedEntity: 'haulageLegs' },
+    transport_mode: { label: 'Transport Mode', type: 'picklist', required: true, options: TRANSPORT_MODES },
+    rate_basis: { label: 'Rate Basis', type: 'picklist', required: true, options: RATE_BASIS_OPTIONS },
+    container_type: { label: 'Container Type', type: 'picklist', required: false, options: CONTAINER_TYPES },
+    rate_per_container: { label: 'Rate Per Container', type: 'number', required: false, min: 0, step: 0.01 },
+    min_weight_kg: { label: 'Min Weight (KG)', type: 'number', required: false, min: 0, step: 0.01 },
+    max_weight_kg: { label: 'Max Weight (KG)', type: 'number', required: false, min: 0, step: 0.01 },
+    rate_per_unit: { label: 'Rate Per Unit', type: 'number', required: false, min: 0, step: 0.01 },
+    flat_rate: { label: 'Flat Rate', type: 'number', required: false, min: 0, step: 0.01 },
+    currency: { label: 'Currency', type: 'picklist', required: true, options: CURRENCY_CODES, defaultValue: 'INR' },
+    fuel_surcharge_pct: { label: 'Fuel Surcharge %', type: 'number', required: false, min: 0, step: 0.01, defaultValue: 0 },
+    toll_charges: { label: 'Toll Charges', type: 'number', required: false, min: 0, step: 0.01, defaultValue: 0 },
+    loading_charges: { label: 'Loading Charges', type: 'number', required: false, min: 0, step: 0.01, defaultValue: 0 },
+    unloading_charges: { label: 'Unloading Charges', type: 'number', required: false, min: 0, step: 0.01, defaultValue: 0 },
+    documentation_fee: { label: 'Documentation Fee', type: 'number', required: false, min: 0, step: 0.01, defaultValue: 0 },
+    free_days: { label: 'Free Days', type: 'number', required: false, min: 0, defaultValue: 3 },
+    detention_per_day: { label: 'Detention Per Day', type: 'number', required: false, min: 0, step: 0.01 },
+    minimum_charge: { label: 'Minimum Charge', type: 'number', required: false, min: 0, step: 0.01 },
+    valid_from: { label: 'Valid From', type: 'date', required: true },
+    valid_to: { label: 'Valid To', type: 'date', required: true },
+    is_active: { label: 'Active', type: 'checkbox', required: false, defaultValue: true },
+    notes: { label: 'Notes', type: 'textarea', required: false }
+};
+
+// ==========================================
+// HAULAGE LEG FIELDS
+// ==========================================
+export const HAULAGE_LEG_FIELDS = {
+    route_id: { label: 'Route', type: 'lookup', required: true, relatedEntity: 'haulageRoutes' },
+    leg_sequence: { label: 'Leg Sequence', type: 'number', required: true, min: 1 },
+    leg_name: { label: 'Leg Name', type: 'text', required: false, maxLength: 255 },
+    from_location_id: { label: 'From Location', type: 'portlookup', required: true, maxLength: 10 },
+    to_location_id: { label: 'To Location', type: 'portlookup', required: true, maxLength: 10 },
+    transport_mode: { label: 'Transport Mode', type: 'picklist', required: true, options: TRANSPORT_MODES },
+    distance_km: { label: 'Distance (KM)', type: 'number', required: false, min: 0, step: 0.01 },
+    transit_days: { label: 'Transit Days', type: 'number', required: false, min: 0 },
+    via_point_id: { label: 'Via Point', type: 'portlookup', required: false, maxLength: 10 },
+    notes: { label: 'Notes', type: 'textarea', required: false }
+};
+
+// ==========================================
+// HAULAGE RESPONSIBILITY FIELDS
+// ==========================================
+export const HAULAGE_RESPONSIBILITY_FIELDS = {
+    term_code: { label: 'Term Code', type: 'text', required: true, maxLength: 50 },
+    term_name: { label: 'Term Name', type: 'text', required: true, maxLength: 255 },
+    term_category: { label: 'Term Category', type: 'picklist', required: false, options: HAULAGE_TERM_CATEGORIES },
+    description: { label: 'Description', type: 'textarea', required: false },
+    ihe_arranged_by: { label: 'IHE Arranged By', type: 'picklist', required: true, options: HAULAGE_ARRANGED_BY_OPTIONS },
+    ihe_paid_by: { label: 'IHE Paid By', type: 'picklist', required: true, options: HAULAGE_PAID_BY_OPTIONS },
+    ihe_include_in_quote: { label: 'Include IHE in Quote', type: 'checkbox', required: false, defaultValue: true },
+    ihi_arranged_by: { label: 'IHI Arranged By', type: 'picklist', required: true, options: HAULAGE_ARRANGED_BY_OPTIONS },
+    ihi_paid_by: { label: 'IHI Paid By', type: 'picklist', required: true, options: HAULAGE_PAID_BY_OPTIONS },
+    ihi_include_in_quote: { label: 'Include IHI in Quote', type: 'checkbox', required: false, defaultValue: true },
+    common_usage: { label: 'Common Usage', type: 'text', required: false, maxLength: 255 },
+    notes: { label: 'Notes', type: 'textarea', required: false },
+    is_active: { label: 'Active', type: 'checkbox', required: false, defaultValue: true }
+};
+
+// ==========================================
 // HELPER FUNCTIONS
 // ==========================================
 
@@ -223,7 +362,11 @@ export function getFieldConfig(entityType, fieldName) {
         rates: RATE_FIELDS,
         oceanFreight: RATE_FIELDS, // Ocean Freight uses same fields as rates
         surcharges: SURCHARGE_FIELDS,
-        marginRules: MARGIN_RULE_FIELDS
+        marginRules: MARGIN_RULE_FIELDS,
+        haulageRoutes: HAULAGE_ROUTE_FIELDS,
+        haulageRates: HAULAGE_RATE_FIELDS,
+        haulageLegs: HAULAGE_LEG_FIELDS,
+        haulageResponsibilities: HAULAGE_RESPONSIBILITY_FIELDS
     };
     return fieldConfigs[entityType]?.[fieldName];
 }
@@ -240,7 +383,11 @@ export function getRequiredFields(entityType) {
         rates: RATE_FIELDS,
         oceanFreight: RATE_FIELDS, // Ocean Freight uses same fields as rates
         surcharges: SURCHARGE_FIELDS,
-        marginRules: MARGIN_RULE_FIELDS
+        marginRules: MARGIN_RULE_FIELDS,
+        haulageRoutes: HAULAGE_ROUTE_FIELDS,
+        haulageRates: HAULAGE_RATE_FIELDS,
+        haulageLegs: HAULAGE_LEG_FIELDS,
+        haulageResponsibilities: HAULAGE_RESPONSIBILITY_FIELDS
     };
     const fields = fieldConfigs[entityType] || {};
     return Object.keys(fields).filter(key => fields[key].required);
@@ -254,7 +401,11 @@ export function getAllFields(entityType) {
         rates: RATE_FIELDS,
         oceanFreight: RATE_FIELDS,
         surcharges: SURCHARGE_FIELDS,
-        marginRules: MARGIN_RULE_FIELDS
+        marginRules: MARGIN_RULE_FIELDS,
+        haulageRoutes: HAULAGE_ROUTE_FIELDS,
+        haulageRates: HAULAGE_RATE_FIELDS,
+        haulageLegs: HAULAGE_LEG_FIELDS,
+        haulageResponsibilities: HAULAGE_RESPONSIBILITY_FIELDS
     };
     return fieldConfigs[entityType] || {};
 }

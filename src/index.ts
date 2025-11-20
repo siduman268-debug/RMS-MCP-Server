@@ -5268,6 +5268,760 @@ async function createHttpServer() {
     }
   });
 
+  // ============================================
+  // HAULAGE ROUTES CRUD APIS
+  // ============================================
+
+  // List/Search Haulage Routes
+  fastify.get('/api/haulage-routes', async (request, reply) => {
+    try {
+      const { from_location, to_location, is_active, primary_mode, limit = '100' } = request.query as any;
+      const tenantId = (request as any).tenant_id;
+
+      console.log('🚛 [HAULAGE ROUTES LIST] Fetching routes for tenant:', tenantId);
+
+      let query = supabase
+        .from('haulage_route')
+        .select(`
+          *,
+          from_location:locations!haulage_route_from_location_id_fkey(id, location_code, location_name, country_code),
+          to_location:locations!haulage_route_to_location_id_fkey(id, location_code, location_name, country_code)
+        `)
+        .eq('tenant_id', tenantId);
+
+      if (is_active !== undefined && is_active !== '') {
+        query = query.eq('is_active', is_active === 'true');
+      }
+
+      if (primary_mode) {
+        query = query.eq('primary_mode', primary_mode);
+      }
+
+      if (from_location) {
+        query = query.or(`from_location_id.eq.${from_location},from_location.location_code.ilike.%${from_location}%`);
+      }
+
+      if (to_location) {
+        query = query.or(`to_location_id.eq.${to_location},to_location.location_code.ilike.%${to_location}%`);
+      }
+
+      query = query.order('route_code', { ascending: true }).limit(parseInt(limit));
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      console.log(`✅ [HAULAGE ROUTES LIST] Found ${data?.length || 0} routes`);
+
+      return reply.send({
+        success: true,
+        data: data || []
+      });
+    } catch (error: any) {
+      console.error('❌ [HAULAGE ROUTES LIST] Error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch haulage routes'
+      });
+    }
+  });
+
+  // Get Single Haulage Route
+  fastify.get('/api/haulage-routes/:routeId', async (request, reply) => {
+    try {
+      const { routeId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
+
+      const { data, error } = await supabase
+        .from('haulage_route')
+        .select(`
+          *,
+          from_location:locations!haulage_route_from_location_id_fkey(id, location_code, location_name, country_code),
+          to_location:locations!haulage_route_to_location_id_fkey(id, location_code, location_name, country_code)
+        `)
+        .eq('id', routeId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch haulage route'
+      });
+    }
+  });
+
+  // Create Haulage Route
+  fastify.post('/api/haulage-routes', async (request, reply) => {
+    try {
+      const tenantId = (request as any).tenant_id;
+      const payload = { ...(request.body as any), tenant_id: tenantId };
+
+      console.log('🚛 [HAULAGE ROUTE CREATE] Creating route:', payload);
+
+      const { data, error } = await supabase
+        .from('haulage_route')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'haulage_route', String(data.id), 'CREATE', undefined, undefined, undefined, data);
+
+      console.log('✅ [HAULAGE ROUTE CREATE] Created:', data.id);
+
+      return reply.send({
+        success: true,
+        data: data,
+        message: 'Haulage route created successfully'
+      });
+    } catch (error: any) {
+      console.error('❌ [HAULAGE ROUTE CREATE] Error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to create haulage route'
+      });
+    }
+  });
+
+  // Update Haulage Route
+  fastify.put('/api/haulage-routes/:routeId', async (request, reply) => {
+    try {
+      const { routeId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
+      const payload = request.body;
+
+      // Get old data first for audit
+      const { data: oldData } = await supabase
+        .from('haulage_route')
+        .select('*')
+        .eq('id', routeId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      const { data, error } = await supabase
+        .from('haulage_route')
+        .update(payload)
+        .eq('id', routeId)
+        .eq('tenant_id', tenantId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'haulage_route', String(routeId), 'UPDATE', undefined, undefined, oldData, data);
+
+      return reply.send({
+        success: true,
+        data: data,
+        message: 'Haulage route updated successfully'
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to update haulage route'
+      });
+    }
+  });
+
+  // Delete Haulage Route
+  fastify.delete('/api/haulage-routes/:routeId', async (request, reply) => {
+    try {
+      const { routeId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
+
+      // Get old data first for audit
+      const { data: oldData } = await supabase
+        .from('haulage_route')
+        .select('*')
+        .eq('id', routeId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      const { error } = await supabase
+        .from('haulage_route')
+        .delete()
+        .eq('id', routeId)
+        .eq('tenant_id', tenantId);
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'haulage_route', String(routeId), 'DELETE', undefined, undefined, oldData, null);
+
+      return reply.send({
+        success: true,
+        message: `Haulage route ${routeId} deleted successfully`
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to delete haulage route'
+      });
+    }
+  });
+
+  // ============================================
+  // HAULAGE RATES CRUD APIS
+  // ============================================
+
+  // List/Search Haulage Rates
+  fastify.get('/api/haulage-rates', async (request, reply) => {
+    try {
+      const { vendor_id, route_id, transport_mode, container_type, is_active, limit = '100' } = request.query as any;
+      const tenantId = (request as any).tenant_id;
+
+      console.log('💰 [HAULAGE RATES LIST] Fetching rates for tenant:', tenantId);
+
+      let query = supabase
+        .from('haulage_rate')
+        .select(`
+          *,
+          vendor(id, name),
+          contract:rate_contract(id, name, contract_number),
+          route:haulage_route(id, route_code, route_name, from_location_id, to_location_id)
+        `)
+        .eq('tenant_id', tenantId);
+
+      if (vendor_id) {
+        query = query.eq('vendor_id', vendor_id);
+      }
+
+      if (route_id) {
+        query = query.eq('route_id', route_id);
+      }
+
+      if (transport_mode) {
+        query = query.eq('transport_mode', transport_mode);
+      }
+
+      if (container_type) {
+        query = query.eq('container_type', container_type);
+      }
+
+      if (is_active !== undefined && is_active !== '') {
+        query = query.eq('is_active', is_active === 'true');
+      }
+
+      query = query.order('id', { ascending: false }).limit(parseInt(limit));
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      console.log(`✅ [HAULAGE RATES LIST] Found ${data?.length || 0} rates`);
+
+      return reply.send({
+        success: true,
+        data: data || []
+      });
+    } catch (error: any) {
+      console.error('❌ [HAULAGE RATES LIST] Error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch haulage rates'
+      });
+    }
+  });
+
+  // Get Single Haulage Rate
+  fastify.get('/api/haulage-rates/:rateId', async (request, reply) => {
+    try {
+      const { rateId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
+
+      const { data, error } = await supabase
+        .from('haulage_rate')
+        .select(`
+          *,
+          vendor(id, name),
+          contract:rate_contract(id, name, contract_number),
+          route:haulage_route(id, route_code, route_name)
+        `)
+        .eq('id', rateId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch haulage rate'
+      });
+    }
+  });
+
+  // Create Haulage Rate
+  fastify.post('/api/haulage-rates', async (request, reply) => {
+    try {
+      const tenantId = (request as any).tenant_id;
+      const payload = { ...(request.body as any), tenant_id: tenantId };
+
+      console.log('💰 [HAULAGE RATE CREATE] Creating rate:', payload);
+
+      const { data, error } = await supabase
+        .from('haulage_rate')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'haulage_rate', String(data.id), 'CREATE', undefined, undefined, undefined, data);
+
+      console.log('✅ [HAULAGE RATE CREATE] Created:', data.id);
+
+      return reply.send({
+        success: true,
+        data: data,
+        message: 'Haulage rate created successfully'
+      });
+    } catch (error: any) {
+      console.error('❌ [HAULAGE RATE CREATE] Error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to create haulage rate'
+      });
+    }
+  });
+
+  // Update Haulage Rate
+  fastify.put('/api/haulage-rates/:rateId', async (request, reply) => {
+    try {
+      const { rateId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
+      const payload = request.body;
+
+      // Get old data first for audit
+      const { data: oldData } = await supabase
+        .from('haulage_rate')
+        .select('*')
+        .eq('id', rateId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      const { data, error } = await supabase
+        .from('haulage_rate')
+        .update(payload)
+        .eq('id', rateId)
+        .eq('tenant_id', tenantId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'haulage_rate', String(rateId), 'UPDATE', undefined, undefined, oldData, data);
+
+      return reply.send({
+        success: true,
+        data: data,
+        message: 'Haulage rate updated successfully'
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to update haulage rate'
+      });
+    }
+  });
+
+  // Delete Haulage Rate
+  fastify.delete('/api/haulage-rates/:rateId', async (request, reply) => {
+    try {
+      const { rateId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
+
+      // Get old data first for audit
+      const { data: oldData } = await supabase
+        .from('haulage_rate')
+        .select('*')
+        .eq('id', rateId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      const { error } = await supabase
+        .from('haulage_rate')
+        .delete()
+        .eq('id', rateId)
+        .eq('tenant_id', tenantId);
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'haulage_rate', String(rateId), 'DELETE', undefined, undefined, oldData, null);
+
+      return reply.send({
+        success: true,
+        message: `Haulage rate ${rateId} deleted successfully`
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to delete haulage rate'
+      });
+    }
+  });
+
+  // ============================================
+  // HAULAGE LEGS CRUD APIS
+  // ============================================
+
+  // List/Search Haulage Legs
+  fastify.get('/api/haulage-legs', async (request, reply) => {
+    try {
+      const { route_id, limit = '100' } = request.query as any;
+      const tenantId = (request as any).tenant_id;
+
+      console.log('🔗 [HAULAGE LEGS LIST] Fetching legs for tenant:', tenantId);
+
+      let query = supabase
+        .from('haulage_leg')
+        .select(`
+          *,
+          route:haulage_route(id, route_code, route_name),
+          from_location:locations!haulage_leg_from_location_id_fkey(id, location_code, location_name),
+          to_location:locations!haulage_leg_to_location_id_fkey(id, location_code, location_name)
+        `)
+        .eq('tenant_id', tenantId);
+
+      if (route_id) {
+        query = query.eq('route_id', route_id);
+      }
+
+      query = query.order('route_id', { ascending: true }).order('leg_sequence', { ascending: true }).limit(parseInt(limit));
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      console.log(`✅ [HAULAGE LEGS LIST] Found ${data?.length || 0} legs`);
+
+      return reply.send({
+        success: true,
+        data: data || []
+      });
+    } catch (error: any) {
+      console.error('❌ [HAULAGE LEGS LIST] Error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch haulage legs'
+      });
+    }
+  });
+
+  // Get Single Haulage Leg
+  fastify.get('/api/haulage-legs/:legId', async (request, reply) => {
+    try {
+      const { legId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
+
+      const { data, error } = await supabase
+        .from('haulage_leg')
+        .select(`
+          *,
+          route:haulage_route(id, route_code, route_name),
+          from_location:locations!haulage_leg_from_location_id_fkey(id, location_code, location_name),
+          to_location:locations!haulage_leg_to_location_id_fkey(id, location_code, location_name)
+        `)
+        .eq('id', legId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch haulage leg'
+      });
+    }
+  });
+
+  // Create Haulage Leg
+  fastify.post('/api/haulage-legs', async (request, reply) => {
+    try {
+      const tenantId = (request as any).tenant_id;
+      const payload = { ...(request.body as any), tenant_id: tenantId };
+
+      console.log('🔗 [HAULAGE LEG CREATE] Creating leg:', payload);
+
+      const { data, error } = await supabase
+        .from('haulage_leg')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'haulage_leg', String(data.id), 'CREATE', undefined, undefined, undefined, data);
+
+      console.log('✅ [HAULAGE LEG CREATE] Created:', data.id);
+
+      return reply.send({
+        success: true,
+        data: data,
+        message: 'Haulage leg created successfully'
+      });
+    } catch (error: any) {
+      console.error('❌ [HAULAGE LEG CREATE] Error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to create haulage leg'
+      });
+    }
+  });
+
+  // Update Haulage Leg
+  fastify.put('/api/haulage-legs/:legId', async (request, reply) => {
+    try {
+      const { legId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
+      const payload = request.body;
+
+      // Get old data first for audit
+      const { data: oldData } = await supabase
+        .from('haulage_leg')
+        .select('*')
+        .eq('id', legId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      const { data, error } = await supabase
+        .from('haulage_leg')
+        .update(payload)
+        .eq('id', legId)
+        .eq('tenant_id', tenantId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'haulage_leg', String(legId), 'UPDATE', undefined, undefined, oldData, data);
+
+      return reply.send({
+        success: true,
+        data: data,
+        message: 'Haulage leg updated successfully'
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to update haulage leg'
+      });
+    }
+  });
+
+  // Delete Haulage Leg
+  fastify.delete('/api/haulage-legs/:legId', async (request, reply) => {
+    try {
+      const { legId } = request.params as any;
+      const tenantId = (request as any).tenant_id;
+
+      // Get old data first for audit
+      const { data: oldData } = await supabase
+        .from('haulage_leg')
+        .select('*')
+        .eq('id', legId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      const { error } = await supabase
+        .from('haulage_leg')
+        .delete()
+        .eq('id', legId)
+        .eq('tenant_id', tenantId);
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'haulage_leg', String(legId), 'DELETE', undefined, undefined, oldData, null);
+
+      return reply.send({
+        success: true,
+        message: `Haulage leg ${legId} deleted successfully`
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to delete haulage leg'
+      });
+    }
+  });
+
+  // ============================================
+  // HAULAGE RESPONSIBILITIES CRUD APIS
+  // ============================================
+
+  // List/Search Haulage Responsibilities
+  fastify.get('/api/haulage-responsibilities', async (request, reply) => {
+    try {
+      const { term_category, is_active, limit = '100' } = request.query as any;
+
+      console.log('📋 [HAULAGE RESP LIST] Fetching haulage responsibilities');
+
+      let query = supabase
+        .from('haulage_responsibility')
+        .select('*');
+
+      if (term_category) {
+        query = query.eq('term_category', term_category);
+      }
+
+      if (is_active !== undefined && is_active !== '') {
+        query = query.eq('is_active', is_active === 'true');
+      }
+
+      query = query.order('term_code', { ascending: true }).limit(parseInt(limit));
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      console.log(`✅ [HAULAGE RESP LIST] Found ${data?.length || 0} terms`);
+
+      return reply.send({
+        success: true,
+        data: data || []
+      });
+    } catch (error: any) {
+      console.error('❌ [HAULAGE RESP LIST] Error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch haulage responsibilities'
+      });
+    }
+  });
+
+  // Get Single Haulage Responsibility
+  fastify.get('/api/haulage-responsibilities/:respId', async (request, reply) => {
+    try {
+      const { respId } = request.params as any;
+
+      const { data, error } = await supabase
+        .from('haulage_responsibility')
+        .select('*')
+        .eq('id', respId)
+        .single();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch haulage responsibility'
+      });
+    }
+  });
+
+  // Create Haulage Responsibility
+  fastify.post('/api/haulage-responsibilities', async (request, reply) => {
+    try {
+      const payload = request.body;
+
+      console.log('📋 [HAULAGE RESP CREATE] Creating term:', payload);
+
+      const { data, error } = await supabase
+        .from('haulage_responsibility')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      console.log('✅ [HAULAGE RESP CREATE] Created:', data.id);
+
+      return reply.send({
+        success: true,
+        data: data,
+        message: 'Haulage responsibility created successfully'
+      });
+    } catch (error: any) {
+      console.error('❌ [HAULAGE RESP CREATE] Error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to create haulage responsibility'
+      });
+    }
+  });
+
+  // Update Haulage Responsibility
+  fastify.put('/api/haulage-responsibilities/:respId', async (request, reply) => {
+    try {
+      const { respId } = request.params as any;
+      const payload = request.body;
+
+      const { data, error } = await supabase
+        .from('haulage_responsibility')
+        .update(payload)
+        .eq('id', respId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data,
+        message: 'Haulage responsibility updated successfully'
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to update haulage responsibility'
+      });
+    }
+  });
+
+  // Delete Haulage Responsibility
+  fastify.delete('/api/haulage-responsibilities/:respId', async (request, reply) => {
+    try {
+      const { respId } = request.params as any;
+
+      const { error } = await supabase
+        .from('haulage_responsibility')
+        .delete()
+        .eq('id', respId);
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        message: `Haulage responsibility ${respId} deleted successfully`
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to delete haulage responsibility'
+      });
+    }
+  });
+
   // Add schedule routes (DCSA webhook, sync, etc.)
   addScheduleRoutes(fastify, supabase);
 
@@ -5323,6 +6077,26 @@ async function main() {
       console.error("  GET  /api/margin-rules/:ruleId");
       console.error("  GET  /api/margin-rules");
       console.error("  DELETE /api/margin-rules/:ruleId");
+      console.error("  POST /api/haulage-routes");
+      console.error("  PUT  /api/haulage-routes/:routeId");
+      console.error("  GET  /api/haulage-routes/:routeId");
+      console.error("  GET  /api/haulage-routes");
+      console.error("  DELETE /api/haulage-routes/:routeId");
+      console.error("  POST /api/haulage-rates");
+      console.error("  PUT  /api/haulage-rates/:rateId");
+      console.error("  GET  /api/haulage-rates/:rateId");
+      console.error("  GET  /api/haulage-rates");
+      console.error("  DELETE /api/haulage-rates/:rateId");
+      console.error("  POST /api/haulage-legs");
+      console.error("  PUT  /api/haulage-legs/:legId");
+      console.error("  GET  /api/haulage-legs/:legId");
+      console.error("  GET  /api/haulage-legs");
+      console.error("  DELETE /api/haulage-legs/:legId");
+      console.error("  POST /api/haulage-responsibilities");
+      console.error("  PUT  /api/haulage-responsibilities/:respId");
+      console.error("  GET  /api/haulage-responsibilities/:respId");
+      console.error("  GET  /api/haulage-responsibilities");
+      console.error("  DELETE /api/haulage-responsibilities/:respId");
     } catch (error) {
       console.error("Failed to start HTTP server:", error);
     }
