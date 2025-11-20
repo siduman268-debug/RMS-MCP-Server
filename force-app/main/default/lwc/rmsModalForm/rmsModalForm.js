@@ -6,6 +6,10 @@ import {
     RATE_FIELDS, 
     SURCHARGE_FIELDS, 
     MARGIN_RULE_FIELDS,
+    HAULAGE_ROUTE_FIELDS,
+    HAULAGE_RATE_FIELDS,
+    HAULAGE_LEG_FIELDS,
+    HAULAGE_RESPONSIBILITY_FIELDS,
     getFieldConfig,
     CONTAINER_TYPES,
     CURRENCY_CODES,
@@ -56,6 +60,29 @@ export default class RmsModalForm extends LightningElement {
         
         if (this.mode === 'edit' || this.mode === 'view') {
             this.formData = this.record && Object.keys(this.record).length > 0 ? { ...this.record } : {};
+            
+            // Special handling for haulage entities with nested location objects
+            if (this.entityType === 'haulageRoutes' || this.entityType === 'haulageRates' || 
+                this.entityType === 'haulageLegs') {
+                // Extract location names for display in lookup fields
+                if (this.formData.from_location) {
+                    this.formData.from_location_id = this.formData.from_location_id || this.formData.from_location.id;
+                    this.formData.from_location_name = this.formData.from_location.location_name;
+                    this.formData.from_location_code = this.formData.from_location.location_code;
+                }
+                if (this.formData.to_location) {
+                    this.formData.to_location_id = this.formData.to_location_id || this.formData.to_location.id;
+                    this.formData.to_location_name = this.formData.to_location.location_name;
+                    this.formData.to_location_code = this.formData.to_location.location_code;
+                }
+                // For haulage_leg, also handle via_point
+                if (this.entityType === 'haulageLegs' && this.formData.via_point) {
+                    this.formData.via_point_id = this.formData.via_point_id || this.formData.via_point.id;
+                    this.formData.via_point_name = this.formData.via_point.location_name;
+                    this.formData.via_point_code = this.formData.via_point.location_code;
+                }
+            }
+            
             console.log('rmsModalForm: formData set for edit/view', this.formData);
         } else if (this.mode === 'create') {
             this.formData = this.getDefaultFormData();
@@ -299,12 +326,26 @@ export default class RmsModalForm extends LightningElement {
         return Object.keys(fieldConfigs).map(fieldName => {
             const config = fieldConfigs[fieldName];
             const fieldType = config.type || 'text';
+            
+            // For port lookup fields in edit/view mode, show location name if available
+            let displayValue = this.formData[fieldName] !== undefined ? this.formData[fieldName] : (config.defaultValue || '');
+            if (fieldType === 'portlookup' && (this.mode === 'edit' || this.mode === 'view')) {
+                // Check for corresponding location name field
+                const nameField = fieldName.replace('_id', '_name');
+                const codeField = fieldName.replace('_id', '_code');
+                if (this.formData[nameField] && this.formData[codeField]) {
+                    displayValue = `${this.formData[nameField]} (${this.formData[codeField]})`;
+                } else if (this.formData[codeField]) {
+                    displayValue = this.formData[codeField];
+                }
+            }
+            
             return {
                 name: fieldName,
                 label: config.label,
                 type: fieldType,
                 required: config.required,
-                value: this.formData[fieldName] !== undefined ? this.formData[fieldName] : (config.defaultValue || ''),
+                value: displayValue,
                 options: config.options || [],
                 placeholder: config.placeholder || '',
                 maxLength: config.maxLength,
@@ -333,7 +374,11 @@ export default class RmsModalForm extends LightningElement {
             rates: RATE_FIELDS,
             oceanFreight: RATE_FIELDS, // Ocean Freight uses same fields as rates
             surcharges: SURCHARGE_FIELDS,
-            marginRules: MARGIN_RULE_FIELDS
+            marginRules: MARGIN_RULE_FIELDS,
+            haulageRoutes: HAULAGE_ROUTE_FIELDS,
+            haulageRates: HAULAGE_RATE_FIELDS,
+            haulageLegs: HAULAGE_LEG_FIELDS,
+            haulageTerms: HAULAGE_RESPONSIBILITY_FIELDS
         };
         return configs[this.entityType] || {};
     }

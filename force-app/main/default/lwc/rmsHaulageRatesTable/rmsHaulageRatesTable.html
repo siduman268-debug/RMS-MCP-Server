@@ -82,9 +82,29 @@
                                 <td data-label="Charge Code"><div class="slds-truncate">{record.charge_code}</div></td>
                                 <td data-label="Status"><span class={record.isActiveClass}>{record.isActiveLabel}</span></td>
                                 <td data-label="Actions">
-                                    <lightning-button label="View" data-id={record.id} onclick={handleView} variant="neutral"></lightning-button>
-                                    <lightning-button label="Edit" data-id={record.id} onclick={handleEdit} variant="neutral" class="slds-m-left_x-small"></lightning-button>
-                                    <lightning-button label="Delete" data-id={record.id} onclick={handleDelete} variant="destructive" class="slds-m-left_x-small"></lightning-button>
+                                    <div class="slds-button-group" role="group">
+                                        <lightning-button-icon 
+                                            icon-name="utility:preview" 
+                                            variant="border-filled" 
+                                            alternative-text="View"
+                                            data-id={record.id}
+                                            onclick={handleView}>
+                                        </lightning-button-icon>
+                                        <lightning-button-icon 
+                                            icon-name="utility:edit" 
+                                            variant="border-filled" 
+                                            alternative-text="Edit"
+                                            data-id={record.id}
+                                            onclick={handleEdit}>
+                                        </lightning-button-icon>
+                                        <lightning-button-icon 
+                                            icon-name="utility:delete" 
+                                            variant="border-filled" 
+                                            alternative-text="Delete"
+                                            data-id={record.id}
+                                            onclick={handleDelete}>
+                                        </lightning-button-icon>
+                                    </div>
                                 </td>
                             </tr>
                         </template>
