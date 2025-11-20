@@ -118,6 +118,18 @@
                         </c-rms-margin-rules-cards>
                     </template>
                 </lightning-tab>
+                
+                <lightning-tab label="Inland Haulage" value="haulage" data-key="haulage">
+                    <c-rms-haulage-management
+                        oncreate={handleCreate}
+                        onedit={handleEdit}
+                        onview={handleView}
+                        ondelete={handleDelete}
+                        onupload={handleUpload}
+                        onexport={handleExport}
+                        ondataload={handleDataLoad}>
+                    </c-rms-haulage-management>
+                </lightning-tab>
             </lightning-tabset>
             
             <!-- Bulk Actions Bar -->

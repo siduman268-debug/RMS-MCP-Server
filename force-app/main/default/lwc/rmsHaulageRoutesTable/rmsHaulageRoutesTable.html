@@ -1,0 +1,199 @@
+<template>
+    <div class="slds-grid slds-gutters slds-wrap slds-m-bottom_medium">
+        <!-- Filters -->
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-4">
+            <lightning-input
+                type="text"
+                label="From Location"
+                value={filterFromLocation}
+                onchange={handleFilterChange}
+                placeholder="Search by location code or name">
+            </lightning-input>
+        </div>
+        
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-4">
+            <lightning-input
+                type="text"
+                label="To Location"
+                value={filterToLocation}
+                onchange={handleFilterChange}
+                placeholder="Search by location code or name">
+            </lightning-input>
+        </div>
+        
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-4">
+            <lightning-combobox
+                label="Primary Mode"
+                value={filterMode}
+                options={modeOptions}
+                onchange={handleFilterChange}>
+            </lightning-combobox>
+        </div>
+        
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-4">
+            <lightning-combobox
+                label="Status"
+                value={filterStatus}
+                options={statusOptions}
+                onchange={handleFilterChange}>
+            </lightning-combobox>
+        </div>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="slds-grid slds-gutters slds-m-bottom_medium">
+        <div class="slds-col">
+            <lightning-button
+                label="Create Route"
+                icon-name="utility:add"
+                variant="brand"
+                onclick={handleCreate}>
+            </lightning-button>
+            <lightning-button
+                label="Clear Filters"
+                icon-name="utility:clear"
+                onclick={handleClearFilters}
+                class="slds-m-left_small">
+            </lightning-button>
+        </div>
+        <div class="slds-col slds-text-align_right">
+            <lightning-button
+                label="Upload CSV"
+                icon-name="utility:upload"
+                onclick={handleUpload}>
+            </lightning-button>
+            <lightning-button
+                label="Export"
+                icon-name="utility:download"
+                onclick={handleExport}
+                class="slds-m-left_small">
+            </lightning-button>
+        </div>
+    </div>
+    
+    <!-- Loading Spinner -->
+    <template if:true={loading}>
+        <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+    </template>
+    
+    <!-- Routes Table -->
+    <template if:false={loading}>
+        <div class="slds-table_header-fixed_container" style="max-height: 600px;">
+            <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_striped">
+                <thead>
+                    <tr class="slds-line-height_reset">
+                        <th scope="col" style="width: 120px;">
+                            <div class="slds-truncate" title="Route Code">Route Code</div>
+                        </th>
+                        <th scope="col">
+                            <div class="slds-truncate" title="Route Name">Route Name</div>
+                        </th>
+                        <th scope="col">
+                            <div class="slds-truncate" title="From Location">From Location</div>
+                        </th>
+                        <th scope="col">
+                            <div class="slds-truncate" title="To Location">To Location</div>
+                        </th>
+                        <th scope="col" style="width: 100px;">
+                            <div class="slds-truncate" title="Mode">Mode</div>
+                        </th>
+                        <th scope="col" style="width: 100px;">
+                            <div class="slds-truncate" title="Distance">Distance</div>
+                        </th>
+                        <th scope="col" style="width: 100px;">
+                            <div class="slds-truncate" title="Transit">Transit</div>
+                        </th>
+                        <th scope="col" style="width: 100px;">
+                            <div class="slds-truncate" title="Status">Status</div>
+                        </th>
+                        <th scope="col" style="width: 150px;">
+                            <div class="slds-truncate" title="Actions">Actions</div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template if:true={formattedRecords.length}>
+                        <template for:each={formattedRecords} for:item="record">
+                            <tr key={record.id} class="slds-hint-parent">
+                                <td data-label="Route Code">
+                                    <div class="slds-truncate" title={record.route_code}>
+                                        <strong>{record.route_code}</strong>
+                                    </div>
+                                </td>
+                                <td data-label="Route Name">
+                                    <div class="slds-truncate" title={record.route_name}>
+                                        {record.route_name}
+                                    </div>
+                                </td>
+                                <td data-label="From Location">
+                                    <div class="slds-truncate" title={record.fromLocationName}>
+                                        <strong>{record.fromLocationCode}</strong> - {record.fromLocationName}
+                                    </div>
+                                </td>
+                                <td data-label="To Location">
+                                    <div class="slds-truncate" title={record.toLocationName}>
+                                        <strong>{record.toLocationCode}</strong> - {record.toLocationName}
+                                    </div>
+                                </td>
+                                <td data-label="Mode">
+                                    <div class="slds-truncate" title={record.primary_mode}>
+                                        {record.primary_mode}
+                                    </div>
+                                </td>
+                                <td data-label="Distance">
+                                    <div class="slds-truncate" title={record.distanceFormatted}>
+                                        {record.distanceFormatted}
+                                    </div>
+                                </td>
+                                <td data-label="Transit">
+                                    <div class="slds-truncate" title={record.transitFormatted}>
+                                        {record.transitFormatted}
+                                    </div>
+                                </td>
+                                <td data-label="Status">
+                                    <span class={record.isActiveClass}>{record.isActiveLabel}</span>
+                                </td>
+                                <td data-label="Actions">
+                                    <lightning-button-group>
+                                        <lightning-button
+                                            label="View"
+                                            data-id={record.id}
+                                            onclick={handleView}
+                                            variant="neutral">
+                                        </lightning-button>
+                                        <lightning-button
+                                            label="Edit"
+                                            data-id={record.id}
+                                            onclick={handleEdit}
+                                            variant="neutral">
+                                        </lightning-button>
+                                        <lightning-button
+                                            label="Delete"
+                                            data-id={record.id}
+                                            onclick={handleDelete}
+                                            variant="destructive">
+                                        </lightning-button>
+                                    </lightning-button-group>
+                                </td>
+                            </tr>
+                        </template>
+                    </template>
+                    <template if:false={formattedRecords.length}>
+                        <tr>
+                            <td colspan="9" class="slds-text-align_center">
+                                <div class="slds-m-around_medium">
+                                    <p class="slds-text-body_regular">No haulage routes found. Create one to get started!</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="slds-m-top_small slds-text-body_small slds-text-color_weak">
+            Showing {formattedRecords.length} route(s)
+        </div>
+    </template>
+</template>
+

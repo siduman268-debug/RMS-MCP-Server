@@ -1,0 +1,73 @@
+<template>
+    <div class="slds-grid slds-gutters slds-wrap slds-m-bottom_medium">
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2">
+            <lightning-combobox label="Term Category" value={filterCategory} options={categoryOptions} onchange={handleFilterChange}></lightning-combobox>
+        </div>
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2">
+            <lightning-combobox label="Status" value={filterStatus} options={statusOptions} onchange={handleFilterChange}></lightning-combobox>
+        </div>
+    </div>
+    
+    <div class="slds-grid slds-gutters slds-m-bottom_medium">
+        <div class="slds-col">
+            <lightning-button label="Create Term" icon-name="utility:add" variant="brand" onclick={handleCreate}></lightning-button>
+            <lightning-button label="Clear Filters" icon-name="utility:clear" onclick={handleClearFilters} class="slds-m-left_small"></lightning-button>
+        </div>
+        <div class="slds-col slds-text-align_right">
+            <lightning-button label="Upload CSV" icon-name="utility:upload" onclick={handleUpload}></lightning-button>
+            <lightning-button label="Export" icon-name="utility:download" onclick={handleExport} class="slds-m-left_small"></lightning-button>
+        </div>
+    </div>
+    
+    <template if:true={loading}>
+        <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+    </template>
+    
+    <template if:false={loading}>
+        <div class="slds-table_header-fixed_container" style="max-height: 600px;">
+            <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_striped">
+                <thead>
+                    <tr class="slds-line-height_reset">
+                        <th scope="col"><div class="slds-truncate">Term Code</div></th>
+                        <th scope="col"><div class="slds-truncate">Term Name</div></th>
+                        <th scope="col"><div class="slds-truncate">Category</div></th>
+                        <th scope="col"><div class="slds-truncate">IHE Arranged By</div></th>
+                        <th scope="col"><div class="slds-truncate">IHI Arranged By</div></th>
+                        <th scope="col"><div class="slds-truncate">IHE in Quote</div></th>
+                        <th scope="col"><div class="slds-truncate">IHI in Quote</div></th>
+                        <th scope="col"><div class="slds-truncate">Status</div></th>
+                        <th scope="col" style="width: 150px;"><div class="slds-truncate">Actions</div></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template if:true={formattedRecords.length}>
+                        <template for:each={formattedRecords} for:item="record">
+                            <tr key={record.id} class="slds-hint-parent">
+                                <td data-label="Term Code"><div class="slds-truncate"><strong>{record.term_code}</strong></div></td>
+                                <td data-label="Term Name"><div class="slds-truncate">{record.term_name}</div></td>
+                                <td data-label="Category"><div class="slds-truncate">{record.term_category}</div></td>
+                                <td data-label="IHE Arranged By"><div class="slds-truncate">{record.ihe_arranged_by}</div></td>
+                                <td data-label="IHI Arranged By"><div class="slds-truncate">{record.ihi_arranged_by}</div></td>
+                                <td data-label="IHE in Quote"><div class="slds-truncate">{record.iheIncludeLabel}</div></td>
+                                <td data-label="IHI in Quote"><div class="slds-truncate">{record.ihiIncludeLabel}</div></td>
+                                <td data-label="Status"><span class={record.isActiveClass}>{record.isActiveLabel}</span></td>
+                                <td data-label="Actions">
+                                    <lightning-button-group>
+                                        <lightning-button label="View" data-id={record.id} onclick={handleView}></lightning-button>
+                                        <lightning-button label="Edit" data-id={record.id} onclick={handleEdit}></lightning-button>
+                                        <lightning-button label="Delete" data-id={record.id} onclick={handleDelete} variant="destructive"></lightning-button>
+                                    </lightning-button-group>
+                                </td>
+                            </tr>
+                        </template>
+                    </template>
+                    <template if:false={formattedRecords.length}>
+                        <tr><td colspan="9" class="slds-text-align_center"><div class="slds-m-around_medium"><p>No haulage terms found.</p></div></td></tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <div class="slds-m-top_small slds-text-body_small slds-text-color_weak">Showing {formattedRecords.length} term(s)</div>
+    </template>
+</template>
+

@@ -23,6 +23,18 @@ import listMarginRules from '@salesforce/apex/MarginRuleService.listRulesForLWC'
 import createMarginRule from '@salesforce/apex/RMSMarginRuleService.createMarginRule';
 import updateMarginRule from '@salesforce/apex/RMSMarginRuleService.updateMarginRule';
 import deleteMarginRule from '@salesforce/apex/RMSMarginRuleService.deleteMarginRule';
+import createHaulageRoute from '@salesforce/apex/RMSHaulageRouteService.createHaulageRoute';
+import updateHaulageRoute from '@salesforce/apex/RMSHaulageRouteService.updateHaulageRoute';
+import deleteHaulageRoute from '@salesforce/apex/RMSHaulageRouteService.deleteHaulageRoute';
+import createHaulageRate from '@salesforce/apex/RMSHaulageRateService.createHaulageRate';
+import updateHaulageRate from '@salesforce/apex/RMSHaulageRateService.updateHaulageRate';
+import deleteHaulageRate from '@salesforce/apex/RMSHaulageRateService.deleteHaulageRate';
+import createHaulageLeg from '@salesforce/apex/RMSHaulageLegService.createHaulageLeg';
+import updateHaulageLeg from '@salesforce/apex/RMSHaulageLegService.updateHaulageLeg';
+import deleteHaulageLeg from '@salesforce/apex/RMSHaulageLegService.deleteHaulageLeg';
+import createHaulageResponsibility from '@salesforce/apex/RMSHaulageResponsibilityService.createHaulageResponsibility';
+import updateHaulageResponsibility from '@salesforce/apex/RMSHaulageResponsibilityService.updateHaulageResponsibility';
+import deleteHaulageResponsibility from '@salesforce/apex/RMSHaulageResponsibilityService.deleteHaulageResponsibility';
 
 export default class RmsManagement extends NavigationMixin(LightningElement) {
     @track activeTab = 'vendors';
@@ -32,6 +44,10 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
     @track oceanFreightRates = []; // For Ocean Freight tab (base table rates)
     @track surcharges = [];
     @track marginRules = [];
+    @track haulageRoutes = [];
+    @track haulageRates = [];
+    @track haulageLegs = [];
+    @track haulageTerms = [];
     
     @track showModal = false;
     @track modalTitle = '';
@@ -426,6 +442,46 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
                     result = await updateMarginRule({ ruleId: ruleId, updates: data });
                     this.showSuccessToast('Margin rule updated', 'Margin rule has been updated successfully.');
                 }
+            } else if (entityType === 'haulageRoutes') {
+                if (mode === 'create') {
+                    result = await createHaulageRoute({ routeData: data });
+                    this.showSuccessToast('Haulage route created', 'Haulage route has been created successfully.');
+                } else if (mode === 'edit') {
+                    const routeId = data.id;
+                    delete data.id;
+                    result = await updateHaulageRoute({ routeId: routeId, updates: data });
+                    this.showSuccessToast('Haulage route updated', 'Haulage route has been updated successfully.');
+                }
+            } else if (entityType === 'haulageRates') {
+                if (mode === 'create') {
+                    result = await createHaulageRate({ rateData: data });
+                    this.showSuccessToast('Haulage rate created', 'Haulage rate has been created successfully.');
+                } else if (mode === 'edit') {
+                    const rateId = data.id;
+                    delete data.id;
+                    result = await updateHaulageRate({ rateId: rateId, updates: data });
+                    this.showSuccessToast('Haulage rate updated', 'Haulage rate has been updated successfully.');
+                }
+            } else if (entityType === 'haulageLegs') {
+                if (mode === 'create') {
+                    result = await createHaulageLeg({ legData: data });
+                    this.showSuccessToast('Haulage leg created', 'Haulage leg has been created successfully.');
+                } else if (mode === 'edit') {
+                    const legId = data.id;
+                    delete data.id;
+                    result = await updateHaulageLeg({ legId: legId, updates: data });
+                    this.showSuccessToast('Haulage leg updated', 'Haulage leg has been updated successfully.');
+                }
+            } else if (entityType === 'haulageTerms') {
+                if (mode === 'create') {
+                    result = await createHaulageResponsibility({ respData: data });
+                    this.showSuccessToast('Haulage term created', 'Haulage term has been created successfully.');
+                } else if (mode === 'edit') {
+                    const respId = data.id;
+                    delete data.id;
+                    result = await updateHaulageResponsibility({ respId: respId, updates: data });
+                    this.showSuccessToast('Haulage term updated', 'Haulage term has been updated successfully.');
+                }
             } else {
                 throw new Error(`Unsupported entity type: ${entityType}`);
             }
@@ -466,6 +522,14 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             this.surcharges = [...(data || [])];
         } else if (entityType === 'marginRules') {
             this.marginRules = [...(data || [])];
+        } else if (entityType === 'haulageRoutes') {
+            this.haulageRoutes = [...(data || [])];
+        } else if (entityType === 'haulageRates') {
+            this.haulageRates = [...(data || [])];
+        } else if (entityType === 'haulageLegs') {
+            this.haulageLegs = [...(data || [])];
+        } else if (entityType === 'haulageTerms') {
+            this.haulageTerms = [...(data || [])];
         }
     }
     
@@ -601,6 +665,14 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
                 return this.surcharges;
             case 'marginRules':
                 return this.marginRules;
+            case 'haulageRoutes':
+                return this.haulageRoutes || [];
+            case 'haulageRates':
+                return this.haulageRates || [];
+            case 'haulageLegs':
+                return this.haulageLegs || [];
+            case 'haulageTerms':
+                return this.haulageTerms || [];
             default:
                 return [];
         }
@@ -614,7 +686,11 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             'rates': 'Ocean Freight Rate',
             'oceanFreight': 'Ocean Freight Rate',
             'surcharges': 'Surcharge',
-            'marginRules': 'Margin Rule'
+            'marginRules': 'Margin Rule',
+            'haulageRoutes': 'Haulage Route',
+            'haulageRates': 'Haulage Rate',
+            'haulageLegs': 'Haulage Leg',
+            'haulageTerms': 'Haulage Term'
         };
         return labels[type] || 'Record';
     }
@@ -655,6 +731,18 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
             } else if (entityType === 'marginRules') {
                 result = await deleteMarginRule({ ruleId: recordId });
                 this.showSuccessToast('Margin rule deleted', 'Margin rule has been deleted successfully.');
+            } else if (entityType === 'haulageRoutes') {
+                result = await deleteHaulageRoute({ routeId: recordId });
+                this.showSuccessToast('Haulage route deleted', 'Haulage route has been deleted successfully.');
+            } else if (entityType === 'haulageRates') {
+                result = await deleteHaulageRate({ rateId: recordId });
+                this.showSuccessToast('Haulage rate deleted', 'Haulage rate has been deleted successfully.');
+            } else if (entityType === 'haulageLegs') {
+                result = await deleteHaulageLeg({ legId: recordId });
+                this.showSuccessToast('Haulage leg deleted', 'Haulage leg has been deleted successfully.');
+            } else if (entityType === 'haulageTerms') {
+                result = await deleteHaulageResponsibility({ respId: recordId });
+                this.showSuccessToast('Haulage term deleted', 'Haulage term has been deleted successfully.');
             } else {
                 throw new Error(`Delete not supported for entity type: ${entityType}`);
             }
@@ -732,6 +820,16 @@ export default class RmsManagement extends NavigationMixin(LightningElement) {
                     await marginRulesComponent.handleFetchRules();
                 } else {
                     await this.loadMarginRules();
+                }
+                break;
+            case 'haulageRoutes':
+            case 'haulageRates':
+            case 'haulageLegs':
+            case 'haulageTerms':
+                // Trigger refresh in haulage management component
+                const haulageComponent = this.template.querySelector('c-rms-haulage-management');
+                if (haulageComponent && typeof haulageComponent.refreshActiveTab === 'function') {
+                    await haulageComponent.refreshActiveTab();
                 }
                 break;
         }

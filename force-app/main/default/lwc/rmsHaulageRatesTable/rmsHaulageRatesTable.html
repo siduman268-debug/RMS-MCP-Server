@@ -1,0 +1,103 @@
+<template>
+    <div class="slds-grid slds-gutters slds-wrap slds-m-bottom_medium">
+        <!-- Filters -->
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-4">
+            <lightning-input
+                type="text"
+                label="Vendor ID"
+                value={filterVendor}
+                onchange={handleFilterChange}
+                placeholder="Enter vendor ID">
+            </lightning-input>
+        </div>
+        
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-4">
+            <lightning-combobox
+                label="Transport Mode"
+                value={filterMode}
+                options={modeOptions}
+                onchange={handleFilterChange}>
+            </lightning-combobox>
+        </div>
+        
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-4">
+            <lightning-combobox
+                label="Container Type"
+                value={filterContainerType}
+                options={containerOptions}
+                onchange={handleFilterChange}>
+            </lightning-combobox>
+        </div>
+        
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-4">
+            <lightning-combobox
+                label="Status"
+                value={filterStatus}
+                options={statusOptions}
+                onchange={handleFilterChange}>
+            </lightning-combobox>
+        </div>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="slds-grid slds-gutters slds-m-bottom_medium">
+        <div class="slds-col">
+            <lightning-button label="Create Rate" icon-name="utility:add" variant="brand" onclick={handleCreate}></lightning-button>
+            <lightning-button label="Clear Filters" icon-name="utility:clear" onclick={handleClearFilters} class="slds-m-left_small"></lightning-button>
+        </div>
+        <div class="slds-col slds-text-align_right">
+            <lightning-button label="Upload CSV" icon-name="utility:upload" onclick={handleUpload}></lightning-button>
+            <lightning-button label="Export" icon-name="utility:download" onclick={handleExport} class="slds-m-left_small"></lightning-button>
+        </div>
+    </div>
+    
+    <template if:true={loading}>
+        <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+    </template>
+    
+    <template if:false={loading}>
+        <div class="slds-table_header-fixed_container" style="max-height: 600px;">
+            <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_striped">
+                <thead>
+                    <tr class="slds-line-height_reset">
+                        <th scope="col"><div class="slds-truncate">Vendor</div></th>
+                        <th scope="col"><div class="slds-truncate">Route</div></th>
+                        <th scope="col"><div class="slds-truncate">Mode</div></th>
+                        <th scope="col"><div class="slds-truncate">Container</div></th>
+                        <th scope="col"><div class="slds-truncate">Rate</div></th>
+                        <th scope="col"><div class="slds-truncate">Charge Code</div></th>
+                        <th scope="col"><div class="slds-truncate">Status</div></th>
+                        <th scope="col" style="width: 150px;"><div class="slds-truncate">Actions</div></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template if:true={formattedRecords.length}>
+                        <template for:each={formattedRecords} for:item="record">
+                            <tr key={record.id} class="slds-hint-parent">
+                                <td data-label="Vendor"><div class="slds-truncate">{record.vendorName}</div></td>
+                                <td data-label="Route"><div class="slds-truncate">{record.routeCode}</div></td>
+                                <td data-label="Mode"><div class="slds-truncate">{record.transport_mode}</div></td>
+                                <td data-label="Container"><div class="slds-truncate">{record.container_type}</div></td>
+                                <td data-label="Rate"><div class="slds-truncate"><strong>{record.rateDisplay}</strong></div></td>
+                                <td data-label="Charge Code"><div class="slds-truncate">{record.charge_code}</div></td>
+                                <td data-label="Status"><span class={record.isActiveClass}>{record.isActiveLabel}</span></td>
+                                <td data-label="Actions">
+                                    <lightning-button-group>
+                                        <lightning-button label="View" data-id={record.id} onclick={handleView}></lightning-button>
+                                        <lightning-button label="Edit" data-id={record.id} onclick={handleEdit}></lightning-button>
+                                        <lightning-button label="Delete" data-id={record.id} onclick={handleDelete} variant="destructive"></lightning-button>
+                                    </lightning-button-group>
+                                </td>
+                            </tr>
+                        </template>
+                    </template>
+                    <template if:false={formattedRecords.length}>
+                        <tr><td colspan="8" class="slds-text-align_center"><div class="slds-m-around_medium"><p>No haulage rates found.</p></div></td></tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <div class="slds-m-top_small slds-text-body_small slds-text-color_weak">Showing {formattedRecords.length} rate(s)</div>
+    </template>
+</template>
+

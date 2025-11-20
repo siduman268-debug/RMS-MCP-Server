@@ -1,0 +1,100 @@
+<template>
+    <div class="slds-card">
+        <div class="slds-card__header slds-grid">
+            <header class="slds-media slds-media_center slds-has-flexi-truncate">
+                <div class="slds-media__figure">
+                    <lightning-icon icon-name="custom:custom88" size="small"></lightning-icon>
+                </div>
+                <div class="slds-media__body">
+                    <h2 class="slds-card__header-title">
+                        <span>Inland Haulage Management</span>
+                    </h2>
+                </div>
+            </header>
+        </div>
+        
+        <div class="slds-card__body slds-card__body_inner">
+            <!-- Nested Sub-Tabs for Haulage -->
+            <lightning-tabset value={activeSubTab} onselect={handleSubTabChange} variant="scoped">
+                
+                <!-- Routes Sub-Tab -->
+                <lightning-tab label="Routes" value="routes" data-key="routes">
+                    <template if:true={loading}>
+                        <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+                    </template>
+                    <template if:false={loading}>
+                        <c-rms-haulage-routes-table
+                            records={routes}
+                            oncreate={handleCreate}
+                            onedit={handleEdit}
+                            onview={handleView}
+                            ondelete={handleDelete}
+                            onupload={handleUpload}
+                            onexport={handleExport}
+                            ondataload={handleDataLoad}>
+                        </c-rms-haulage-routes-table>
+                    </template>
+                </lightning-tab>
+                
+                <!-- Rates Sub-Tab -->
+                <lightning-tab label="Rates" value="rates" data-key="rates">
+                    <template if:true={loading}>
+                        <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+                    </template>
+                    <template if:false={loading}>
+                        <c-rms-haulage-rates-table
+                            records={rates}
+                            oncreate={handleCreate}
+                            onedit={handleEdit}
+                            onview={handleView}
+                            ondelete={handleDelete}
+                            onupload={handleUpload}
+                            onexport={handleExport}
+                            ondataload={handleDataLoad}>
+                        </c-rms-haulage-rates-table>
+                    </template>
+                </lightning-tab>
+                
+                <!-- Legs Sub-Tab -->
+                <lightning-tab label="Legs" value="legs" data-key="legs">
+                    <template if:true={loading}>
+                        <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+                    </template>
+                    <template if:false={loading}>
+                        <c-rms-haulage-legs-table
+                            records={legs}
+                            oncreate={handleCreate}
+                            onedit={handleEdit}
+                            onview={handleView}
+                            ondelete={handleDelete}
+                            onupload={handleUpload}
+                            onexport={handleExport}
+                            ondataload={handleDataLoad}>
+                        </c-rms-haulage-legs-table>
+                    </template>
+                </lightning-tab>
+                
+                <!-- Terms (Responsibilities) Sub-Tab -->
+                <lightning-tab label="Terms" value="terms" data-key="terms">
+                    <template if:true={loading}>
+                        <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+                    </template>
+                    <template if:false={loading}>
+                        <c-rms-haulage-terms-table
+                            records={terms}
+                            oncreate={handleCreate}
+                            onedit={handleEdit}
+                            onview={handleView}
+                            ondelete={handleDelete}
+                            onupload={handleUpload}
+                            onexport={handleExport}
+                            ondataload={handleDataLoad}>
+                        </c-rms-haulage-terms-table>
+                    </template>
+                </lightning-tab>
+                
+            </lightning-tabset>
+        </div>
+    </div>
+</template>
+
