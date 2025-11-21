@@ -6022,6 +6022,677 @@ async function createHttpServer() {
     }
   });
 
+  // ============================================================================
+  // LCL (Less than Container Load) CRUD APIS
+  // ============================================================================
+
+  // ------------------------------------------------------------------------
+  // LCL Ocean Freight Rate CRUD
+  // ------------------------------------------------------------------------
+
+  // List LCL Ocean Freight Rates
+  fastify.get('/api/lcl-rates', async (request, reply) => {
+    try {
+      const {
+        origin_code,
+        destination_code,
+        vendor_id,
+        pricing_model,
+        service_type,
+        is_active = 'true',
+        limit = '50',
+        offset = '0'
+      } = request.query as any;
+
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      console.log('🔍 [LCL RATES] Fetching rates with filters:', {
+        origin_code, destination_code, vendor_id, pricing_model, service_type
+      });
+
+      let query = supabase
+        .from('lcl_ocean_freight_rate')
+        .select(`
+          *,
+          vendor:vendor_id (id, name, logo_url, vendor_type)
+        `)
+        .eq('tenant_id', tenantId);
+
+      if (origin_code) query = query.eq('origin_code', origin_code);
+      if (destination_code) query = query.eq('destination_code', destination_code);
+      if (vendor_id) query = query.eq('vendor_id', parseInt(vendor_id));
+      if (pricing_model) query = query.eq('pricing_model', pricing_model);
+      if (service_type) query = query.eq('service_type', service_type);
+      if (is_active === 'true') query = query.eq('is_active', true);
+
+      query = query
+        .order('origin_code', { ascending: true })
+        .order('destination_code', { ascending: true })
+        .order('min_volume_cbm', { ascending: true })
+        .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      console.log(`✅ [LCL RATES] Found ${data?.length || 0} rates`);
+
+      return reply.send({
+        success: true,
+        data: data || []
+      });
+    } catch (error: any) {
+      console.error('❌ [LCL RATES] Error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch LCL rates'
+      });
+    }
+  });
+
+  // Get LCL Ocean Freight Rate by ID
+  fastify.get('/api/lcl-rates/:rateId', async (request, reply) => {
+    try {
+      const { rateId } = request.params as any;
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      const { data, error } = await supabase
+        .from('lcl_ocean_freight_rate')
+        .select(`
+          *,
+          vendor:vendor_id (id, name, logo_url, vendor_type)
+        `)
+        .eq('id', rateId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch LCL rate'
+      });
+    }
+  });
+
+  // Create LCL Ocean Freight Rate
+  fastify.post('/api/lcl-rates', async (request, reply) => {
+    try {
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+      const payload = { ...(request.body as any), tenant_id: tenantId };
+
+      console.log('✏️ [LCL RATES] Creating rate:', payload);
+
+      const { data, error } = await supabase
+        .from('lcl_ocean_freight_rate')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'lcl_ocean_freight_rate', String(data.id), 'CREATE', undefined, undefined, undefined, data);
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+    } catch (error: any) {
+      console.error('❌ [LCL RATES] Create error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to create LCL rate'
+      });
+    }
+  });
+
+  // Update LCL Ocean Freight Rate
+  fastify.put('/api/lcl-rates/:rateId', async (request, reply) => {
+    try {
+      const { rateId } = request.params as any;
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      // Get old data for audit
+      const { data: oldData } = await supabase
+        .from('lcl_ocean_freight_rate')
+        .select('*')
+        .eq('id', rateId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      const { data, error } = await supabase
+        .from('lcl_ocean_freight_rate')
+        .update(request.body)
+        .eq('id', rateId)
+        .eq('tenant_id', tenantId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'lcl_ocean_freight_rate', String(rateId), 'UPDATE', undefined, undefined, oldData, data);
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to update LCL rate'
+      });
+    }
+  });
+
+  // Delete LCL Ocean Freight Rate
+  fastify.delete('/api/lcl-rates/:rateId', async (request, reply) => {
+    try {
+      const { rateId } = request.params as any;
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      // Get old data for audit
+      const { data: oldData } = await supabase
+        .from('lcl_ocean_freight_rate')
+        .select('*')
+        .eq('id', rateId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      const { error } = await supabase
+        .from('lcl_ocean_freight_rate')
+        .delete()
+        .eq('id', rateId)
+        .eq('tenant_id', tenantId);
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'lcl_ocean_freight_rate', String(rateId), 'DELETE', undefined, undefined, oldData, null);
+
+      return reply.send({
+        success: true,
+        message: `LCL rate ${rateId} deleted successfully`
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to delete LCL rate'
+      });
+    }
+  });
+
+  // Bulk Create LCL Ocean Freight Rates
+  fastify.post('/api/lcl-rates/bulk', async (request, reply) => {
+    try {
+      const { rates } = request.body as any;
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      if (!rates || !Array.isArray(rates)) {
+        return reply.status(400).send({
+          success: false,
+          error: 'rates array is required'
+        });
+      }
+
+      const ratesWithTenant = rates.map(rate => ({ ...rate, tenant_id: tenantId }));
+
+      const { data, error } = await supabase
+        .from('lcl_ocean_freight_rate')
+        .insert(ratesWithTenant)
+        .select();
+
+      if (error) throw error;
+
+      // Audit log for bulk
+      for (const rate of data) {
+        await logAudit(supabase, tenantId, 'lcl_ocean_freight_rate', String(rate.id), 'CREATE', undefined, undefined, undefined, rate);
+      }
+
+      return reply.send({
+        success: true,
+        data: data,
+        message: `${data.length} LCL rates created successfully`
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to bulk create LCL rates'
+      });
+    }
+  });
+
+  // ------------------------------------------------------------------------
+  // LCL Surcharge CRUD
+  // ------------------------------------------------------------------------
+
+  // List LCL Surcharges
+  fastify.get('/api/lcl-surcharges', async (request, reply) => {
+    try {
+      const {
+        vendor_id,
+        charge_code,
+        applies_scope,
+        origin_code,
+        destination_code,
+        is_active = 'true',
+        limit = '50',
+        offset = '0'
+      } = request.query as any;
+
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      console.log('🔍 [LCL SURCHARGES] Fetching surcharges with filters:', {
+        vendor_id, charge_code, applies_scope
+      });
+
+      let query = supabase
+        .from('lcl_surcharge')
+        .select(`
+          *,
+          vendor:vendor_id (id, name, logo_url)
+        `)
+        .eq('tenant_id', tenantId);
+
+      if (vendor_id) query = query.eq('vendor_id', parseInt(vendor_id));
+      if (charge_code) query = query.eq('charge_code', charge_code);
+      if (applies_scope) query = query.eq('applies_scope', applies_scope);
+      if (origin_code) query = query.eq('origin_code', origin_code);
+      if (destination_code) query = query.eq('destination_code', destination_code);
+      if (is_active === 'true') query = query.eq('is_active', true);
+
+      query = query
+        .order('charge_code', { ascending: true })
+        .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      console.log(`✅ [LCL SURCHARGES] Found ${data?.length || 0} surcharges`);
+
+      return reply.send({
+        success: true,
+        data: data || []
+      });
+    } catch (error: any) {
+      console.error('❌ [LCL SURCHARGES] Error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch LCL surcharges'
+      });
+    }
+  });
+
+  // Get LCL Surcharge by ID
+  fastify.get('/api/lcl-surcharges/:surchargeId', async (request, reply) => {
+    try {
+      const { surchargeId } = request.params as any;
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      const { data, error } = await supabase
+        .from('lcl_surcharge')
+        .select(`
+          *,
+          vendor:vendor_id (id, name, logo_url)
+        `)
+        .eq('id', surchargeId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch LCL surcharge'
+      });
+    }
+  });
+
+  // Create LCL Surcharge
+  fastify.post('/api/lcl-surcharges', async (request, reply) => {
+    try {
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+      const payload = { ...(request.body as any), tenant_id: tenantId };
+
+      const { data, error } = await supabase
+        .from('lcl_surcharge')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'lcl_surcharge', String(data.id), 'CREATE', undefined, undefined, undefined, data);
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to create LCL surcharge'
+      });
+    }
+  });
+
+  // Update LCL Surcharge
+  fastify.put('/api/lcl-surcharges/:surchargeId', async (request, reply) => {
+    try {
+      const { surchargeId } = request.params as any;
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      // Get old data for audit
+      const { data: oldData } = await supabase
+        .from('lcl_surcharge')
+        .select('*')
+        .eq('id', surchargeId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      const { data, error } = await supabase
+        .from('lcl_surcharge')
+        .update(request.body)
+        .eq('id', surchargeId)
+        .eq('tenant_id', tenantId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'lcl_surcharge', String(surchargeId), 'UPDATE', undefined, undefined, oldData, data);
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to update LCL surcharge'
+      });
+    }
+  });
+
+  // Delete LCL Surcharge
+  fastify.delete('/api/lcl-surcharges/:surchargeId', async (request, reply) => {
+    try {
+      const { surchargeId } = request.params as any;
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      // Get old data for audit
+      const { data: oldData } = await supabase
+        .from('lcl_surcharge')
+        .select('*')
+        .eq('id', surchargeId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      const { error } = await supabase
+        .from('lcl_surcharge')
+        .delete()
+        .eq('id', surchargeId)
+        .eq('tenant_id', tenantId);
+
+      if (error) throw error;
+
+      // Audit logging
+      await logAudit(supabase, tenantId, 'lcl_surcharge', String(surchargeId), 'DELETE', undefined, undefined, oldData, null);
+
+      return reply.send({
+        success: true,
+        message: `LCL surcharge ${surchargeId} deleted successfully`
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to delete LCL surcharge'
+      });
+    }
+  });
+
+  // Bulk Create LCL Surcharges
+  fastify.post('/api/lcl-surcharges/bulk', async (request, reply) => {
+    try {
+      const { surcharges } = request.body as any;
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      if (!surcharges || !Array.isArray(surcharges)) {
+        return reply.status(400).send({
+          success: false,
+          error: 'surcharges array is required'
+        });
+      }
+
+      const surchargesWithTenant = surcharges.map(surcharge => ({ ...surcharge, tenant_id: tenantId }));
+
+      const { data, error } = await supabase
+        .from('lcl_surcharge')
+        .insert(surchargesWithTenant)
+        .select();
+
+      if (error) throw error;
+
+      // Audit log for bulk
+      for (const surcharge of data) {
+        await logAudit(supabase, tenantId, 'lcl_surcharge', String(surcharge.id), 'CREATE', undefined, undefined, undefined, surcharge);
+      }
+
+      return reply.send({
+        success: true,
+        data: data,
+        message: `${data.length} LCL surcharges created successfully`
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to bulk create LCL surcharges'
+      });
+    }
+  });
+
+  // ------------------------------------------------------------------------
+  // LCL Shipment Item CRUD
+  // ------------------------------------------------------------------------
+
+  // List LCL Shipment Items
+  fastify.get('/api/lcl-items', async (request, reply) => {
+    try {
+      const {
+        enquiry_id,
+        is_hazardous,
+        is_temperature_controlled,
+        limit = '50',
+        offset = '0'
+      } = request.query as any;
+
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      let query = supabase
+        .from('lcl_shipment_item')
+        .select('*')
+        .eq('tenant_id', tenantId);
+
+      if (enquiry_id) query = query.eq('enquiry_id', enquiry_id);
+      if (is_hazardous === 'true') query = query.eq('is_hazardous', true);
+      if (is_temperature_controlled === 'true') query = query.eq('is_temperature_controlled', true);
+
+      query = query
+        .order('created_at', { ascending: false })
+        .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data || []
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch LCL shipment items'
+      });
+    }
+  });
+
+  // Get LCL Shipment Item by ID
+  fastify.get('/api/lcl-items/:itemId', async (request, reply) => {
+    try {
+      const { itemId } = request.params as any;
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      const { data, error } = await supabase
+        .from('lcl_shipment_item')
+        .select('*')
+        .eq('id', itemId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to fetch LCL shipment item'
+      });
+    }
+  });
+
+  // Create LCL Shipment Item
+  fastify.post('/api/lcl-items', async (request, reply) => {
+    try {
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+      const payload = { ...(request.body as any), tenant_id: tenantId };
+
+      const { data, error } = await supabase
+        .from('lcl_shipment_item')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to create LCL shipment item'
+      });
+    }
+  });
+
+  // Update LCL Shipment Item
+  fastify.put('/api/lcl-items/:itemId', async (request, reply) => {
+    try {
+      const { itemId } = request.params as any;
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      const { data, error } = await supabase
+        .from('lcl_shipment_item')
+        .update(request.body)
+        .eq('id', itemId)
+        .eq('tenant_id', tenantId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to update LCL shipment item'
+      });
+    }
+  });
+
+  // Delete LCL Shipment Item
+  fastify.delete('/api/lcl-items/:itemId', async (request, reply) => {
+    try {
+      const { itemId } = request.params as any;
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      const { error } = await supabase
+        .from('lcl_shipment_item')
+        .delete()
+        .eq('id', itemId)
+        .eq('tenant_id', tenantId);
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        message: `LCL shipment item ${itemId} deleted successfully`
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to delete LCL shipment item'
+      });
+    }
+  });
+
+  // Bulk Create LCL Shipment Items
+  fastify.post('/api/lcl-items/bulk', async (request, reply) => {
+    try {
+      const { items } = request.body as any;
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      if (!items || !Array.isArray(items)) {
+        return reply.status(400).send({
+          success: false,
+          error: 'items array is required'
+        });
+      }
+
+      const itemsWithTenant = items.map(item => ({ ...item, tenant_id: tenantId }));
+
+      const { data, error } = await supabase
+        .from('lcl_shipment_item')
+        .insert(itemsWithTenant)
+        .select();
+
+      if (error) throw error;
+
+      return reply.send({
+        success: true,
+        data: data,
+        message: `${data.length} LCL shipment items created successfully`
+      });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: error.message || 'Failed to bulk create LCL shipment items'
+      });
+    }
+  });
+
   // Add schedule routes (DCSA webhook, sync, etc.)
   addScheduleRoutes(fastify, supabase);
 
@@ -6097,6 +6768,24 @@ async function main() {
       console.error("  GET  /api/haulage-responsibilities/:respId");
       console.error("  GET  /api/haulage-responsibilities");
       console.error("  DELETE /api/haulage-responsibilities/:respId");
+      console.error("  POST /api/lcl-rates");
+      console.error("  PUT  /api/lcl-rates/:rateId");
+      console.error("  GET  /api/lcl-rates/:rateId");
+      console.error("  GET  /api/lcl-rates");
+      console.error("  DELETE /api/lcl-rates/:rateId");
+      console.error("  POST /api/lcl-rates/bulk");
+      console.error("  POST /api/lcl-surcharges");
+      console.error("  PUT  /api/lcl-surcharges/:surchargeId");
+      console.error("  GET  /api/lcl-surcharges/:surchargeId");
+      console.error("  GET  /api/lcl-surcharges");
+      console.error("  DELETE /api/lcl-surcharges/:surchargeId");
+      console.error("  POST /api/lcl-surcharges/bulk");
+      console.error("  POST /api/lcl-items");
+      console.error("  PUT  /api/lcl-items/:itemId");
+      console.error("  GET  /api/lcl-items/:itemId");
+      console.error("  GET  /api/lcl-items");
+      console.error("  DELETE /api/lcl-items/:itemId");
+      console.error("  POST /api/lcl-items/bulk");
     } catch (error) {
       console.error("Failed to start HTTP server:", error);
     }
