@@ -914,6 +914,19 @@ export function addV4Routes(
 
       console.log(`✅ [LCL SEARCH] Found ${rates?.length || 0} potential rates`);
 
+      // Fetch applicable margin rules for this route
+      const { data: marginRules } = await supabase
+        .from('margin_rule_v2')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .lte('valid_from', searchDate)
+        .gte('valid_to', searchDate)
+        .or(`scope.eq.global,scope.eq.port_pair,scope.eq.trade_zone`)
+        .limit(50);
+
+      console.log(`📊 [LCL SEARCH] Found ${marginRules?.length || 0} margin rules`);
+
       // Match rates to shipment volume and calculate costs
       const matchedRates = [];
 
@@ -1033,7 +1046,54 @@ export function addV4Routes(
           };
         });
 
-        const totalCost = freightCost + totalSurcharges;
+        const totalBuyAmount = freightCost + totalSurcharges;
+
+        // Apply margin rules
+        let applicableMarginRule = null;
+        let marginAmount = 0;
+        let marginPercentage = 0;
+
+        if (marginRules && marginRules.length > 0) {
+          // Priority order: port_pair > trade_zone > global
+          // For LCL, we'll primarily use global or mode-based rules
+          const sortedRules = marginRules.sort((a: any, b: any) => {
+            const scopePriority: any = { port_pair: 3, trade_zone: 2, global: 1 };
+            return (scopePriority[b.scope] || 0) - (scopePriority[a.scope] || 0);
+          });
+
+          for (const rule of sortedRules) {
+            let matched = false;
+
+            if (rule.scope === 'global') {
+              // Global rule applies to all
+              if (!rule.mode || rule.mode === 'ocean') {
+                matched = true;
+              }
+            } else if (rule.scope === 'port_pair') {
+              // Check if origin/destination match
+              if (rule.origin_id === rate.origin_code && rule.destination_id === rate.destination_code) {
+                matched = true;
+              }
+            } else if (rule.scope === 'trade_zone') {
+              // Trade zone matching would require location lookups - skip for now
+              // TODO: Implement trade zone matching
+            }
+
+            if (matched) {
+              applicableMarginRule = rule;
+              if (rule.percentage) {
+                marginPercentage = rule.percentage;
+                marginAmount = totalBuyAmount * (rule.percentage / 100);
+              } else if (rule.fixed_amount) {
+                marginAmount = rule.fixed_amount;
+                marginPercentage = (rule.fixed_amount / totalBuyAmount) * 100;
+              }
+              break; // Use first matching rule (highest priority)
+            }
+          }
+        }
+
+        const totalSellAmount = totalBuyAmount + marginAmount;
 
         matchedRates.push({
           rate_id: rate.id,
@@ -1050,7 +1110,15 @@ export function addV4Routes(
           minimum_charge_applied: minimumChargeApplied,
           surcharges: surchargeDetails,
           total_surcharges: parseFloat(totalSurcharges.toFixed(2)),
-          total_cost: parseFloat(totalCost.toFixed(2)),
+          total_buy_amount: parseFloat(totalBuyAmount.toFixed(2)),
+          margin: applicableMarginRule ? {
+            rule_id: applicableMarginRule.id,
+            rule_name: applicableMarginRule.name || `Rule ${applicableMarginRule.id}`,
+            scope: applicableMarginRule.scope,
+            percentage: parseFloat(marginPercentage.toFixed(2)),
+            amount: parseFloat(marginAmount.toFixed(2))
+          } : null,
+          total_sell_amount: parseFloat(totalSellAmount.toFixed(2)),
           currency: rate.currency,
           transit_days: rate.tt_days,
           frequency: rate.frequency,
@@ -1059,8 +1127,8 @@ export function addV4Routes(
         });
       }
 
-      // Sort by total cost (cheapest first)
-      matchedRates.sort((a, b) => a.total_cost - b.total_cost);
+      // Sort by total sell amount (cheapest first)
+      matchedRates.sort((a, b) => a.total_sell_amount - b.total_sell_amount);
 
       console.log(`✅ [LCL SEARCH] Returning ${matchedRates.length} matched rates`);
 
@@ -1080,6 +1148,351 @@ export function addV4Routes(
       return reply.code(500).send({
         success: false,
         error: error.message || 'Failed to search LCL rates'
+      });
+    }
+  });
+
+  // ============================================
+  // LCL PREPARE QUOTE
+  // ============================================
+
+  fastify.post('/api/v4/prepare-lcl-quote', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const {
+        enquiry_id,
+        customer_id,
+        rate_id, // From search-lcl-rates response
+        items, // Shipment items (same as search)
+        additional_surcharges, // Optional: custom surcharges
+        margin_rule_id, // Optional: apply margin
+        notes,
+        salesforce_org_id
+      } = request.body as any;
+
+      console.log('📋 [LCL QUOTE] Request:', {
+        enquiry_id,
+        rate_id,
+        items: items?.length,
+        margin_rule_id
+      });
+
+      // Validation
+      if (!rate_id) {
+        return reply.code(400).send({
+          success: false,
+          error: 'rate_id is required'
+        });
+      }
+
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return reply.code(400).send({
+          success: false,
+          error: 'items array is required'
+        });
+      }
+
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+
+      // Calculate shipment totals (same as search)
+      let totalVolumeCBM = 0;
+      let totalWeightKG = 0;
+      let totalChargeableWeightKG = 0;
+
+      const itemDetails = items.map((item: any) => {
+        const volumeCBM = (item.length_cm * item.width_cm * item.height_cm) / 1000000;
+        const pieces = item.pieces || 1;
+        const volumetricWeightKG = volumeCBM * 1000;
+        const chargeableWeightKG = Math.max(item.gross_weight_kg, volumetricWeightKG);
+
+        totalVolumeCBM += volumeCBM * pieces;
+        totalWeightKG += item.gross_weight_kg * pieces;
+        totalChargeableWeightKG += chargeableWeightKG * pieces;
+
+        return {
+          ...item,
+          volume_cbm: parseFloat(volumeCBM.toFixed(3)),
+          volumetric_weight_kg: parseFloat(volumetricWeightKG.toFixed(2)),
+          chargeable_weight_kg: parseFloat(chargeableWeightKG.toFixed(2)),
+          total_volume_cbm: parseFloat((volumeCBM * pieces).toFixed(3)),
+          total_chargeable_weight_kg: parseFloat((chargeableWeightKG * pieces).toFixed(2))
+        };
+      });
+
+      // Fetch the selected rate
+      const { data: rate, error: rateError } = await supabase
+        .from('lcl_ocean_freight_rate')
+        .select(`
+          *,
+          vendor:vendor_id (id, name, logo_url, vendor_type)
+        `)
+        .eq('id', rate_id)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      if (rateError || !rate) {
+        return reply.code(404).send({
+          success: false,
+          error: 'Rate not found'
+        });
+      }
+
+      // Calculate freight cost
+      let freightBuyAmount = 0;
+      if (rate.rate_basis === 'PER_CBM') {
+        freightBuyAmount = totalVolumeCBM * rate.rate_per_cbm;
+      } else if (rate.rate_basis === 'PER_TON') {
+        freightBuyAmount = (totalChargeableWeightKG / 1000) * rate.rate_per_ton;
+      } else if (rate.rate_basis === 'PER_KG') {
+        freightBuyAmount = totalChargeableWeightKG * rate.rate_per_kg;
+      }
+
+      // Apply minimum charge
+      const minimumCharge = rate.minimum_charge || 0;
+      const minimumChargeApplied = freightBuyAmount < minimumCharge;
+      if (minimumChargeApplied) {
+        freightBuyAmount = minimumCharge;
+      }
+
+      // Fetch surcharges
+      const { data: surcharges } = await supabase
+        .from('lcl_surcharge')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('vendor_id', rate.vendor_id)
+        .eq('is_active', true)
+        .lte('valid_from', new Date().toISOString().split('T')[0])
+        .gte('valid_to', new Date().toISOString().split('T')[0]);
+
+      // Calculate surcharges grouped by applies_scope
+      const surchargesByScope: any = {
+        origin: [],
+        port: [],
+        freight: [],
+        dest: [],
+        door: [],
+        other: []
+      };
+
+      let totalSurchargesBuy = 0;
+
+      for (const surcharge of surcharges || []) {
+        let amount = 0;
+
+        switch (surcharge.rate_basis) {
+          case 'PER_CBM':
+            amount = totalVolumeCBM * surcharge.amount;
+            break;
+          case 'PER_TON':
+            amount = (totalChargeableWeightKG / 1000) * surcharge.amount;
+            break;
+          case 'PER_KG':
+            amount = totalChargeableWeightKG * surcharge.amount;
+            break;
+          case 'PER_SHIPMENT':
+          case 'FLAT':
+            amount = surcharge.amount;
+            break;
+          case 'PERCENTAGE':
+            amount = freightBuyAmount * (surcharge.percentage / 100);
+            break;
+        }
+
+        if (surcharge.min_charge && amount < surcharge.min_charge) {
+          amount = surcharge.min_charge;
+        }
+        if (surcharge.max_charge && amount > surcharge.max_charge) {
+          amount = surcharge.max_charge;
+        }
+
+        totalSurchargesBuy += amount;
+
+        const scope = surcharge.applies_scope || 'other';
+        surchargesByScope[scope].push({
+          charge_code: surcharge.charge_code,
+          charge_name: surcharge.charge_name || surcharge.charge_code,
+          rate_basis: surcharge.rate_basis,
+          buy_amount: parseFloat(amount.toFixed(2)),
+          currency: surcharge.currency
+        });
+      }
+
+      // Add any additional custom surcharges
+      if (additional_surcharges && Array.isArray(additional_surcharges)) {
+        for (const customSurcharge of additional_surcharges) {
+          const scope = customSurcharge.applies_scope || 'other';
+          surchargesByScope[scope].push({
+            charge_code: customSurcharge.charge_code,
+            charge_name: customSurcharge.charge_name || customSurcharge.charge_code,
+            buy_amount: parseFloat(customSurcharge.amount.toFixed(2)),
+            currency: customSurcharge.currency || rate.currency,
+            note: 'Custom charge'
+          });
+          totalSurchargesBuy += customSurcharge.amount;
+        }
+      }
+
+      // Calculate totals by scope
+      const originTotal = surchargesByScope.origin.reduce((sum: number, s: any) => sum + s.buy_amount, 0);
+      const portTotal = surchargesByScope.port.reduce((sum: number, s: any) => sum + s.buy_amount, 0);
+      const freightSurchargesTotal = surchargesByScope.freight.reduce((sum: number, s: any) => sum + s.buy_amount, 0);
+      const destTotal = surchargesByScope.dest.reduce((sum: number, s: any) => sum + s.buy_amount, 0);
+      const doorTotal = surchargesByScope.door.reduce((sum: number, s: any) => sum + s.buy_amount, 0);
+      const otherTotal = surchargesByScope.other.reduce((sum: number, s: any) => sum + s.buy_amount, 0);
+
+      // Total buy amount
+      const totalBuyAmount = freightBuyAmount + totalSurchargesBuy;
+
+      // Margin is already applied in search-rates
+      // If margin_rule_id is provided, we can fetch it for reference, but the calculation was done in search
+      let marginDetails: any = null;
+      let marginAmount = 0;
+
+      if (margin_rule_id) {
+        const { data: marginRule } = await supabase
+          .from('margin_rule_v2')
+          .select('*')
+          .eq('id', margin_rule_id)
+          .eq('tenant_id', tenantId)
+          .single();
+
+        if (marginRule) {
+          if (marginRule.percentage) {
+            marginAmount = totalBuyAmount * (marginRule.percentage / 100);
+          } else if (marginRule.fixed_amount) {
+            marginAmount = marginRule.fixed_amount;
+          }
+
+          marginDetails = {
+            rule_id: marginRule.id,
+            rule_name: marginRule.name || `Rule ${marginRule.id}`,
+            scope: marginRule.scope,
+            percentage: marginRule.percentage,
+            fixed_amount: marginRule.fixed_amount,
+            margin_amount: parseFloat(marginAmount.toFixed(2))
+          };
+        }
+      }
+
+      const totalSellAmount = totalBuyAmount + marginAmount;
+
+      // Store shipment items
+      const itemsToInsert = itemDetails.map((item: any) => ({
+        enquiry_id,
+        length_cm: item.length_cm,
+        width_cm: item.width_cm,
+        height_cm: item.height_cm,
+        gross_weight_kg: item.gross_weight_kg,
+        pieces: item.pieces || 1,
+        commodity: item.commodity,
+        packaging_type: item.packaging_type,
+        is_hazardous: item.is_hazardous || false,
+        is_temperature_controlled: item.is_temperature_controlled || false,
+        tenant_id: tenantId
+      }));
+
+      const { data: insertedItems, error: itemsError } = await supabase
+        .from('lcl_shipment_item')
+        .insert(itemsToInsert)
+        .select();
+
+      if (itemsError) {
+        console.warn('Failed to store shipment items:', itemsError);
+      }
+
+      // Build response
+      const quote = {
+        quote_id: `LCL-${enquiry_id}-${Date.now()}`,
+        enquiry_id,
+        customer_id,
+        created_at: new Date().toISOString(),
+        salesforce_org_id,
+
+        shipment_summary: {
+          items: itemDetails,
+          total_pieces: items.reduce((sum: number, item: any) => sum + (item.pieces || 1), 0),
+          total_volume_cbm: parseFloat(totalVolumeCBM.toFixed(3)),
+          total_weight_kg: parseFloat(totalWeightKG.toFixed(2)),
+          total_chargeable_weight_kg: parseFloat(totalChargeableWeightKG.toFixed(2))
+        },
+
+        rate_details: {
+          rate_id: rate.id,
+          vendor_name: rate.vendor?.name,
+          vendor_logo: rate.vendor?.logo_url,
+          service_type: rate.service_type,
+          pricing_model: rate.pricing_model,
+          origin: rate.origin_code,
+          destination: rate.destination_code,
+          transit_days: rate.tt_days,
+          frequency: rate.frequency
+        },
+
+        cost_breakdown: {
+          freight: {
+            buy_amount: parseFloat(freightBuyAmount.toFixed(2)),
+            rate_basis: rate.rate_basis,
+            rate_applied: rate.rate_per_cbm || rate.rate_per_ton || rate.rate_per_kg,
+            calculation: rate.rate_basis === 'PER_CBM'
+              ? `${totalVolumeCBM.toFixed(3)} CBM × ${rate.rate_per_cbm} ${rate.currency}/CBM`
+              : rate.rate_basis === 'PER_TON'
+              ? `${(totalChargeableWeightKG / 1000).toFixed(2)} TON × ${rate.rate_per_ton} ${rate.currency}/TON`
+              : `${totalChargeableWeightKG.toFixed(2)} KG × ${rate.rate_per_kg} ${rate.currency}/KG`,
+            minimum_charge: minimumCharge,
+            minimum_charge_applied: minimumChargeApplied
+          },
+
+          surcharges: {
+            origin: {
+              charges: surchargesByScope.origin,
+              total: parseFloat(originTotal.toFixed(2))
+            },
+            port: {
+              charges: surchargesByScope.port,
+              total: parseFloat(portTotal.toFixed(2))
+            },
+            freight_surcharges: {
+              charges: surchargesByScope.freight,
+              total: parseFloat(freightSurchargesTotal.toFixed(2))
+            },
+            destination: {
+              charges: surchargesByScope.dest,
+              total: parseFloat(destTotal.toFixed(2))
+            },
+            door: {
+              charges: surchargesByScope.door,
+              total: parseFloat(doorTotal.toFixed(2))
+            },
+            other: {
+              charges: surchargesByScope.other,
+              total: parseFloat(otherTotal.toFixed(2))
+            }
+          },
+
+          total_buy: parseFloat(totalBuyAmount.toFixed(2))
+        },
+
+        margin: marginDetails,
+
+        sell_price: {
+          total: parseFloat(totalSellAmount.toFixed(2)),
+          currency: rate.currency,
+          valid_until: rate.valid_to
+        },
+
+        notes
+      };
+
+      console.log('✅ [LCL QUOTE] Quote generated:', quote.quote_id);
+
+      return reply.send({
+        success: true,
+        data: quote
+      });
+    } catch (error: any) {
+      console.error('❌ [LCL QUOTE] Error:', error);
+      return reply.code(500).send({
+        success: false,
+        error: error.message || 'Failed to prepare LCL quote'
       });
     }
   });
