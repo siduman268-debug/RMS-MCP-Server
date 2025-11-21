@@ -532,6 +532,532 @@ The API returns all schedules in the date range. Your LWC should filter by:
 
 ---
 
+## 5. LCL (Less than Container Load) APIs
+
+### 5.1 Search LCL Rates
+
+**Endpoint**: `POST /api/v4/search-lcl-rates`  
+**Authentication**: Required
+
+**Description**: Search for LCL (Less than Container Load) ocean freight rates with automatic slab-based pricing, surcharge application, and margin calculation.
+
+**Request**:
+```json
+{
+  "origin": "INNSA",                    // Required: Origin port UN/LOCODE
+  "destination": "NLRTM",               // Required: Destination port UN/LOCODE
+  "service_type": "CONSOLIDATED",       // Optional: Service type (default: CONSOLIDATED)
+  "vendor_id": 1,                       // Optional: Filter by vendor
+  "cargo_ready_date": "2025-11-20",    // Optional: Defaults to today
+  "shipment_items": [                   // Required: Array of shipment items
+    {
+      "length_cm": 120,
+      "width_cm": 80,
+      "height_cm": 100,
+      "gross_weight_kg": 500,
+      "pieces": 2,
+      "is_stackable": true,
+      "description": "Electronics"
+    },
+    {
+      "length_cm": 100,
+      "width_cm": 60,
+      "height_cm": 80,
+      "gross_weight_kg": 300,
+      "pieces": 3,
+      "is_stackable": false,
+      "description": "Furniture"
+    }
+  ]
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "rates": [
+      {
+        "rate_id": 1,
+        "vendor_id": 1,
+        "vendor_name": "Generic Carrier",
+        "origin": "INNSA",
+        "destination": "NLRTM",
+        "origin_name": "Nhava Sheva",
+        "destination_name": "Rotterdam",
+        "service_type": "CONSOLIDATED",
+        "pricing_model": "SLAB_BASED",
+        "rate_basis": "CBM",
+        "min_volume_cbm": 3.0,
+        "max_volume_cbm": 5.0,
+        "rate_per_cbm": 52.0,
+        "max_weight_kg_per_cbm": 500.0,
+        "minimum_charge": 150.0,
+        "weight_per_cbm_conversion": 1000.0,
+        "transit_days": 28,
+        "currency": "USD",
+        "valid_from": "2025-01-01",
+        "valid_to": "2025-12-31",
+        "pricing": {
+          "total_volume_cbm": 3.72,
+          "total_weight_kg": 1900.0,
+          "chargeable_weight_kg": 3720.0,
+          "freight_cost_usd": 193.44,
+          "surcharges": [
+            {
+              "charge_code": "BAF",
+              "charge_name": "Bunker Adjustment Factor",
+              "amount_usd": 19.34
+            },
+            {
+              "charge_code": "CAF",
+              "charge_name": "Currency Adjustment Factor",
+              "amount_usd": 9.67
+            }
+          ],
+          "total_surcharges_usd": 29.01,
+          "total_buy_usd": 222.45,
+          "margin": {
+            "type": "percentage",
+            "value": 15.0,
+            "amount_usd": 33.37
+          },
+          "total_sell_usd": 255.82
+        }
+      }
+    ],
+    "metadata": {
+      "total_volume_cbm": 3.72,
+      "total_weight_kg": 1900.0,
+      "chargeable_weight_kg": 3720.0,
+      "rates_found": 1,
+      "generated_at": "2025-11-20T10:30:00.000Z"
+    }
+  }
+}
+```
+
+**Key Features**:
+- ✅ Automatic volume and chargeable weight calculation from shipment items
+- ✅ Slab-based pricing with weight limits per slab
+- ✅ Flat rate per CBM pricing support
+- ✅ Automatic surcharge application (PER_CBM, PERCENTAGE, PER_SHIPMENT, FLAT)
+- ✅ On-the-fly margin calculation (global, port_pair, trade_zone priority)
+- ✅ Sorted by total sell amount
+
+**Chargeable Weight Logic**:
+```
+Volumetric Weight = volume_cbm * 1000 kg
+Chargeable Weight = MAX(actual_weight_kg, volumetric_weight_kg)
+```
+
+---
+
+### 5.2 Prepare LCL Quote
+
+**Endpoint**: `POST /api/v4/prepare-lcl-quote`  
+**Authentication**: Required
+
+**Description**: Generate a detailed LCL quote with selected rate and shipment items breakdown.
+
+**Request**:
+```json
+{
+  "quote_id": "LCL-2025-001",          // Required: Your quote reference
+  "rate_id": 1,                         // Required: Rate ID from search-lcl-rates
+  "shipment_items": [                   // Required: Same items from search
+    {
+      "length_cm": 120,
+      "width_cm": 80,
+      "height_cm": 100,
+      "gross_weight_kg": 500,
+      "pieces": 2,
+      "is_stackable": true,
+      "description": "Electronics"
+    }
+  ],
+  "cargo_ready_date": "2025-11-20"     // Optional: Defaults to today
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "quote_id": "LCL-2025-001",
+    "lcl_shipment_id": 123,
+    "rate_details": {
+      "rate_id": 1,
+      "vendor": "Generic Carrier",
+      "origin": "INNSA",
+      "destination": "NLRTM",
+      "service_type": "CONSOLIDATED",
+      "pricing_model": "SLAB_BASED",
+      "transit_days": 28,
+      "currency": "USD"
+    },
+    "shipment_summary": {
+      "total_items": 2,
+      "total_pieces": 2,
+      "total_volume_cbm": 0.96,
+      "total_weight_kg": 500.0,
+      "chargeable_weight_kg": 960.0
+    },
+    "pricing_breakdown": {
+      "freight": {
+        "rate_per_cbm": 52.0,
+        "volume_cbm": 0.96,
+        "freight_cost_usd": 49.92,
+        "minimum_charge": 150.0,
+        "applied_amount_usd": 150.0
+      },
+      "surcharges": [
+        {
+          "charge_code": "THC_ORIGIN",
+          "charge_name": "Terminal Handling Charge - Origin",
+          "calc_method": "PER_CBM",
+          "amount_usd": 9.6
+        }
+      ],
+      "total_surcharges_usd": 9.6,
+      "total_buy_usd": 159.6,
+      "margin": {
+        "type": "percentage",
+        "value": 15.0,
+        "amount_usd": 23.94
+      },
+      "total_sell_usd": 183.54
+    },
+    "validity": {
+      "from": "2025-01-01",
+      "to": "2025-12-31",
+      "cargo_ready_date": "2025-11-20"
+    },
+    "metadata": {
+      "generated_at": "2025-11-20T10:35:00.000Z",
+      "api_version": "v4"
+    }
+  }
+}
+```
+
+**Key Features**:
+- ✅ Stores shipment items for future reference
+- ✅ Complete pricing breakdown (freight + surcharges + margin)
+- ✅ Minimum charge enforcement
+- ✅ Detailed item-level volume and weight calculations
+
+---
+
+### 5.3 LCL CRUD APIs
+
+#### 5.3.1 LCL Ocean Freight Rates
+
+**List Rates**: `GET /api/lcl-rates?origin=INNSA&destination=NLRTM&limit=50`  
+**Get by ID**: `GET /api/lcl-rates/:id`  
+**Create**: `POST /api/lcl-rates`  
+**Update**: `PUT /api/lcl-rates/:id`  
+**Delete**: `DELETE /api/lcl-rates/:id`  
+**Bulk Create**: `POST /api/lcl-rates/bulk`
+
+**Create/Update Request**:
+```json
+{
+  "vendor_id": 1,
+  "contract_id": 1,
+  "origin": "INNSA",
+  "destination": "NLRTM",
+  "service_type": "CONSOLIDATED",
+  "pricing_model": "SLAB_BASED",      // SLAB_BASED or FLAT_RATE
+  "rate_basis": "CBM",
+  "min_volume_cbm": 3.0,              // For SLAB_BASED only
+  "max_volume_cbm": 5.0,              // For SLAB_BASED only
+  "rate_per_cbm": 52.0,
+  "max_weight_kg_per_cbm": 500.0,     // For SLAB_BASED only
+  "minimum_charge": 150.0,
+  "weight_per_cbm_conversion": 1000.0,
+  "transit_days": 28,
+  "valid_from": "2025-01-01",
+  "valid_to": "2025-12-31",
+  "currency": "USD",
+  "is_active": true
+}
+```
+
+---
+
+#### 5.3.2 LCL Surcharges
+
+**List Surcharges**: `GET /api/lcl-surcharges?vendor_id=1&limit=50`  
+**Get by ID**: `GET /api/lcl-surcharges/:id`  
+**Create**: `POST /api/lcl-surcharges`  
+**Update**: `PUT /api/lcl-surcharges/:id`  
+**Delete**: `DELETE /api/lcl-surcharges/:id`  
+**Bulk Create**: `POST /api/lcl-surcharges/bulk`
+
+**Create/Update Request**:
+```json
+{
+  "vendor_id": 1,
+  "contract_id": 1,
+  "charge_code": "BAF",
+  "origin": "INNSA",                   // Optional: for origin-specific charges
+  "destination": "NLRTM",              // Optional: for destination-specific charges
+  "applies_scope": "freight",          // freight, origin, destination, other
+  "calc_method": "PERCENTAGE",         // PER_CBM, PERCENTAGE, PER_SHIPMENT, FLAT
+  "amount": null,                      // For PER_CBM, PER_SHIPMENT, FLAT
+  "percentage": 10.0,                  // For PERCENTAGE only
+  "currency": "USD",
+  "valid_from": "2025-01-01",
+  "valid_to": "2025-12-31",
+  "is_active": true
+}
+```
+
+---
+
+#### 5.3.3 LCL Shipment Items
+
+**List Items**: `GET /api/lcl-items?shipment_id=123&limit=50`  
+**Get by ID**: `GET /api/lcl-items/:id`  
+**Create**: `POST /api/lcl-items`  
+**Update**: `PUT /api/lcl-items/:id`  
+**Delete**: `DELETE /api/lcl-items/:id`  
+**Bulk Create**: `POST /api/lcl-items/bulk`
+
+**Create/Update Request**:
+```json
+{
+  "shipment_id": 123,
+  "length_cm": 120,
+  "width_cm": 80,
+  "height_cm": 100,
+  "gross_weight_kg": 500,
+  "pieces": 2,
+  "is_stackable": true,
+  "description": "Electronics",
+  "hs_code": "8471.30.00",
+  "commodity": "Laptops"
+}
+```
+
+**Note**: `volume_cbm`, `total_volume_cbm`, `total_weight_kg`, `volumetric_weight_kg`, and `chargeable_weight_kg` are auto-calculated by the database.
+
+---
+
+## 6. FCL Inland Haulage Pricing Models 🚨 NEW
+
+### Overview
+
+The V4 API now supports **3 different inland haulage pricing models** to prevent double-charging when carriers include inland haulage in their ocean freight rates.
+
+**Problem Solved**: Previously, if a carrier quoted a door-to-door rate (e.g., INSON-NLRTM for $2000 with IHE included), the API would add IHE again, resulting in $2200 (WRONG).
+
+**Solution**: The `ocean_freight_rate` table now has an `includes_inland_haulage` JSONB column that tells the API how to handle inland charges.
+
+---
+
+### 6.1 Three Pricing Models
+
+#### Model 1: Gateway Port Pricing (Traditional) ✅ DEFAULT
+
+**Scenario**: Ocean freight is priced from a gateway port (e.g., INNSA-NLRTM), and inland haulage is billed separately.
+
+**Example**:
+- Ocean: INNSA-NLRTM = $1500
+- IHE: INSON-INNSA = $200
+- Total: $1700
+
+**Configuration**: No `includes_inland_haulage` tag needed (default behavior).
+
+**API Behavior**:
+```json
+{
+  "ocean_freight_cost_usd": 1500,
+  "inland_haulage": {
+    "pricing_model": "gateway_port",
+    "ihe_charges": {
+      "found": true,
+      "total_amount_usd": 200
+    },
+    "total_haulage_usd": 200
+  },
+  "grand_total_usd": 1700
+}
+```
+
+---
+
+#### Model 2: All-Inclusive Pricing 🚨 PREVENTS DOUBLE-CHARGING
+
+**Scenario**: Ocean freight is priced door-to-door and **already includes** inland haulage in the rate.
+
+**Example** (Maersk):
+- Ocean: INSON-NLRTM = $2000 (IHE included)
+- IHE: $0 (bundled)
+- Total: $2000
+
+**Configuration**:
+```sql
+UPDATE ocean_freight_rate
+SET includes_inland_haulage = jsonb_build_object(
+  'ihe_included', true,
+  'pricing_model', 'all_inclusive',
+  'notes', 'Door-to-door all-inclusive rate'
+)
+WHERE vendor_id = 1 AND origin_code = 'INSON';
+```
+
+**API Behavior**:
+```json
+{
+  "ocean_freight_cost_usd": 2000,
+  "inland_haulage": {
+    "pricing_model": "all_inclusive",
+    "ihe_charges": {
+      "found": false,
+      "bundled": true,
+      "total_amount_usd": 0,
+      "message": "IHE is included in ocean freight rate"
+    },
+    "total_haulage_usd": 0,
+    "notes": "Inland haulage bundled in ocean rate"
+  },
+  "grand_total_usd": 2000
+}
+```
+
+✅ **Result**: No double-charging!
+
+---
+
+#### Model 3: Inland Origin Pricing
+
+**Scenario**: Ocean freight is priced **from** an inland point, but carrier **still bills IHE separately**.
+
+**Example** (Some carriers):
+- Ocean: INSON-NLRTM = $1800 (priced from inland)
+- IHE: INSON-INNSA = $200 (billed separately)
+- Total: $2000
+
+**Configuration**:
+```sql
+UPDATE ocean_freight_rate
+SET includes_inland_haulage = jsonb_build_object(
+  'ihe_included', false,
+  'ihe_from_location', 'INSON',
+  'ihe_to_location', 'INNSA',
+  'pricing_model', 'inland_origin',
+  'notes', 'Ocean priced from inland, IHE billed separately'
+)
+WHERE id = 123;
+```
+
+**API Behavior**:
+```json
+{
+  "ocean_freight_cost_usd": 1800,
+  "inland_haulage": {
+    "pricing_model": "inland_origin",
+    "ihe_charges": {
+      "found": true,
+      "route": "INSON → INNSA",
+      "total_amount_usd": 200
+    },
+    "total_haulage_usd": 200
+  },
+  "grand_total_usd": 2000
+}
+```
+
+---
+
+### 6.2 Detection Logic
+
+The API automatically detects the pricing model based on the `includes_inland_haulage` JSONB column:
+
+```typescript
+if (!includes_inland_haulage) {
+  // Model 1: Gateway Port (default)
+  pricing_model = 'gateway_port';
+  shouldCalculateIHE = originIsInland;
+  shouldCalculateIHI = destinationIsInland;
+}
+else if (includes_inland_haulage.pricing_model === 'all_inclusive') {
+  // Model 2: All-Inclusive
+  shouldCalculateIHE = false; // Don't add IHE
+  shouldCalculateIHI = false; // Don't add IHI
+}
+else if (includes_inland_haulage.pricing_model === 'inland_origin') {
+  // Model 3: Inland Origin
+  shouldCalculateIHE = !includes_inland_haulage.ihe_included;
+  shouldCalculateIHI = !includes_inland_haulage.ihi_included;
+}
+```
+
+---
+
+### 6.3 Migration Path (Safe Rollout)
+
+**Phase 1: Deploy Code** ✅ DONE
+- New logic deployed
+- All existing rates have `includes_inland_haulage = NULL`
+- **Zero customer impact** (default = gateway_port)
+
+**Phase 2: Identify Problem Rates**
+```sql
+-- Find rates that might be double-charging
+SELECT 
+  id, 
+  vendor_id, 
+  origin_code, 
+  destination_code,
+  sell_amount
+FROM ocean_freight_rate
+WHERE origin_code IN (
+  SELECT unlocode FROM locations WHERE location_type = 'INLAND'
+)
+AND includes_inland_haulage IS NULL;
+```
+
+**Phase 3: Tag Rates (Controlled)**
+```sql
+-- Test with ONE rate first
+UPDATE ocean_freight_rate
+SET includes_inland_haulage = jsonb_build_object(
+  'ihe_included', true,
+  'pricing_model', 'all_inclusive',
+  'notes', 'Testing new logic - Maersk door rate'
+)
+WHERE id = 123;
+
+-- Test with prepare-quote
+-- Verify IHE is NOT added
+-- If good, tag more rates
+```
+
+**Phase 4: Monitor (Gradual)**
+- Tag 5 rates → Test → Monitor
+- Tag 50 rates → Test → Monitor
+- Tag all applicable rates
+
+---
+
+### 6.4 Affected Endpoints
+
+**Updated Endpoints**:
+- `POST /api/v4/prepare-quote` ← Primary update
+- `POST /api/v4/search-rates` ← No change yet (uses MV)
+
+**Backward Compatibility**: ✅
+- All untagged rates work as before
+- Only tagged rates use new logic
+- Zero breaking changes
+
+---
+
 ## 📋 Quick Reference
 
 ### Container Types
