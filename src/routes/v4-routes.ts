@@ -585,48 +585,115 @@ export function addV4Routes(
       const oceanFreightSell = (rateData.all_in_freight_sell || 0) * container_count;
 
       // Automatic inland haulage (if inland detected)
+      // Check includes_inland_haulage to handle 3 pricing models
       let inlandHaulageTotalUSD = 0;
       let inlandHaulageDetails: any = {
         ihe_charges: { found: false, message: 'Origin is not inland, no IHE needed' },
         ihi_charges: { found: false, message: 'Destination is not inland, no IHI needed' },
-        total_haulage_usd: 0
+        total_haulage_usd: 0,
+        pricing_model: 'gateway_port' // Default
       };
 
-      if (originIsInland || destinationIsInland) {
-        try {
-          const { data: haulageResult, error: haulageError } = await supabase.rpc(
-            'simplified_inland_function',
-            {
-              p_pol_code: (rateData.origin_code || rateData.pol_code || origin).toUpperCase(),
-              p_pod_code: (rateData.destination_code || rateData.pod_code || destination).toUpperCase(),
-              p_container_type: rateData.container_type,
-              p_container_count: container_count,
-              p_cargo_weight_mt: cargo_weight_mt,
-              p_haulage_type: haulage_type,
-              p_vendor_id: vendorId
-            }
-          );
+      const haulageConfig = rateData.includes_inland_haulage;
 
-          if (haulageError) {
-            console.error('Inland haulage error:', haulageError);
-            inlandHaulageDetails = {
-              error: haulageError.message
-            };
-          } else if (haulageResult && haulageResult.success) {
-            inlandHaulageDetails = {
-              ihe_charges: haulageResult.ihe_charges || { found: false },
-              ihi_charges: haulageResult.ihi_charges || { found: false },
-              total_haulage_usd:
-                (haulageResult.ihe_charges?.total_amount_usd || 0) +
-                (haulageResult.ihi_charges?.total_amount_usd || 0)
-            };
-            inlandHaulageTotalUSD = inlandHaulageDetails.total_haulage_usd;
+      if (originIsInland || destinationIsInland) {
+        // Determine pricing model
+        let pricingModel = 'gateway_port'; // Default: traditional port-to-port + separate IHE
+        let shouldCalculateIHE = originIsInland;
+        let shouldCalculateIHI = destinationIsInland;
+
+        if (haulageConfig) {
+          pricingModel = haulageConfig.pricing_model || 'gateway_port';
+
+          // Handle IHE (Inland Haulage Export)
+          if (originIsInland) {
+            if (pricingModel === 'all_inclusive' && haulageConfig.ihe_included) {
+              // IHE is bundled in ocean rate - DO NOT add separate charge
+              shouldCalculateIHE = false;
+              inlandHaulageDetails.ihe_charges = {
+                found: false,
+                message: 'IHE included in ocean freight rate (all-inclusive pricing)',
+                pricing_model: 'all_inclusive',
+                bundled: true
+              };
+              console.log('⚠️ [INLAND HAULAGE] IHE bundled in ocean rate - skipping separate charge');
+            } else if (pricingModel === 'inland_origin') {
+              // Ocean rate is from inland, but IHE charged separately
+              shouldCalculateIHE = true;
+              console.log('ℹ️ [INLAND HAULAGE] Inland origin pricing - IHE will be added separately');
+            }
           }
-        } catch (error) {
-          console.error('Error getting inland haulage:', error);
-          inlandHaulageDetails = {
-            error: error instanceof Error ? error.message : String(error)
-          };
+
+          // Handle IHI (Inland Haulage Import) - same logic
+          if (destinationIsInland) {
+            if (pricingModel === 'all_inclusive' && haulageConfig.ihi_included) {
+              shouldCalculateIHI = false;
+              inlandHaulageDetails.ihi_charges = {
+                found: false,
+                message: 'IHI included in ocean freight rate (all-inclusive pricing)',
+                pricing_model: 'all_inclusive',
+                bundled: true
+              };
+              console.log('⚠️ [INLAND HAULAGE] IHI bundled in ocean rate - skipping separate charge');
+            }
+          }
+        }
+
+        // Calculate inland haulage only if not bundled
+        if (shouldCalculateIHE || shouldCalculateIHI) {
+          try {
+            const { data: haulageResult, error: haulageError } = await supabase.rpc(
+              'simplified_inland_function',
+              {
+                p_pol_code: (rateData.origin_code || rateData.pol_code || origin).toUpperCase(),
+                p_pod_code: (rateData.destination_code || rateData.pod_code || destination).toUpperCase(),
+                p_container_type: rateData.container_type,
+                p_container_count: container_count,
+                p_cargo_weight_mt: cargo_weight_mt,
+                p_haulage_type: haulage_type,
+                p_vendor_id: vendorId
+              }
+            );
+
+            if (haulageError) {
+              console.error('Inland haulage error:', haulageError);
+              inlandHaulageDetails.error = haulageError.message;
+            } else if (haulageResult && haulageResult.success) {
+              // Only include charges that should be calculated
+              const iheCharges = shouldCalculateIHE ? haulageResult.ihe_charges : { found: false, message: 'IHE bundled in ocean rate' };
+              const ihiCharges = shouldCalculateIHI ? haulageResult.ihi_charges : { found: false, message: 'IHI bundled in ocean rate' };
+
+              inlandHaulageDetails = {
+                ihe_charges: iheCharges || { found: false },
+                ihi_charges: ihiCharges || { found: false },
+                total_haulage_usd:
+                  (shouldCalculateIHE ? (haulageResult.ihe_charges?.total_amount_usd || 0) : 0) +
+                  (shouldCalculateIHI ? (haulageResult.ihi_charges?.total_amount_usd || 0) : 0),
+                pricing_model: pricingModel,
+                notes: pricingModel === 'all_inclusive' 
+                  ? 'Some haulage charges are included in ocean freight rate'
+                  : pricingModel === 'inland_origin'
+                  ? 'Ocean rate priced from inland point, haulage billed separately'
+                  : 'Traditional gateway port pricing with separate haulage'
+              };
+              inlandHaulageTotalUSD = inlandHaulageDetails.total_haulage_usd;
+
+              console.log('✅ [INLAND HAULAGE] Calculated:', {
+                pricing_model: pricingModel,
+                ihe_amount: shouldCalculateIHE ? haulageResult.ihe_charges?.total_amount_usd : 'bundled',
+                ihi_amount: shouldCalculateIHI ? haulageResult.ihi_charges?.total_amount_usd : 'bundled',
+                total: inlandHaulageTotalUSD
+              });
+            }
+          } catch (error) {
+            console.error('Error getting inland haulage:', error);
+            inlandHaulageDetails.error = error instanceof Error ? error.message : String(error);
+          }
+        } else {
+          // All haulage is bundled
+          inlandHaulageDetails.pricing_model = pricingModel;
+          inlandHaulageDetails.total_haulage_usd = 0;
+          console.log('ℹ️ [INLAND HAULAGE] All charges bundled in ocean rate');
         }
       }
 
