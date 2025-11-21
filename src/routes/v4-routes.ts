@@ -804,5 +804,284 @@ export function addV4Routes(
       };
     }
   });
+
+  // ============================================
+  // LCL SEARCH RATES
+  // ============================================
+
+  fastify.post('/api/v4/search-lcl-rates', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const {
+        origin_code,
+        destination_code,
+        items, // Array of shipment items with dimensions and weights
+        service_type, // optional: DIRECT, CONSOLIDATED
+        vendor_ids, // optional: filter by specific vendors
+        valid_date // optional: defaults to today
+      } = request.body as any;
+
+      console.log('🔍 [LCL SEARCH] Request:', {
+        origin_code,
+        destination_code,
+        items: items?.length,
+        service_type,
+        vendor_ids
+      });
+
+      // Validation
+      if (!origin_code || !destination_code) {
+        return reply.code(400).send({
+          success: false,
+          error: 'origin_code and destination_code are required'
+        });
+      }
+
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return reply.code(400).send({
+          success: false,
+          error: 'items array is required and must contain at least one item'
+        });
+      }
+
+      // Calculate total volume and weight from items
+      let totalVolumeCBM = 0;
+      let totalWeightKG = 0;
+      let totalChargeableWeightKG = 0;
+
+      const itemDetails = items.map((item: any) => {
+        // Calculate volume (L × W × H / 1,000,000)
+        const volumeCBM = (item.length_cm * item.width_cm * item.height_cm) / 1000000;
+        const pieces = item.pieces || 1;
+
+        // Calculate volumetric weight (volume × 1000 for ocean)
+        const volumetricWeightKG = volumeCBM * 1000;
+
+        // Chargeable weight = MAX(actual weight, volumetric weight)
+        const chargeableWeightKG = Math.max(item.gross_weight_kg, volumetricWeightKG);
+
+        // Totals per line item
+        const lineVolumeCBM = volumeCBM * pieces;
+        const lineChargeableWeightKG = chargeableWeightKG * pieces;
+
+        totalVolumeCBM += lineVolumeCBM;
+        totalWeightKG += item.gross_weight_kg * pieces;
+        totalChargeableWeightKG += lineChargeableWeightKG;
+
+        return {
+          ...item,
+          volume_cbm: volumeCBM,
+          volumetric_weight_kg: volumetricWeightKG,
+          chargeable_weight_kg: chargeableWeightKG,
+          total_volume_cbm: lineVolumeCBM,
+          total_chargeable_weight_kg: lineChargeableWeightKG
+        };
+      });
+
+      console.log('📦 [LCL SEARCH] Shipment totals:', {
+        total_volume_cbm: totalVolumeCBM.toFixed(3),
+        total_weight_kg: totalWeightKG.toFixed(2),
+        total_chargeable_weight_kg: totalChargeableWeightKG.toFixed(2)
+      });
+
+      const tenantId = (request as any).tenant_id || '00000000-0000-0000-0000-000000000001';
+      const searchDate = valid_date || new Date().toISOString().split('T')[0];
+
+      // Find matching rates
+      let rateQuery = supabase
+        .from('lcl_ocean_freight_rate')
+        .select(`
+          *,
+          vendor:vendor_id (id, name, logo_url, vendor_type)
+        `)
+        .eq('tenant_id', tenantId)
+        .eq('origin_code', origin_code.toUpperCase())
+        .eq('destination_code', destination_code.toUpperCase())
+        .eq('is_active', true)
+        .lte('valid_from', searchDate)
+        .gte('valid_to', searchDate);
+
+      if (service_type) {
+        rateQuery = rateQuery.eq('service_type', service_type);
+      }
+
+      if (vendor_ids && Array.isArray(vendor_ids) && vendor_ids.length > 0) {
+        rateQuery = rateQuery.in('vendor_id', vendor_ids);
+      }
+
+      const { data: rates, error: ratesError } = await rateQuery;
+
+      if (ratesError) throw ratesError;
+
+      console.log(`✅ [LCL SEARCH] Found ${rates?.length || 0} potential rates`);
+
+      // Match rates to shipment volume and calculate costs
+      const matchedRates = [];
+
+      for (const rate of rates || []) {
+        // Check if shipment volume fits this rate
+        let matched = false;
+        let matchedSlab = null;
+
+        if (rate.pricing_model === 'SLAB_BASED') {
+          // For slab-based pricing, check if volume falls within this slab
+          const volumeInRange =
+            totalVolumeCBM >= (rate.min_volume_cbm || 0) &&
+            (rate.max_volume_cbm === null || totalVolumeCBM <= rate.max_volume_cbm);
+
+          // Also check weight limit for this slab (if specified)
+          const weightWithinLimit =
+            !rate.max_weight_per_slab_kg ||
+            totalChargeableWeightKG <= rate.max_weight_per_slab_kg;
+
+          if (volumeInRange && weightWithinLimit) {
+            matched = true;
+            matchedSlab = {
+              min_volume_cbm: rate.min_volume_cbm,
+              max_volume_cbm: rate.max_volume_cbm,
+              rate_per_cbm: rate.rate_per_cbm,
+              max_weight_per_slab_kg: rate.max_weight_per_slab_kg
+            };
+          }
+        } else if (rate.pricing_model === 'FLAT_RATE') {
+          // For flat rate, any volume is accepted
+          matched = true;
+          matchedSlab = {
+            rate_per_cbm: rate.rate_per_cbm,
+            note: 'Flat rate applies to all volumes'
+          };
+        }
+
+        if (!matched) continue;
+
+        // Calculate freight cost
+        let freightCost = 0;
+        if (rate.rate_basis === 'PER_CBM') {
+          freightCost = totalVolumeCBM * rate.rate_per_cbm;
+        } else if (rate.rate_basis === 'PER_TON') {
+          freightCost = (totalChargeableWeightKG / 1000) * rate.rate_per_ton;
+        } else if (rate.rate_basis === 'PER_KG') {
+          freightCost = totalChargeableWeightKG * rate.rate_per_kg;
+        }
+
+        // Apply minimum charge if specified
+        const minimumCharge = rate.minimum_charge || 0;
+        const minimumChargeApplied = freightCost < minimumCharge;
+        if (minimumChargeApplied) {
+          freightCost = minimumCharge;
+        }
+
+        // Fetch surcharges for this vendor/route
+        const { data: surcharges } = await supabase
+          .from('lcl_surcharge')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .eq('vendor_id', rate.vendor_id)
+          .eq('is_active', true)
+          .lte('valid_from', searchDate)
+          .gte('valid_to', searchDate)
+          .or(`origin_code.is.null,origin_code.eq.${origin_code.toUpperCase()}`)
+          .or(`destination_code.is.null,destination_code.eq.${destination_code.toUpperCase()}`);
+
+        // Calculate surcharge amounts
+        let totalSurcharges = 0;
+        const surchargeDetails = (surcharges || []).map((surcharge: any) => {
+          let amount = 0;
+          let calculation = '';
+
+          switch (surcharge.rate_basis) {
+            case 'PER_CBM':
+              amount = totalVolumeCBM * surcharge.amount;
+              calculation = `${totalVolumeCBM.toFixed(3)} CBM × ${surcharge.amount} ${surcharge.currency}/CBM`;
+              break;
+            case 'PER_TON':
+              amount = (totalChargeableWeightKG / 1000) * surcharge.amount;
+              calculation = `${(totalChargeableWeightKG / 1000).toFixed(2)} TON × ${surcharge.amount} ${surcharge.currency}/TON`;
+              break;
+            case 'PER_KG':
+              amount = totalChargeableWeightKG * surcharge.amount;
+              calculation = `${totalChargeableWeightKG.toFixed(2)} KG × ${surcharge.amount} ${surcharge.currency}/KG`;
+              break;
+            case 'PER_SHIPMENT':
+            case 'FLAT':
+              amount = surcharge.amount;
+              calculation = `Flat charge`;
+              break;
+            case 'PERCENTAGE':
+              amount = freightCost * (surcharge.percentage / 100);
+              calculation = `${surcharge.percentage}% of ${freightCost.toFixed(2)} ${surcharge.currency}`;
+              break;
+          }
+
+          // Apply min/max if specified
+          if (surcharge.min_charge && amount < surcharge.min_charge) {
+            amount = surcharge.min_charge;
+            calculation += ` (min charge applied)`;
+          }
+          if (surcharge.max_charge && amount > surcharge.max_charge) {
+            amount = surcharge.max_charge;
+            calculation += ` (max charge applied)`;
+          }
+
+          totalSurcharges += amount;
+
+          return {
+            charge_code: surcharge.charge_code,
+            charge_name: surcharge.charge_name || surcharge.charge_code,
+            applies_scope: surcharge.applies_scope,
+            amount: parseFloat(amount.toFixed(2)),
+            calculation
+          };
+        });
+
+        const totalCost = freightCost + totalSurcharges;
+
+        matchedRates.push({
+          rate_id: rate.id,
+          vendor_id: rate.vendor_id,
+          vendor_name: rate.vendor?.name,
+          vendor_logo: rate.vendor?.logo_url,
+          origin: origin_code.toUpperCase(),
+          destination: destination_code.toUpperCase(),
+          service_type: rate.service_type,
+          pricing_model: rate.pricing_model,
+          matched_slab: matchedSlab,
+          freight_cost: parseFloat(freightCost.toFixed(2)),
+          minimum_charge: minimumCharge,
+          minimum_charge_applied: minimumChargeApplied,
+          surcharges: surchargeDetails,
+          total_surcharges: parseFloat(totalSurcharges.toFixed(2)),
+          total_cost: parseFloat(totalCost.toFixed(2)),
+          currency: rate.currency,
+          transit_days: rate.tt_days,
+          frequency: rate.frequency,
+          valid_from: rate.valid_from,
+          valid_to: rate.valid_to
+        });
+      }
+
+      // Sort by total cost (cheapest first)
+      matchedRates.sort((a, b) => a.total_cost - b.total_cost);
+
+      console.log(`✅ [LCL SEARCH] Returning ${matchedRates.length} matched rates`);
+
+      return reply.send({
+        success: true,
+        shipment_summary: {
+          items: itemDetails,
+          total_pieces: items.reduce((sum: number, item: any) => sum + (item.pieces || 1), 0),
+          total_volume_cbm: parseFloat(totalVolumeCBM.toFixed(3)),
+          total_weight_kg: parseFloat(totalWeightKG.toFixed(2)),
+          total_chargeable_weight_kg: parseFloat(totalChargeableWeightKG.toFixed(2))
+        },
+        rates: matchedRates
+      });
+    } catch (error: any) {
+      console.error('❌ [LCL SEARCH] Error:', error);
+      return reply.code(500).send({
+        success: false,
+        error: error.message || 'Failed to search LCL rates'
+      });
+    }
+  });
 }
 

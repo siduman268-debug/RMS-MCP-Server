@@ -6733,6 +6733,7 @@ async function main() {
       console.error("  POST /api/v4/search-rates");
       console.error("  POST /api/v4/prepare-quote");
       console.error("  POST /api/v4/schedules/search");
+      console.error("  POST /api/v4/search-lcl-rates");
       console.error("  POST /api/ocean-freight-rates");
       console.error("  PUT  /api/ocean-freight-rates/:rateId");
       console.error("  GET  /api/ocean-freight-rates/:rateId");
