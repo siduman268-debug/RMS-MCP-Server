@@ -433,6 +433,26 @@ export function addV4Routes(
         });
       }
 
+      // NOTE: mv_freight_sell_prices does not currently expose includes_inland_haulage.
+      // To support the 3 inland pricing models in V4 prepare-quote, we need to
+      // fetch this JSONB column from the base ocean_freight_rate table and
+      // merge it into rateData so the inland haulage logic below can use it.
+      try {
+        const { data: baseRateRow, error: baseRateError } = await supabase
+          .from('ocean_freight_rate')
+          .select('includes_inland_haulage')
+          .eq('id', rate_id)
+          .single();
+
+        if (!baseRateError && baseRateRow) {
+          // Attach the JSONB config so the inland haulage logic can read it
+          (rateData as any).includes_inland_haulage = baseRateRow.includes_inland_haulage;
+        }
+      } catch (e) {
+        // Non-fatal: if this fails we gracefully fall back to default gateway_port logic
+        console.error('Warning: failed to load includes_inland_haulage for rate', rate_id, e);
+      }
+
       // Ensure cargo ready date falls within rate validity
       if (
         (rateData.valid_from && cargoReadyDateISO < rateData.valid_from) ||
@@ -954,11 +974,13 @@ export function addV4Routes(
       const searchDate = valid_date || new Date().toISOString().split('T')[0];
 
       // Find matching rates
+      // Note: Some databases don't expose vendor.logo_url, so we only select
+      // fields that are guaranteed to exist to avoid runtime errors.
       let rateQuery = supabase
         .from('lcl_ocean_freight_rate')
         .select(`
           *,
-          vendor:vendor_id (id, name, logo_url, vendor_type)
+          vendor:vendor_id (id, name, vendor_type)
         `)
         .eq('tenant_id', tenantId)
         .eq('origin_code', origin_code.toUpperCase())
@@ -1290,7 +1312,7 @@ export function addV4Routes(
         .from('lcl_ocean_freight_rate')
         .select(`
           *,
-          vendor:vendor_id (id, name, logo_url, vendor_type)
+          vendor:vendor_id (id, name, vendor_type)
         `)
         .eq('id', rate_id)
         .eq('tenant_id', tenantId)
